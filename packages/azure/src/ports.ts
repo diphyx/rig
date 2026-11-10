@@ -7,17 +7,31 @@ import { API, type Paths, versioned } from "./paths.js";
 
 type SecurityRule = {
     name?: string;
-    properties?: { protocol?: string; sourceAddressPrefix?: string; destinationPortRange?: string; priority?: number };
+    properties?: {
+        priority?: number;
+        direction?: string;
+        access?: string;
+        protocol?: string;
+        sourceAddressPrefix?: string;
+        sourcePortRange?: string;
+        destinationAddressPrefix?: string;
+        destinationPortRange?: string;
+    };
 };
 
 type Nsg = { name?: string; tags?: Record<string, string>; properties?: { securityRules?: SecurityRule[] } };
 
-/* The tag on the security group rig makes for one machine: its name. */
+/* The tags on the security group rig makes for one machine: its name, and when it was made. */
 const GROUP = "rig-machine";
+const MADE = "rig-made";
 
-type Nic = { properties?: { networkSecurityGroup?: { id?: string } } } & Record<string, unknown>;
+/* A group younger than this may be a try still running: `sweep` leaves it. */
+const YOUNG = 10 * 60_000;
 
-/** A machine's ports: a network security group of its own, made on the first `open` and set on its network card. */
+/* The machine's deny-all: the lowest a custom rule can rank, still above the network's own allow (65000). */
+const DENY = { name: "rig-deny", priority: 4096 };
+
+/** A machine's ports: a network security group of its own, made before it with only the kind's rules, all else denied. */
 export function createPorts(arm: Arm, path: Paths, region: string) {
     async function nsgOf(vm: string): Promise<Nsg | null> {
         try {
@@ -42,68 +56,72 @@ export function createPorts(arm: Arm, path: Paths, region: string) {
         }
     }
 
-    /* The machine's network card gets the group, once. */
-    async function attach(vm: string): Promise<void> {
-        const machine = (await arm.send("GET", versioned(path.vm(vm), API.compute))).body as {
-            properties?: { networkProfile?: { networkInterfaces?: { id?: string }[] } };
-        };
-
-        const nic = machine.properties?.networkProfile?.networkInterfaces?.[0]?.id;
-
-        if (!nic) {
-            throw new Error(`azure: ${vm} has no network card`);
-        }
-
-        const card = (await arm.send("GET", versioned(nic, API.network))).body as Nic;
-
-        if (card.properties?.networkSecurityGroup?.id) {
-            return;
-        }
-
-        await arm.done("PUT", versioned(nic, API.network), {
-            ...card,
-            properties: { ...card.properties, networkSecurityGroup: { id: path.nsg(vm) } },
-        });
+    /* An inbound rule, as a network security group takes it. */
+    function inbound(name: string, priority: number, access: string, protocol: string, from: string, ports: string) {
+        return {
+            name,
+            properties: {
+                priority,
+                direction: "Inbound",
+                access,
+                protocol,
+                sourceAddressPrefix: from,
+                sourcePortRange: "*",
+                destinationAddressPrefix: "*",
+                destinationPortRange: ports,
+            },
+        } satisfies SecurityRule;
     }
 
+    function allow(name: string, priority: number, rule: Rule): SecurityRule {
+        const ports = rule.to !== undefined && rule.to !== rule.port ? `${rule.port}-${rule.to}` : String(rule.port);
+
+        return inbound(name, priority, "Allow", rule.proto === Proto.UDP ? "Udp" : "Tcp", rule.from, ports);
+    }
+
+    const deny = inbound(DENY.name, DENY.priority, "Deny", "*", "*", "*");
+
     return {
-        async open(vm: string, rule: Rule): Promise<Rule> {
-            const rules = (await nsgOf(vm))?.properties?.securityRules ?? [];
-            const name = `rig-${randomBytes(4).toString("hex")}`;
-
-            const priority =
-                100 +
-                rules.reduce((top, one) => {
-                    return Math.max(top, (one.properties?.priority ?? 100) - 100 + 1);
-                }, 0);
-
-            const ports =
-                rule.to !== undefined && rule.to !== rule.port ? `${rule.port}-${rule.to}` : String(rule.port);
-
+        /** §11: before the machine: its own group, all inbound denied but the kind's rules; its id. */
+        async make(vm: string, kept: Rule[]): Promise<string> {
             await arm.done("PUT", versioned(path.nsg(vm), API.network), {
                 location: region,
-                tags: { [GROUP]: vm },
+                tags: { [GROUP]: vm, [MADE]: String(Date.now()) },
                 properties: {
                     securityRules: [
-                        ...rules,
-                        {
-                            name,
-                            properties: {
-                                priority,
-                                direction: "Inbound",
-                                access: "Allow",
-                                protocol: rule.proto === Proto.UDP ? "Udp" : "Tcp",
-                                sourceAddressPrefix: rule.from,
-                                sourcePortRange: "*",
-                                destinationAddressPrefix: "*",
-                                destinationPortRange: ports,
-                            },
-                        },
+                        ...kept.map((rule, index) => {
+                            return allow(`rig-${randomBytes(4).toString("hex")}`, 100 + index, rule);
+                        }),
+                        deny,
                     ],
                 },
             });
 
-            await attach(vm);
+            return path.nsg(vm);
+        },
+
+        async open(vm: string, rule: Rule): Promise<Rule> {
+            const nsg = await nsgOf(vm);
+
+            if (!nsg) {
+                throw new Error(`azure: ${vm} has no security group of its own`);
+            }
+
+            const rules = nsg.properties?.securityRules ?? [];
+            const name = `rig-${randomBytes(4).toString("hex")}`;
+
+            const priority =
+                1 +
+                rules.reduce((top, one) => {
+                    const at = one.properties?.priority ?? 0;
+
+                    return at < DENY.priority ? Math.max(top, at) : top;
+                }, 99);
+
+            /* The one rule, on its own: the group's other rules and tags stay as they are. */
+            await arm.done("PUT", versioned(`${path.nsg(vm)}/securityRules/${name}`, API.network), {
+                properties: allow(name, priority, rule).properties,
+            });
 
             return { ...rule, id: name };
         },
@@ -119,7 +137,11 @@ export function createPorts(arm: Arm, path: Paths, region: string) {
         },
 
         async list(vm: string): Promise<Rule[]> {
-            return ((await nsgOf(vm))?.properties?.securityRules ?? []).map((one) => {
+            const rules = ((await nsgOf(vm))?.properties?.securityRules ?? []).filter((one) => {
+                return one.name !== DENY.name;
+            });
+
+            return rules.map((one) => {
                 const [from = "", to] = (one.properties?.destinationPortRange ?? "0").split("-");
 
                 return {
@@ -153,8 +175,9 @@ export function createPorts(arm: Arm, path: Paths, region: string) {
 
             for (const group of groups) {
                 const vm = group.tags?.[GROUP];
+                const young = Date.now() - Number(group.tags?.[MADE] ?? 0) < YOUNG;
 
-                if (vm && !(await exists(vm))) {
+                if (vm && !young && !(await exists(vm))) {
                     await remove(path.nsg(vm));
                 }
             }

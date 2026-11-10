@@ -13,6 +13,8 @@ import {
     type Tags,
 } from "@diphyx/rig";
 
+import { tryit } from "radash";
+
 import { codeOf, createArm, gone } from "./arm.js";
 import { KEYS, resolveAuth } from "./auth.js";
 import { type AzureConfig, checkConfig, subscriptionOf } from "./config.js";
@@ -41,6 +43,17 @@ export function createAzure(config: AzureConfig): Azure {
     const network = createNetwork(arm, path, region, extra.subnet);
     const ports = createPorts(arm, path, region);
     const sizes = createSizes(arm, path, region);
+
+    /* The machine deleted, with its disk, card and IP; one already gone is done. */
+    async function remove(vm: string): Promise<void> {
+        try {
+            await arm.done("DELETE", versioned(path.vm(vm), API.compute));
+        } catch (error) {
+            if (!gone(error)) {
+                throw error;
+            }
+        }
+    }
 
     async function vmOf(vm: string): Promise<Vm | null> {
         try {
@@ -105,10 +118,11 @@ export function createAzure(config: AzureConfig): Azure {
 
         places: sizes.places,
 
-        /** §11: exactly one try, waited for; no room is `busy`, by the data file; anything else throws. */
+        /** §11: exactly one try, waited for, behind a security group of its own made first; no room is `busy`, by the data file; anything else throws. */
         async create(place: Place, spec: Spec): Promise<Answer> {
             const vm = azureName(spec.name);
             const subnet = await network.subnet();
+            const nsg = await ports.make(vm, spec.ports);
 
             try {
                 await arm.done(
@@ -117,6 +131,7 @@ export function createAzure(config: AzureConfig): Azure {
                     vmBody(place, spec, vm, {
                         region,
                         subnet,
+                        nsg,
                         ...(extra.key && { key: extra.key }),
                         ...(config.identity && { identity: config.identity }),
                     }),
@@ -124,6 +139,10 @@ export function createAzure(config: AzureConfig): Azure {
 
                 return { ok: { id: vm } };
             } catch (error) {
+                /* §11: a failed try leaves nothing it made: a machine Azure kept in a failed state, then its group. */
+                await tryit(remove)(vm);
+                await tryit(ports.release)(vm);
+
                 const busy = busyOf(codeOf(error));
 
                 if (busy) {
@@ -171,14 +190,7 @@ export function createAzure(config: AzureConfig): Azure {
 
         /** §11: the machine, its disk, card and IP go together; then its security group, and groups of machines gone earlier. */
         async end(id: string): Promise<void> {
-            try {
-                await arm.done("DELETE", versioned(path.vm(id), API.compute));
-            } catch (error) {
-                if (!gone(error)) {
-                    throw error;
-                }
-            }
-
+            await remove(id);
             await ports.release(id);
 
             await ports.sweep(async (vm) => {

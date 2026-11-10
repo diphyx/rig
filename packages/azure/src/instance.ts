@@ -20,7 +20,7 @@ export function azureName(name: string): string {
 }
 
 /** Where and as what a machine runs. */
-export type Placement = { region: string; subnet: string; key?: string; identity?: string };
+export type Placement = { region: string; subnet: string; nsg: string; key?: string; identity?: string };
 
 /* The kind's image: a resource id, or a `publisher:offer:sku:version` URN. */
 function imageOf(image: string): Record<string, string> {
@@ -84,6 +84,7 @@ export function vmBody(place: Place, spec: Spec, vm: string, placement: Placemen
                         properties: {
                             primary: true,
                             deleteOption: "Delete",
+                            networkSecurityGroup: { id: placement.nsg },
                             ipConfigurations: [
                                 {
                                     name: "ip",

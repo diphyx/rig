@@ -52,6 +52,12 @@ const NETWORK = {
     "PUT /subscriptions/s/resourcegroups/rig": () => {
         return ok();
     },
+    [`PUT ${NSG}/.*-nsg`]: () => {
+        return ok();
+    },
+    [`DELETE ${NSG}/.*-nsg`]: () => {
+        return ok();
+    },
     [`PUT ${RG}/providers/Microsoft.Network/virtualNetworks/rig-eastus`]: () => {
         return ok();
     },
@@ -68,6 +74,7 @@ const PLACE = { market: Market.DEMAND, type: "Standard_D4ps_v6", zone: "eastus-1
 const SPEC = {
     name: "app-w-0a1b2c3d",
     tags: { rig: "1", "rig-app": "app", "rig-kind": "w", "rig-name": "app-w-0a1b2c3d" },
+    ports: [],
 };
 
 beforeEach(() => {
@@ -183,6 +190,63 @@ describe("azure: create", () => {
         });
 
         expect(bodies[0]!.properties).not.toHaveProperty("priority");
+    });
+
+    it("makes the machine's own group first, the kind's rules over a deny-all, and sets it on the card", async () => {
+        const groups: Record<string, unknown>[] = [];
+        const { provider, bodies, calls } = created({
+            [`PUT ${NSG}/.*-nsg`]: (body) => {
+                groups.push(body!);
+
+                return ok();
+            },
+        });
+
+        await provider.create(PLACE, { ...SPEC, ports: [{ port: 22, from: "1.2.3.4/32" }] });
+
+        const order = calls.map((one) => {
+            return one.path.split("?")[0]!.split("/").pop();
+        });
+
+        expect(order.indexOf("app-w-0a1b2c3d-nsg")).toBeLessThan(order.lastIndexOf("app-w-0a1b2c3d"));
+
+        expect(groups[0]).toMatchObject({
+            properties: {
+                securityRules: [
+                    {
+                        properties: {
+                            priority: 100,
+                            access: "Allow",
+                            destinationPortRange: "22",
+                            sourceAddressPrefix: "1.2.3.4/32",
+                        },
+                    },
+                    { name: "rig-deny", properties: { priority: 4096, access: "Deny", sourceAddressPrefix: "*" } },
+                ],
+            },
+        });
+
+        expect(JSON.stringify(bodies[0])).toContain(`"networkSecurityGroup":{"id":"${NSG}/app-w-0a1b2c3d-nsg"}`);
+    });
+
+    it("leaves nothing behind after a failed try: a machine kept as failed, then its group, are deleted", async () => {
+        const { provider, calls } = created({
+            [`PUT ${VM}/app-w-0a1b2c3d`]: () => {
+                return failed(409, "ZonalAllocationFailed");
+            },
+        });
+
+        expect(await provider.create(PLACE, SPEC)).toMatchObject({ busy: "zone" });
+
+        const deletes = calls
+            .filter((one) => {
+                return one.method === "DELETE";
+            })
+            .map((one) => {
+                return one.path.split("?")[0]!.split("/").at(-1);
+            });
+
+        expect(deletes).toEqual(["app-w-0a1b2c3d", "app-w-0a1b2c3d-nsg"]);
     });
 
     it("asks for a spot machine that is deleted on a take-back; takes a given subnet and SSH key as they are", async () => {
@@ -421,6 +485,57 @@ describe("azure: machines", () => {
     });
 });
 
+describe("azure: ports", () => {
+    const GROUPBODY = {
+        tags: { "rig-machine": "app-w-1", "rig-made": "0" },
+        properties: {
+            securityRules: [
+                {
+                    name: "rig-aaaa",
+                    properties: {
+                        priority: 100,
+                        protocol: "Tcp",
+                        sourceAddressPrefix: "1.2.3.4/32",
+                        destinationPortRange: "22",
+                    },
+                },
+                { name: "rig-deny", properties: { priority: 4096, access: "Deny" } },
+            ],
+        },
+    };
+
+    it("opens one rule on its own, below the deny-all; lists only the rules that open ports", async () => {
+        const put: Record<string, unknown>[] = [];
+        const { provider } = azure({
+            [`GET ${NSG}/app-w-1-nsg`]: () => {
+                return ok(GROUPBODY);
+            },
+            [`PUT ${NSG}/app-w-1-nsg/securityRules/rig-.*`]: (body) => {
+                put.push(body!);
+
+                return ok();
+            },
+        });
+
+        await provider.port!.open("app-w-1", { port: 443, from: "::/0" });
+
+        expect(put).toMatchObject([
+            {
+                properties: {
+                    priority: 101,
+                    access: "Allow",
+                    destinationPortRange: "443",
+                    sourceAddressPrefix: "::/0",
+                },
+            },
+        ]);
+
+        expect(await provider.port!.list("app-w-1")).toEqual([
+            { id: "rig-aaaa", port: 22, proto: "tcp", from: "1.2.3.4/32" },
+        ]);
+    });
+});
+
 describe("azure: shape and presets", () => {
     const { provider } = azure({});
 
@@ -448,6 +563,48 @@ describe("azure: shape and presets", () => {
 });
 
 describe("azure: with the core", () => {
+    it("takes a full spot quota as no room in spot, and makes the machine on demand", async () => {
+        const { provider } = azure({
+            ...NETWORK,
+            "GET /subscriptions/s": () => {
+                return ok();
+            },
+            "GET /subscriptions/s/providers/Microsoft.Compute/skus": () => {
+                return ok({
+                    value: [
+                        { resourceType: "virtualMachines", name: "Standard_D4ps_v6", locationInfo: [{ zones: ["1"] }] },
+                    ],
+                });
+            },
+            [`GET ${VM}`]: () => {
+                return ok({ value: [] });
+            },
+            [`PUT ${VM}/.*`]: (body) => {
+                return (body?.properties as { priority?: string }).priority === "Spot"
+                    ? failed(409, "OperationNotAllowed", "QuotaExceeded")
+                    : ok();
+            },
+        });
+
+        const rig = createRig({
+            rig: 1,
+            app: "app",
+            providers: [provider],
+            kinds: [
+                {
+                    name: "w",
+                    try: [{ provider: "azure", market: [Market.SPOT, Market.DEMAND], types: ["Standard_D4ps_v6"] }],
+                },
+            ],
+            store: mkdtempSync(join(tmpdir(), "rig-azure-")),
+            extra: { rounds: false },
+        });
+
+        await rig.open();
+
+        expect(await rig.machine.create("w")).toMatchObject({ market: "demand" });
+    });
+
     it("checks at open, and creates a machine from a preset", async () => {
         const { provider, calls } = azure({
             ...NETWORK,

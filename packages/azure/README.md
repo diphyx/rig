@@ -67,23 +67,27 @@ It calls Azure Resource Manager's REST API, signed in with Azure's own `@azure/i
 | image                     | the kind's (a resource id, or `publisher:offer:sku:version`), or Ubuntu 24.04 (arm64 or x64, by size)                                                                     |
 | `get`, `list`             | the machine, its addresses from its card and IP; the group's machines in the region, every page                                                                           |
 | `start`, `stop`, `reboot` | `start`, `deallocate`, `restart`; stopping a spot machine is `unsupported`                                                                                                |
-| `end`                     | the machine deleted with its disk, card and IP, then its security group; a group still held, and those of machines gone earlier, go on a later `end`                      |
+| `end`                     | the machine deleted with its disk, card and IP, then its security group; groups left by machines gone earlier go too                                                      |
 | `disk.grow`, `get`        | resizes the OS disk; ready once its change has succeeded                                                                                                                  |
-| `port.*`                  | a network security group of the machine's own, made on the first `port.open`, set on its card                                                                             |
+| `port.*`                  | a network security group of the machine's own, made before it with the kind's `ports` and a deny-all                                                                      |
 
 Busy answers come from [`src/azure.json`](src/azure.json): no room in a zone (`ZonalAllocationFailed`, `AllocationFailed`, `SkuNotAvailable`, ...), or in the subscription (`QuotaExceeded`, `OperationNotAllowed`); Azure's inner error, in `details`, is read first. Any other error is thrown.
+
+### Ports at create
+
+A new machine is behind a network security group of its own, made before it and set on its card: the kind's `ports`, and a deny-all inbound below them (`4096`, above the network's own allow). Every other inbound port is closed, inside the network too. `port.open` adds to them, and a failed try leaves nothing it made: a machine Azure kept as failed is deleted, then its group.
 
 ## Presets
 
 The same five presets as every rig provider (spec §7), made by the core's preset engine from [`src/azure.json`](src/azure.json), newest generation first.
 
-| Preset    | Size       | Default size | Default market                 | arm                   | x86                                                               |
-| --------- | ---------- | ------------ | ------------------------------ | --------------------- | ----------------------------------------------------------------- |
-| `small`   | —          | —            | `[Market.DEMAND]`              | `B2pls_v2`, `B2ps_v2` | `B2s`, `B2als_v2`                                                 |
-| `general` | `cpu`      | `2`          | `[Market.DEMAND]`              | `Dps_v6`, `Dps_v5`    | `Ds_v6`, `Das_v6`, `Ds_v5`, `Das_v5`                              |
-| `compute` | `cpu`      | `4`          | `[Market.SPOT, Market.DEMAND]` | `Dpls_v6`, `Dpls_v5`  | `Fas_v6`, `Fs_v2`                                                 |
-| `memory`  | `mem` (GB) | `32`         | `[Market.DEMAND]`              | `Eps_v6`, `Eps_v5`    | `Es_v6`, `Eas_v6`, `Es_v5`, `Eas_v5`                              |
-| `gpu`     | `gpu`      | `t4`         | `[Market.SPOT, Market.DEMAND]` | —                     | `NCas_T4_v3` (T4), `NCads_A100_v4` (A100), `NCads_H100_v5` (H100) |
+| Preset    | Size       | Default size | Default market                 | Default disk (GB) | arm                   | x86                                                               |
+| --------- | ---------- | ------------ | ------------------------------ | ----------------- | --------------------- | ----------------------------------------------------------------- |
+| `small`   | —          | —            | `[Market.DEMAND]`              | `30`              | `B2pls_v2`, `B2ps_v2` | `B2s`, `B2als_v2`                                                 |
+| `general` | `cpu`      | `2`          | `[Market.DEMAND]`              | `30 + 5 × cpu`    | `Dps_v6`, `Dps_v5`    | `Ds_v6`, `Das_v6`, `Ds_v5`, `Das_v5`                              |
+| `compute` | `cpu`      | `4`          | `[Market.SPOT, Market.DEMAND]` | `30 + 5 × cpu`    | `Dpls_v6`, `Dpls_v5`  | `Fas_v6`, `Fs_v2`                                                 |
+| `memory`  | `mem` (GB) | `32`         | `[Market.DEMAND]`              | `30 + mem / 2`    | `Eps_v6`, `Eps_v5`    | `Es_v6`, `Eas_v6`, `Es_v5`, `Eas_v5`                              |
+| `gpu`     | `gpu`      | `t4`         | `[Market.SPOT, Market.DEMAND]` | `200`             | —                     | `NCas_T4_v3` (T4), `NCads_A100_v4` (A100), `NCads_H100_v5` (H100) |
 
 Only `name` is required; every other option has a strong default.
 
@@ -92,8 +96,9 @@ Only `name` is required; every other option has a strong default.
 | `cpu`, `mem`, `gpu` | per preset                                          | the size, rounded up to the next one sold                              |
 | `arch`              | `PresetArch.ANY`: Cobalt and Ampere first, then x86 | `PresetArch.ARM`, `X86` or `ANY`; with your own `image`, one arch only |
 | `up`                | `0`                                                 | also try the next `up` sizes, after every type of the asked size       |
+| `disk`              | per preset, from the asked size                     | GB of the boot disk                                                    |
 | `market`            | per preset                                          | in failover order                                                      |
-| kind keys           | —                                                   | `image`, `disk`, `script`, `risk`, `life`, `recovers`, `tags`          |
+| kind keys           | —                                                   | `image`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`         |
 
 ```ts
 azure.presets.compute({ name: "worker" });
@@ -117,6 +122,8 @@ await azure.shape("Standard_NC4as_T4_v3"); // { cpu: 4, mem: 28, gpu: "t4", arch
 ## Spot
 
 Spot Virtual Machines, with a 30-second warning before a take-back, seen from inside the machine. The core finds a take-back on its next round, ends the machine so nothing it held is left, and recovers it.
+
+A full spot quota is no room in spot, not in the account: the core tries the entry's demand machines next.
 
 ## Spec
 
