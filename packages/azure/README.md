@@ -14,17 +14,25 @@ pnpm add @diphyx/rig @diphyx/rig-azure
 
 ```ts
 import { createRig } from "@diphyx/rig";
-import { azure } from "@diphyx/rig-azure";
+import { createAzure } from "@diphyx/rig-azure";
 
-const cloud = azure({ subscription: "...", region: "eastus" });
+const azure = createAzure({ region: "eastus", extra: { subscription: "..." } });
 
 const rig = createRig({
     rig: 1,
     app: "my-app",
-    providers: [cloud],
-    kinds: [cloud.small({ name: "dev" }), cloud.compute({ name: "worker", cpu: 8 })],
+    providers: [azure],
+    kinds: [azure.presets.small({ name: "dev" }), azure.presets.compute({ name: "worker", cpu: 8 })],
 });
 ```
+
+## Config
+
+The same keys as every rig provider's factory (spec §8.2): `region`, `name`, `auth`, `identity`; azure's own go in `extra`.
+
+## Auth
+
+The same three ways as every rig provider (spec §8.1): `auto` (env, `az` login, or a managed identity), `env` (`RIG_AZURE_<KEY>`), or `keys`: `tenant`, `id`, `secret`. `identity` is what its machines run as.
 
 ## Presets
 
