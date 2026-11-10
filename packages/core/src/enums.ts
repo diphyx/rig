@@ -85,3 +85,19 @@ export enum State {
     OPEN = "open",
     CLOSED = "closed",
 }
+
+/** §7: the presets every provider offers. */
+export enum PresetName {
+    SMALL = "small",
+    GENERAL = "general",
+    COMPUTE = "compute",
+    MEMORY = "memory",
+    GPU = "gpu",
+}
+
+/** §7.2: a preset's CPU architecture; `ANY` is arm's types, then x86's. */
+export enum PresetArch {
+    ARM = "arm",
+    X86 = "x86",
+    ANY = "any",
+}

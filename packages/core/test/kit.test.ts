@@ -28,7 +28,7 @@ type Expect = {
     throws?: true;
     events?: Record<string, unknown>[];
     store?: { risk?: unknown };
-    fake?: Record<string, { machines?: unknown[] }>;
+    fake?: Record<string, { machines?: unknown[]; ends?: string[] }>;
 };
 
 type Case = {
@@ -82,8 +82,9 @@ function fakes(
     data: Record<string, Fake>,
     clock: () => number,
     stray: string[],
-): { providers: Provider[]; machines: Map<string, ProviderMachine[]> } {
+): { providers: Provider[]; machines: Map<string, ProviderMachine[]>; ends: Map<string, string[]> } {
     const machines = new Map<string, ProviderMachine[]>();
+    const ends = new Map<string, string[]>();
     let next = 0;
 
     const providers = (
@@ -109,6 +110,7 @@ function fakes(
         };
 
         machines.set(written.name, own);
+        ends.set(written.name, []);
 
         const provider: Provider = {
             slot: Slot.PROVIDER,
@@ -195,6 +197,8 @@ function fakes(
                 );
             },
             async end(id) {
+                ends.get(written.name)!.push(id);
+
                 const machine = find(id);
 
                 if (machine) {
@@ -231,7 +235,7 @@ function fakes(
         return provider;
     });
 
-    return { providers, machines };
+    return { providers, machines, ends };
 }
 
 /* README §5's `try` short form. */
@@ -290,7 +294,7 @@ async function play(one: Case): Promise<void> {
 
     const folder = mkdtempSync(join(tmpdir(), "rig-kit-"));
     const stray: string[] = [];
-    const { providers, machines } = fakes(one.given.config, one.given.fake, clock, stray);
+    const { providers, machines, ends } = fakes(one.given.config, one.given.fake, clock, stray);
 
     if (one.given.store?.risk) {
         mkdirSync(join(folder, "rig", "1"), { recursive: true });
@@ -354,7 +358,13 @@ async function play(one: Case): Promise<void> {
         }
 
         for (const [name, fake] of Object.entries(want.fake ?? {})) {
-            match(machines.get(name), fake.machines, `${at}: fake ${name}`);
+            if (fake.machines) {
+                match(machines.get(name), fake.machines, `${at}: fake ${name}`);
+            }
+
+            if (fake.ends) {
+                match(ends.get(name), fake.ends, `${at}: fake ${name} ends`);
+            }
         }
     }
 }

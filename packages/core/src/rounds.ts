@@ -52,10 +52,11 @@ async function recover(context: Context, pending: Pending): Promise<void> {
     emit(Event.MACHINE_RECOVERED, { lost: pending.lost, machine: toMachine(known) });
 }
 
-/* §15.1, §16: count the loss and the hours it ran, then recover. */
+/* §15.1, §16: count the loss and the hours it ran, `end` it so the provider removes what it left, then recover. */
 async function lose(context: Context, known: Known): Promise<void> {
     const { store } = context;
     countLeft(context, known, true);
+    await providerOf(context, known).end(known.id);
 
     store.forget(known);
     store.save();
