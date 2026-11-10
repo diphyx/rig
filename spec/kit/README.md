@@ -74,7 +74,7 @@ In `config.providers`, each provider is written as data:
 - A try at a place with no answer left MUST fail the case: the core tried what it should not.
 - After `ok`, the fake runs the machine: `status: "running"` (or `"pending"`, with `boot`), the place's market, type and zone, `spec.tags`, `ip: { private: "10.0.0.<n>" }` for id `m<n>`, `created` at the clock.
 - With `can.disk`, every machine has a disk of `30` GB: `disk.grow` sets its size, `disk.get` gives `{ gb, ready: true }`.
-- `end` makes a machine `ended`. `list` never returns an `ended` machine.
+- `end` makes a machine `ended`, and is kept in the fake's `ends`, in order. `list` never returns an `ended` machine.
 - `get` and `list` MUST return copies, as a real provider does: a later change in the fake MUST NOT show through what the core already holds.
 
 ## 4. Steps

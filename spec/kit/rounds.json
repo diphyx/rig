@@ -6,7 +6,7 @@
     "cases": [
         {
             "id": "rounds/lost-recover",
-            "description": "a lost machine is counted, then replaced",
+            "description": "a lost machine is counted, ended so its provider removes what it left, then replaced",
             "given": {
                 "config": {
                     "rig": 1,
@@ -122,7 +122,12 @@
                                     "id": "m2"
                                 }
                             }
-                        ]
+                        ],
+                        "fake": {
+                            "a": {
+                                "ends": ["m1"]
+                            }
+                        }
                     }
                 }
             ]
