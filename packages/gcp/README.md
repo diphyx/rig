@@ -16,7 +16,7 @@ pnpm add @diphyx/rig @diphyx/rig-gcp
 import { createRig } from "@diphyx/rig";
 import { createGcp } from "@diphyx/rig-gcp";
 
-const gcp = createGcp({ region: "us-central1", extra: { project: "my-project" } });
+const gcp = createGcp(); // its region: CLOUDSDK_COMPUTE_REGION, else us-central1; its project: the key's
 
 const rig = createRig({
     rig: 1,
@@ -31,9 +31,9 @@ const rig = createRig({
 The same three ways as every rig provider (spec §8.1), as `AuthFrom`:
 
 ```ts
-createGcp({ region: "us-central1" }); // auto: env, the gcloud login, or the machine's service account
-createGcp({ region: "us-central1", auth: { from: AuthFrom.ENV } }); // RIG_GCP_KEY
-createGcp({ region: "us-central1", auth: { from: AuthFrom.KEYS, keys: { key } } });
+createGcp(); // auto: env, the gcloud login, or the machine's service account
+createGcp({ auth: { from: AuthFrom.ENV } }); // RIG_GCP_KEY
+createGcp({ auth: { from: AuthFrom.KEYS, keys: { key } } });
 ```
 
 The key is a service-account key's JSON. A missing key is a refusal at once, naming the key.
@@ -42,36 +42,36 @@ The key is a service-account key's JSON. A missing key is a refusal at once, nam
 
 The same keys as every rig provider's factory (spec §8.2); gcp's own go in `extra`, and any other key is a refusal.
 
-| Option          | Default                                      | Is                                                                    |
-| --------------- | -------------------------------------------- | --------------------------------------------------------------------- |
-| `region`        | —                                            | the Compute Engine region                                             |
-| `name`          | `"gcp"`                                      | its name in the config; two regions are two providers, with two names |
-| `auth`          | `{ from: AuthFrom.AUTO }`                    | how it signs in: [Auth](#auth)                                        |
-| `identity`      | none                                         | what its machines run as: a service account's email                   |
-| `extra.project` | the key's, or the one Google's sign-in gives | the project                                                           |
-| `extra.network` | `global/networks/default`                    | the VPC network                                                       |
-| `extra.subnet`  | the network's own, in the region             | a subnet: `regions/us-central1/subnetworks/main`                      |
-| `extra.request` | Compute Engine's REST API                    | for tests: answers in place of Compute Engine                         |
+| Option          | Default                                                              | Is                                                                    |
+| --------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `region`        | `CLOUDSDK_COMPUTE_REGION`, `GOOGLE_CLOUD_REGION`, else `us-central1` | the Compute Engine region                                             |
+| `name`          | `"gcp"`                                                              | its name in the config; two regions are two providers, with two names |
+| `auth`          | `{ from: AuthFrom.AUTO }`                                            | how it signs in: [Auth](#auth)                                        |
+| `identity`      | none                                                                 | what its machines run as: a service account's email                   |
+| `extra.project` | the key's, or the one Google's sign-in gives                         | the project                                                           |
+| `extra.network` | `global/networks/default`                                            | the VPC network                                                       |
+| `extra.subnet`  | the network's own, in the region                                     | a subnet: `regions/us-central1/subnetworks/main`                      |
+| `extra.request` | Compute Engine's REST API                                            | for tests: answers in place of Compute Engine                         |
 
 ## What It Does on Compute Engine
 
 It calls Compute Engine's REST API, signed in with Google's own `google-auth-library`.
 
-| rig                       | Compute Engine                                                                                                                                                    |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `check`                   | reads the region: the keys, the project and the region work                                                                                                       |
-| `places`                  | the region's zones that list the entry's machine types                                                                                                            |
-| `create`                  | one `instances.insert`, waited for; labelled with the tags; the id is its zone and name, `us-central1-a/app-w-0a1b2c3d`, in 63 characters                         |
-| `spot`                    | `provisioningModel: SPOT`, deleted on a take-back                                                                                                                 |
-| `distro`, `image`         | the kind's `distro`: its image family's newest image for the type's arch, kept on the machine's metadata as `rig-image`; or the entry's `image` as it is          |
-| `script`, `login`         | the first-boot script (spec §6.2) as the `startup-script` metadata, run by the guest agent at every boot; the script itself runs once                             |
-| `get`, `list`             | `instances.get`, `instances.aggregatedList` in the region's zones, every page                                                                                     |
-| `start`, `stop`, `reboot` | `start`, `stop`, `reset`; stopping a spot machine is `unsupported`                                                                                                |
-| `end`                     | the machine deleted, then its firewall rules, so it is never open without its deny-all; a gone machine still loses its rules; the boot disk goes with the machine |
-| `disk.grow`, `get`        | `disks.resize` on the boot disk; ready once it is `READY`                                                                                                         |
-| `port.*`                  | firewall rules aimed at the machine's own network tag, its name: its deny-all, the kind's `ports`, and the rules opened later                                     |
+| rig                       | Compute Engine                                                                                                                                                                                                                      |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check`                   | reads the region: the keys, the project and the region work                                                                                                                                                                         |
+| `places`                  | the region's zones that list the entry's machine types                                                                                                                                                                              |
+| `create`                  | one `instances.insert`, waited for; labelled with the tags, the whole rig name kept on its metadata, as a label holds 63 characters; a failed try deletes what it made; the id is its zone and name, `us-central1-a/app-w-0a1b2c3d` |
+| `spot`                    | `provisioningModel: SPOT`, deleted on a take-back                                                                                                                                                                                   |
+| `distro`, `image`         | the kind's `distro`: its image family's newest image for the type's arch, kept on the machine's metadata as `rig-image`; or the entry's `image` as it is                                                                            |
+| `script`, `login`         | the first-boot script (spec §6.2) as the `startup-script` metadata, run by the guest agent at every boot; the script itself runs once                                                                                               |
+| `get`, `list`             | `instances.get`, `instances.aggregatedList` in the region's zones, every page                                                                                                                                                       |
+| `start`, `stop`, `reboot` | `start`, `stop`, `reset`; stopping a spot machine is `unsupported`                                                                                                                                                                  |
+| `end`                     | the machine deleted, then its firewall rules, so it is never open without its deny-all; a gone machine still loses its rules; the boot disk goes with the machine                                                                   |
+| `disk.grow`, `get`        | `disks.resize` on the boot disk; ready once it is `READY`                                                                                                                                                                           |
+| `port.*`                  | firewall rules aimed at the machine's own network tag, its name: its deny-all, the kind's `ports`, and the rules opened later                                                                                                       |
 
-Busy answers come from [`src/gcp.json`](src/gcp.json): no room in a zone (`ZONE_RESOURCE_POOL_EXHAUSTED`, `..._WITH_DETAILS`), or in the project (`QUOTA_EXCEEDED`, `quotaExceeded`). A missing image family for the distro is no room for that type, so failover moves on. Any other error is thrown.
+Busy answers come from [`src/gcp.json`](src/gcp.json): no room in a zone (`ZONE_RESOURCE_POOL_EXHAUSTED`, `..._WITH_DETAILS`), or in the project (`QUOTA_EXCEEDED`, `quotaExceeded`). A missing image family for the distro is no room for that type, so failover moves on. A type not in the data file needs its entry's own `image`, as its arch is unknown. Any other error is thrown.
 
 ### Ports
 
@@ -112,7 +112,7 @@ Only `name` is required; every other option has a strong default.
 | `image`             | —                                                          | this provider's image id: the entry's `image`, booted in place of `distro`                   |
 | `disk`              | per preset, from the asked size; with `image`, the image's | GB of the boot disk                                                                          |
 | `market`            | per preset                                                 | in failover order                                                                            |
-| kind keys           | —                                                          | `distro`, `login`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`                     |
+| kind keys           | —                                                          | `distro`, `login`, `script`, `ports`, `worker`, `risk`, `life`, `recovers`, `tags`           |
 
 ```ts
 gcp.presets.compute({ name: "worker" });

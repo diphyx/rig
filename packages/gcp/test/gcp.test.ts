@@ -82,9 +82,8 @@ describe("gcp: factory", () => {
             return createGcp({ region: "us-central1", project: "p" } as never);
         }).toThrow(/unknown key project; gcp's own go in extra/);
 
-        expect(() => {
-            return createGcp({} as never);
-        }).toThrow(/region is required/);
+        /* No region: the cloud's own env var's, else its default. */
+        expect(createGcp({ extra: { project: "p" } })).toMatchObject({ name: "gcp" });
     });
 });
 
@@ -179,8 +178,41 @@ describe("gcp: create", () => {
                     },
                 },
             ],
-            metadata: { items: [{ key: "rig-image", value: "debian-cloud/debian-13-arm64-v20260101" }] },
+            metadata: {
+                items: [
+                    { key: "rig-image", value: "debian-cloud/debian-13-arm64-v20260101" },
+                    { key: "rig-name", value: "app-w-0a1b2c3d" },
+                ],
+            },
         });
+    });
+
+    it("deletes an instance Compute Engine kept for a failed try, then its rules", async () => {
+        const { provider, calls } = gcp({
+            "POST projects/p/zones/us-central1-a/instances": () => {
+                throw new GceError("internalError", "");
+            },
+            "GET projects/p/zones/us-central1-a/instances/app-w-0a1b2c3d": () => {
+                return { name: "app-w-0a1b2c3d" };
+            },
+            "DELETE projects/p/zones/us-central1-a/instances/app-w-0a1b2c3d": () => {
+                return { status: "DONE" };
+            },
+        });
+
+        await expect(provider.create(PLACE, SPEC)).rejects.toThrow();
+
+        expect(
+            calls.some((one) => {
+                return one.method === "DELETE" && one.path.endsWith("/instances/app-w-0a1b2c3d");
+            }),
+        ).toBe(true);
+    });
+
+    it("refuses to guess the arch of a type it does not know: its entry needs an image", async () => {
+        const { provider } = gcp({});
+
+        await expect(provider.create({ ...PLACE, type: "zz9-odd" }, SPEC)).rejects.toThrow(/arch is unknown/);
     });
 
     it("answers busy type, making nothing, when there is no image family for the distro", async () => {
@@ -219,7 +251,7 @@ describe("gcp: create", () => {
             (bodies[0]!.metadata as { items: { key: string }[] }).items.map((item) => {
                 return item.key;
             }),
-        ).toEqual(["enable-oslogin", "rig-image", "startup-script"]);
+        ).toEqual(["enable-oslogin", "rig-image", "rig-name", "startup-script"]);
     });
 
     it("denies all inbound first, IPv4 and IPv6, opens only the kind's ports, then inserts the machine", async () => {
@@ -316,7 +348,7 @@ describe("gcp: create", () => {
         });
 
         expect(await provider.port!.list("us-central1-a/x")).toEqual([
-            { id: "x-aaaa", port: 22, proto: "tcp", from: "1.2.3.4/32" },
+            { id: "x-aaaa", port: 22, protocol: "tcp", from: "1.2.3.4/32" },
         ]);
     });
 
@@ -368,6 +400,43 @@ describe("gcp: create", () => {
     });
 });
 
+describe("gcp: calls", () => {
+    it("starts, resets, resizes the boot disk and reads it back; closes a rule by deleting it", async () => {
+        const { provider, calls } = gcp({
+            "GET projects/p/zones/us-central1-a/instances/app-w-1": () => {
+                return { name: "app-w-1", disks: [{ boot: true, source: "https://x/disks/app-w-1" }] };
+            },
+            "POST projects/p/zones/us-central1-a/instances/app-w-1/(start|reset)": DONE,
+            "POST projects/p/zones/us-central1-a/disks/app-w-1/resize": DONE,
+            "GET projects/p/zones/us-central1-a/disks/app-w-1": () => {
+                return { sizeGb: "60", status: "RESTORING" };
+            },
+        });
+
+        await provider.start!("us-central1-a/app-w-1");
+        await provider.reboot("us-central1-a/app-w-1");
+        await provider.disk!.grow("us-central1-a/app-w-1", 60);
+
+        expect(await provider.disk!.get("us-central1-a/app-w-1")).toEqual({ gb: 60, ready: false });
+
+        await provider.port!.close("us-central1-a/app-w-1", "app-w-1-aaaa");
+
+        const sent = calls.map((one) => {
+            return `${one.method} ${one.path}`;
+        });
+
+        expect(sent).toContain("POST projects/p/zones/us-central1-a/instances/app-w-1/start");
+        expect(sent).toContain("POST projects/p/zones/us-central1-a/instances/app-w-1/reset");
+        expect(sent).toContain("DELETE projects/p/global/firewalls/app-w-1-aaaa");
+
+        expect(
+            calls.find((one) => {
+                return one.path.endsWith("/resize");
+            })!.body,
+        ).toEqual({ sizeGb: "60" });
+    });
+});
+
 describe("gcp: machines", () => {
     const INSTANCE = {
         name: "app-w-1",
@@ -402,6 +471,29 @@ describe("gcp: machines", () => {
         });
 
         expect(await provider.get("us-central1-a/gone")).toBeNull();
+    });
+
+    it("reads its image, and its whole rig name, from its metadata: a label holds only 63 characters", async () => {
+        const long = `${"a".repeat(32)}-${"k".repeat(32)}-0a1b2c3d`;
+        const { provider } = gcp({
+            "GET projects/p/zones/us-central1-a/instances/app-w-1": () => {
+                return {
+                    ...INSTANCE,
+                    labels: { ...INSTANCE.labels, "rig-name": "cut" },
+                    metadata: {
+                        items: [
+                            { key: "rig-image", value: "debian-cloud/debian-12-v1" },
+                            { key: "rig-name", value: long },
+                        ],
+                    },
+                };
+            },
+        });
+
+        expect(await provider.get("us-central1-a/app-w-1")).toMatchObject({
+            image: "debian-cloud/debian-12-v1",
+            tags: { "rig-name": long },
+        });
     });
 
     it("lists by every tag, in its region only: the API filters simple labels, rig the rest", async () => {

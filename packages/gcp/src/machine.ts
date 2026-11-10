@@ -1,7 +1,7 @@
 import { Market, type ProviderMachine, Status } from "@diphyx/rig";
 
 import { fromGcp } from "./data.js";
-import { IMAGE } from "./instance.js";
+import { IMAGE, NAME } from "./instance.js";
 
 /** A Compute Engine instance, as the API gives it. */
 export type Instance = {
@@ -51,9 +51,14 @@ export function partsOf(id: string): { zone: string; name: string } {
 export function toMachine(instance: Instance): ProviderMachine {
     const nic = instance.networkInterfaces?.[0];
 
-    const image = instance.metadata?.items?.find((item) => {
-        return item.key === IMAGE;
-    })?.value;
+    const item = (key: string): string | undefined => {
+        return instance.metadata?.items?.find((one) => {
+            return one.key === key;
+        })?.value;
+    };
+
+    const image = item(IMAGE);
+    const name = item(NAME);
 
     const ip = {
         ...(nic?.accessConfigs?.[0]?.natIP && { public: nic.accessConfigs[0].natIP }),
@@ -67,7 +72,7 @@ export function toMachine(instance: Instance): ProviderMachine {
         type: last(instance.machineType),
         ...(image && { image }),
         zone: last(instance.zone),
-        tags: fromGcp(instance.labels ?? {}),
+        tags: { ...fromGcp(instance.labels ?? {}), ...(name && { "rig-name": name }) },
         ...(Object.keys(ip).length > 0 && { ip }),
         created: Date.parse(instance.creationTimestamp ?? "") || 0,
     };

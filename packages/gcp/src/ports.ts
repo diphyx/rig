@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { Proto, type Rule } from "@diphyx/rig";
+import { Protocol, type Rule } from "@diphyx/rig";
 import { tryit } from "radash";
 
 import { codeOf, type Gce } from "./gce.js";
@@ -82,7 +82,7 @@ export function createPorts(gce: Gce, network: string) {
 
         await insert(id, firewall, {
             priority: ALLOW,
-            allowed: [{ IPProtocol: rule.proto ?? Proto.TCP, ports: [ports] }],
+            allowed: [{ IPProtocol: rule.protocol ?? Protocol.TCP, ports: [ports] }],
             sourceRanges: [rule.from],
         });
 
@@ -137,7 +137,7 @@ export function createPorts(gce: Gce, network: string) {
                     id: one.name ?? "",
                     port: Number(from),
                     ...(to !== undefined && { to: Number(to) }),
-                    proto: one.allowed?.[0]?.IPProtocol === Proto.UDP ? Proto.UDP : Proto.TCP,
+                    protocol: one.allowed?.[0]?.IPProtocol === Protocol.UDP ? Protocol.UDP : Protocol.TCP,
                     from: one.sourceRanges?.[0] ?? "",
                 };
             });

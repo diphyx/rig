@@ -1,6 +1,10 @@
 {
     "rig": 1,
     "name": "gcp",
+    "region": {
+        "env": ["CLOUDSDK_COMPUTE_REGION", "GOOGLE_CLOUD_REGION"],
+        "default": "us-central1"
+    },
     "busy": {
         "ZONE_RESOURCE_POOL_EXHAUSTED": "zone",
         "ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS": "zone",

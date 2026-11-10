@@ -15,15 +15,16 @@ export type Placement = { network: string; subnet?: string; identity?: string };
 /** The image to boot: its link, and how the machine shows it, under its metadata's `rig-image`. */
 export type Boot = { link: string; image: string };
 
-/** The metadata key a machine's image is kept under. */
+/** The metadata keys a machine's image, and its whole rig name, are kept under: a label holds only 63 characters. */
 export const IMAGE = "rig-image";
+export const NAME = "rig-name";
 
 /* The entry's own metadata items, but those rig sets. */
 function ownItems(extra: Spec["extra"]): { key: string; value: string }[] {
     const items = (extra as { metadata?: { items?: { key: string; value: string }[] } } | undefined)?.metadata?.items;
 
     return (items ?? []).filter((item) => {
-        return item.key !== IMAGE && item.key !== "startup-script";
+        return item.key !== IMAGE && item.key !== NAME && item.key !== "startup-script";
     });
 }
 
@@ -63,6 +64,7 @@ export function instanceBody(
             items: [
                 ...ownItems(spec.extra),
                 { key: IMAGE, value: boot.image },
+                { key: NAME, value: spec.tags["rig-name"] ?? spec.name },
                 ...(spec.script !== undefined ? [{ key: "startup-script", value: spec.script }] : []),
             ],
         },

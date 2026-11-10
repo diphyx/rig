@@ -3,6 +3,7 @@ import {
     Arch,
     Busy,
     createPresets,
+    regionOf,
     type Entry,
     type Place,
     type Presets,
@@ -20,7 +21,7 @@ import { tryit } from "radash";
 
 import { accountOf, KEYS, resolveAuth } from "./auth.js";
 import { checkConfig, type GcpConfig } from "./config.js";
-import { busyOf, DISTROS, PRESETS, RIG, toGcp } from "./data.js";
+import { busyOf, DISTROS, PRESETS, REGION, RIG, toGcp } from "./data.js";
 import { createDisk } from "./disk.js";
 import { codeOf, createGce } from "./gce.js";
 import { idOf, type Instance, partsOf, toMachine } from "./machine.js";
@@ -31,8 +32,10 @@ import { shapeOf } from "./shape.js";
 export type Gcp = Provider & { keys: string[]; presets: Presets };
 
 /** The gcp provider: Compute Engine, `spot` and `demand`, in one region. */
-export function createGcp(config: GcpConfig): Gcp {
+export function createGcp(config: GcpConfig = {}): Gcp {
     checkConfig(config);
+
+    const region = regionOf(config.region, REGION.env, REGION.default);
 
     const name = config.name ?? "gcp";
     const extra = config.extra ?? {};
@@ -50,11 +53,11 @@ export function createGcp(config: GcpConfig): Gcp {
     /* The region's zones, found once. */
     function zonesOf(): Promise<string[]> {
         zones ??= gce.project().then(async (project) => {
-            const region = (await gce.call("GET", `projects/${project}/regions/${config.region}`)) as {
+            const found = (await gce.call("GET", `projects/${project}/regions/${region}`)) as {
                 zones?: string[];
             };
 
-            return (region.zones ?? []).map((zone) => {
+            return (found.zones ?? []).map((zone) => {
                 return zone.split("/").pop() ?? "";
             });
         });
@@ -80,13 +83,41 @@ export function createGcp(config: GcpConfig): Gcp {
         }
     }
 
+    /* The instance deleted, waited for; one already gone is done. */
+    async function remove(id: string): Promise<void> {
+        const { zone, name: instance } = partsOf(id);
+
+        if (!(await instanceOf(id))) {
+            return;
+        }
+
+        try {
+            await gce.wait(await gce.call("DELETE", await base(zone, instance)));
+        } catch (error) {
+            if (codeOf(error) !== "notFound") {
+                throw error;
+            }
+        }
+    }
+
+    /* The type's arch, for its distro image: from the data file, or an error that says how to boot it. */
+    function archOf(type: string): Arch {
+        const shape = shapeOf(type);
+
+        if (!shape) {
+            throw new Error(`gcp: ${type} is not in the data file, so its arch is unknown: give its entry an image`);
+        }
+
+        return shape.arch;
+    }
+
     /* §11: the image to boot: the entry's as it is, or the newest image of the kind's distro, by its family, for the type's arch. */
     async function imageOf(place: Place, spec: Spec): Promise<Boot | null> {
         if (spec.image !== undefined) {
             return { link: spec.image, image: spec.image };
         }
 
-        const [project, family] = DISTROS.pointerOf(spec.distro!, shapeOf(place.type)?.arch ?? Arch.X86).split("/");
+        const [project, family] = DISTROS.pointerOf(spec.distro!, archOf(place.type)).split("/");
         let found: { name?: string; selfLink?: string };
 
         try {
@@ -124,7 +155,7 @@ export function createGcp(config: GcpConfig): Gcp {
         /** §11: the entry's types, in every zone of the region that sells them, once per market. */
         async places(entry: Entry): Promise<Place[]> {
             const project = await gce.project();
-            const region = await zonesOf();
+            const inRegion = await zonesOf();
 
             const filter = encodeURIComponent(
                 entry.types
@@ -144,7 +175,7 @@ export function createGcp(config: GcpConfig): Gcp {
                     return { zone: scope.replace(/^zones\//, ""), type: item.name ?? "" };
                 })
                 .filter(({ zone }) => {
-                    return region.includes(zone);
+                    return inRegion.includes(zone);
                 })
                 .flatMap(({ zone, type }) => {
                     return entry.market.map((market) => {
@@ -185,7 +216,8 @@ export function createGcp(config: GcpConfig): Gcp {
 
                 return { ok: { id } };
             } catch (error) {
-                /* §11: a failed try leaves nothing it made. */
+                /* §11: a failed try leaves nothing it made: an instance Compute Engine kept, then its rules. */
+                await tryit(remove)(id);
                 await tryit(ports.release)(id);
 
                 const busy = busyOf(codeOf(error));
@@ -226,7 +258,7 @@ export function createGcp(config: GcpConfig): Gcp {
                 "instances",
             );
 
-            const region = await zonesOf();
+            const inRegion = await zonesOf();
 
             /* Aggregated lists span every zone: only this region's are this provider's. */
             return found
@@ -235,7 +267,7 @@ export function createGcp(config: GcpConfig): Gcp {
                 })
                 .filter((machine) => {
                     return (
-                        region.includes(machine.zone) &&
+                        inRegion.includes(machine.zone) &&
                         Object.entries(tags).every(([key, value]) => {
                             return machine.tags[key] === value;
                         })
@@ -245,18 +277,7 @@ export function createGcp(config: GcpConfig): Gcp {
 
         /** §11: the machine, waited for, then its firewall rules, so it is never open without its deny-all; a gone one still loses its rules. The boot disk goes with it. */
         async end(id: string): Promise<void> {
-            const { zone, name: instance } = partsOf(id);
-
-            if (await instanceOf(id)) {
-                try {
-                    await gce.wait(await gce.call("DELETE", await base(zone, instance)));
-                } catch (error) {
-                    if (codeOf(error) !== "notFound") {
-                        throw error;
-                    }
-                }
-            }
-
+            await remove(id);
             await ports.release(id);
         },
 
