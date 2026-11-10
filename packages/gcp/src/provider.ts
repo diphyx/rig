@@ -1,5 +1,7 @@
 import {
     type Answer,
+    Arch,
+    Busy,
     createPresets,
     type Entry,
     type Place,
@@ -18,12 +20,12 @@ import { tryit } from "radash";
 
 import { accountOf, KEYS, resolveAuth } from "./auth.js";
 import { checkConfig, type GcpConfig } from "./config.js";
-import { busyOf, PRESETS, RIG, toGcp } from "./data.js";
+import { busyOf, DISTROS, PRESETS, RIG, toGcp } from "./data.js";
 import { createDisk } from "./disk.js";
 import { codeOf, createGce } from "./gce.js";
 import { idOf, type Instance, partsOf, toMachine } from "./machine.js";
 import { createPorts } from "./ports.js";
-import { gceName, instanceBody } from "./instance.js";
+import { type Boot, gceName, instanceBody } from "./instance.js";
 import { shapeOf } from "./shape.js";
 
 export type Gcp = Provider & { keys: string[]; presets: Presets };
@@ -78,11 +80,34 @@ export function createGcp(config: GcpConfig): Gcp {
         }
     }
 
+    /* §11: the image to boot: the entry's as it is, or the newest image of the kind's distro, by its family, for the type's arch. */
+    async function imageOf(place: Place, spec: Spec): Promise<Boot | null> {
+        if (spec.image !== undefined) {
+            return { link: spec.image, image: spec.image };
+        }
+
+        const [project, family] = DISTROS.pointerOf(spec.distro!, shapeOf(place.type)?.arch ?? Arch.X86).split("/");
+        let found: { name?: string; selfLink?: string };
+
+        try {
+            found = (await gce.call("GET", `projects/${project}/global/images/family/${family}`)) as typeof found;
+        } catch (error) {
+            if (codeOf(error) === "notFound") {
+                return null;
+            }
+
+            throw error;
+        }
+
+        return { link: found.selfLink!, image: `${project}/${found.name}` };
+    }
+
     return {
         slot: Slot.PROVIDER,
         name,
         rig: RIG,
         can: { spot: true, stop: true, disk: true, port: true },
+        distros: DISTROS.offers,
         keys: KEYS,
         presets: createPresets(name, PRESETS),
 
@@ -133,6 +158,15 @@ export function createGcp(config: GcpConfig): Gcp {
             const project = await gce.project();
             const instance = gceName(spec.name);
             const id = idOf(place.zone, instance);
+            const boot = await imageOf(place, spec);
+
+            /* §11: a region without the distro's image for this type's arch has no room for the type. */
+            if (!boot) {
+                return {
+                    busy: Busy.TYPE,
+                    message: `gcp: no ${spec.distro!.name} ${spec.distro!.version} image family`,
+                };
+            }
 
             await ports.make(id, spec.ports);
 
@@ -141,7 +175,7 @@ export function createGcp(config: GcpConfig): Gcp {
                     await gce.call(
                         "POST",
                         `projects/${project}/zones/${place.zone}/instances`,
-                        instanceBody(place, spec, instance, {
+                        instanceBody(place, spec, instance, boot, {
                             network,
                             ...(extra.subnet && { subnet: extra.subnet }),
                             ...(config.identity && { identity: config.identity }),

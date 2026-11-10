@@ -79,6 +79,28 @@
             }
         }
     },
+    "distros": {
+        "ubuntu": {
+            "24.04": {
+                "arm": "ubuntu-os-cloud/ubuntu-2404-lts-arm64",
+                "x86": "ubuntu-os-cloud/ubuntu-2404-lts-amd64"
+            },
+            "22.04": {
+                "arm": "ubuntu-os-cloud/ubuntu-2204-lts-arm64",
+                "x86": "ubuntu-os-cloud/ubuntu-2204-lts"
+            }
+        },
+        "debian": {
+            "13": {
+                "arm": "debian-cloud/debian-13-arm64",
+                "x86": "debian-cloud/debian-13"
+            },
+            "12": {
+                "arm": "debian-cloud/debian-12-arm64",
+                "x86": "debian-cloud/debian-12"
+            }
+        }
+    },
     "shapes": {
         "memory": {
             "standard": 4,

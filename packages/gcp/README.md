@@ -1,6 +1,6 @@
 # @diphyx/rig-gcp
 
-The **gcp** provider for [rig](../core): Google Compute Engine, `spot` and `demand`, in one region.
+The **gcp** provider for [rig](../core): Linux machines on Google Compute Engine, `spot` and `demand`, in one region.
 
 **Status: draft.** Tested against a fake Compute Engine.
 
@@ -63,18 +63,32 @@ It calls Compute Engine's REST API, signed in with Google's own `google-auth-lib
 | `places`                  | the region's zones that list the entry's machine types                                                                                                            |
 | `create`                  | one `instances.insert`, waited for; labelled with the tags; the id is its zone and name, `us-central1-a/app-w-0a1b2c3d`, in 63 characters                         |
 | `spot`                    | `provisioningModel: SPOT`, deleted on a take-back                                                                                                                 |
-| image                     | the kind's, or Ubuntu 24.04 (arm64 or amd64, by type) from Canonical's image family                                                                               |
+| `distro`, `image`         | the kind's `distro`: its image family's newest image for the type's arch, kept on the machine's metadata as `rig-image`; or the entry's `image` as it is          |
+| `script`, `login`         | the first-boot script (spec §6.2) as the `startup-script` metadata, run by the guest agent at every boot; the script itself runs once                             |
 | `get`, `list`             | `instances.get`, `instances.aggregatedList` in the region's zones, every page                                                                                     |
 | `start`, `stop`, `reboot` | `start`, `stop`, `reset`; stopping a spot machine is `unsupported`                                                                                                |
 | `end`                     | the machine deleted, then its firewall rules, so it is never open without its deny-all; a gone machine still loses its rules; the boot disk goes with the machine |
 | `disk.grow`, `get`        | `disks.resize` on the boot disk; ready once it is `READY`                                                                                                         |
 | `port.*`                  | firewall rules aimed at the machine's own network tag, its name: its deny-all, the kind's `ports`, and the rules opened later                                     |
 
-Busy answers come from [`src/gcp.json`](src/gcp.json): no room in a zone (`ZONE_RESOURCE_POOL_EXHAUSTED`, `..._WITH_DETAILS`), or in the project (`QUOTA_EXCEEDED`, `quotaExceeded`). Any other error is thrown.
+Busy answers come from [`src/gcp.json`](src/gcp.json): no room in a zone (`ZONE_RESOURCE_POOL_EXHAUSTED`, `..._WITH_DETAILS`), or in the project (`QUOTA_EXCEEDED`, `quotaExceeded`). A missing image family for the distro is no room for that type, so failover moves on. Any other error is thrown.
 
-### Ports at create
+### Ports
 
 A new machine is behind firewall rules of its own, made before it: a deny-all inbound (IPv4 and IPv6, priority `1000`, above the network's own rules), and the kind's `ports` above it (`900`). Every other inbound port is closed, inside the network too. `port.open` adds to them, and a failed try leaves nothing it made.
+
+### Distro
+
+Each version is an image family, `<project>/<family>`; a family always gives its newest image:
+
+| Distro | Version | arm                                     | x86                                     |
+| ------ | ------- | --------------------------------------- | --------------------------------------- |
+| Ubuntu | `24.04` | `ubuntu-os-cloud/ubuntu-2404-lts-arm64` | `ubuntu-os-cloud/ubuntu-2404-lts-amd64` |
+| Ubuntu | `22.04` | `ubuntu-os-cloud/ubuntu-2204-lts-arm64` | `ubuntu-os-cloud/ubuntu-2204-lts`       |
+| Debian | `13`    | `debian-cloud/debian-13-arm64`          | `debian-cloud/debian-13`                |
+| Debian | `12`    | `debian-cloud/debian-12-arm64`          | `debian-cloud/debian-12`                |
+
+The machine's `image` is the image it boots, by its `<project>/<image>`.
 
 ## Presets
 
@@ -90,14 +104,15 @@ The same five presets as every rig provider (spec §7), made by the core's prese
 
 Only `name` is required; every other option has a strong default.
 
-| Option              | Default                                            | Is                                                                     |
-| ------------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
-| `cpu`, `mem`, `gpu` | per preset                                         | the size, rounded up to the next one sold                              |
-| `arch`              | `PresetArch.ANY`: Axion and Ampere first, then x86 | `PresetArch.ARM`, `X86` or `ANY`; with your own `image`, one arch only |
-| `up`                | `0`                                                | also try the next `up` sizes, after every type of the asked size       |
-| `disk`              | per preset, from the asked size                    | GB of the boot disk                                                    |
-| `market`            | per preset                                         | in failover order                                                      |
-| kind keys           | —                                                  | `image`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`         |
+| Option              | Default                                                    | Is                                                                                           |
+| ------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `cpu`, `mem`, `gpu` | per preset                                                 | the size, rounded up to the next one sold                                                    |
+| `arch`              | `PresetArch.ANY`: Axion and Ampere first, then x86         | `PresetArch.ARM`, `X86` or `ANY`; with your own `image`, one arch only; a `distro` fits both |
+| `up`                | `0`                                                        | also try the next `up` sizes, after every type of the asked size                             |
+| `image`             | —                                                          | this provider's image id: the entry's `image`, booted in place of `distro`                   |
+| `disk`              | per preset, from the asked size; with `image`, the image's | GB of the boot disk                                                                          |
+| `market`            | per preset                                                 | in failover order                                                                            |
+| kind keys           | —                                                          | `distro`, `login`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`                     |
 
 ```ts
 gcp.presets.compute({ name: "worker" });

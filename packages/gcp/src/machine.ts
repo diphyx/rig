@@ -1,6 +1,7 @@
 import { Market, type ProviderMachine, Status } from "@diphyx/rig";
 
 import { fromGcp } from "./data.js";
+import { IMAGE } from "./instance.js";
 
 /** A Compute Engine instance, as the API gives it. */
 export type Instance = {
@@ -14,6 +15,7 @@ export type Instance = {
     networkInterfaces?: { networkIP?: string; accessConfigs?: { natIP?: string }[] }[];
     disks?: { boot?: boolean; source?: string }[];
     tags?: { items?: string[]; fingerprint?: string };
+    metadata?: { items?: { key?: string; value?: string }[] };
 };
 
 /** §11: Compute Engine's statuses onto rig's; a spot machine taken back is deleted, so it is gone. */
@@ -48,6 +50,11 @@ export function partsOf(id: string): { zone: string; name: string } {
 /** An instance as rig sees it. */
 export function toMachine(instance: Instance): ProviderMachine {
     const nic = instance.networkInterfaces?.[0];
+
+    const image = instance.metadata?.items?.find((item) => {
+        return item.key === IMAGE;
+    })?.value;
+
     const ip = {
         ...(nic?.accessConfigs?.[0]?.natIP && { public: nic.accessConfigs[0].natIP }),
         ...(nic?.networkIP && { private: nic.networkIP }),
@@ -58,6 +65,7 @@ export function toMachine(instance: Instance): ProviderMachine {
         status: STATUS[instance.status ?? ""] ?? Status.PENDING,
         market: instance.scheduling?.provisioningModel === "SPOT" ? Market.SPOT : Market.DEMAND,
         type: last(instance.machineType),
+        ...(image && { image }),
         zone: last(instance.zone),
         tags: fromGcp(instance.labels ?? {}),
         ...(Object.keys(ip).length > 0 && { ip }),

@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createRig, Market, PresetArch, Reason, Refusal } from "@diphyx/rig";
+import { createRig, Market, Distro, PresetArch, Reason, Refusal } from "@diphyx/rig";
 import { describe, expect, it } from "vitest";
 
 import { resolveAuth } from "../src/auth.js";
@@ -48,6 +48,15 @@ const FIREWALLS: Record<string, Handler> = {
         return { items: [] };
     },
     "DELETE projects/p/global/firewalls/.*": DONE,
+    /* Each family's newest image: the family's name and a date. */
+    "GET projects/[^/]+/global/images/family/.*": (_body, path) => {
+        const [, project, , , , family] = path.split("/");
+
+        return {
+            name: `${family}-v20260101`,
+            selfLink: `https://compute.googleapis.com/compute/v1/projects/${project}/global/images/${family}-v20260101`,
+        };
+    },
 };
 
 function gcp(routes: Record<string, Handler>) {
@@ -62,6 +71,7 @@ const SPEC = {
     name: "app-w-0a1b2c3d",
     tags: { rig: "1", "rig-app": "app", "rig-kind": "w", "rig-name": "app-w-0a1b2c3d" },
     ports: [],
+    distro: { name: Distro.UBUNTU, version: "24.04" },
 };
 
 describe("gcp: factory", () => {
@@ -155,6 +165,63 @@ describe("gcp: create", () => {
         expect(bodies[0]).not.toHaveProperty("scheduling");
     });
 
+    it("boots a distro family's newest image for the type's arch, and keeps its name on the machine", async () => {
+        const { provider, bodies } = inserted();
+
+        await provider.create(PLACE, { ...SPEC, distro: { name: Distro.DEBIAN, version: "13" } });
+
+        expect(bodies[0]).toMatchObject({
+            disks: [
+                {
+                    initializeParams: {
+                        sourceImage:
+                            "https://compute.googleapis.com/compute/v1/projects/debian-cloud/global/images/debian-13-arm64-v20260101",
+                    },
+                },
+            ],
+            metadata: { items: [{ key: "rig-image", value: "debian-cloud/debian-13-arm64-v20260101" }] },
+        });
+    });
+
+    it("answers busy type, making nothing, when there is no image family for the distro", async () => {
+        const { provider, calls } = gcp({
+            "GET projects/[^/]+/global/images/family/.*": () => {
+                throw new GceError("notFound", "");
+            },
+        });
+
+        expect(await provider.create(PLACE, SPEC)).toMatchObject({ busy: "type" });
+
+        expect(
+            calls.some((one) => {
+                return one.method === "POST";
+            }),
+        ).toBe(false);
+    });
+
+    it("keeps the entry's own metadata items, with rig's first boot and image", async () => {
+        const { provider, bodies } = inserted();
+
+        await provider.create(PLACE, {
+            ...SPEC,
+            script: "#!/bin/bash\n",
+            extra: {
+                metadata: {
+                    items: [
+                        { key: "enable-oslogin", value: "TRUE" },
+                        { key: "startup-script", value: "x" },
+                    ],
+                },
+            },
+        });
+
+        expect(
+            (bodies[0]!.metadata as { items: { key: string }[] }).items.map((item) => {
+                return item.key;
+            }),
+        ).toEqual(["enable-oslogin", "rig-image", "startup-script"]);
+    });
+
     it("denies all inbound first, IPv4 and IPv6, opens only the kind's ports, then inserts the machine", async () => {
         const { provider, calls } = gcp({
             "POST projects/p/zones/us-central1-a/instances": DONE,
@@ -199,7 +266,11 @@ describe("gcp: create", () => {
 
         await provider.create(PLACE, { ...SPEC, name });
 
-        expect(calls[0]!.body?.name).toBe(`${"a".repeat(30)}-${"k".repeat(14)}-0a1b2c3d-deny4`);
+        const first = calls.find((one) => {
+            return one.method === "POST";
+        });
+
+        expect(first!.body?.name).toBe(`${"a".repeat(30)}-${"k".repeat(14)}-0a1b2c3d-deny4`);
     });
 
     it("leaves nothing behind after a failed try: its rules are deleted", async () => {

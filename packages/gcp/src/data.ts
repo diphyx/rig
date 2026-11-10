@@ -1,4 +1,4 @@
-import { type Busy, createTagMap, type PresetTable } from "@diphyx/rig";
+import { type Busy, createDistroTable, createTagMap, type DistroTable, type PresetTable } from "@diphyx/rig";
 
 import data from "./gcp.json" with { type: "json" };
 
@@ -13,6 +13,9 @@ export const SHAPES = data.shapes as {
     gpu: Record<string, string>;
     fixed: Record<string, { cpu: number; mem: number; gpu?: string }>;
 };
+
+/** §12: the distro table: each version's image family, as `<project>/<family>`; a family always gives its newest image. */
+export const DISTROS = createDistroTable("gcp", data.distros as DistroTable<string>);
 
 const BUSY = data.busy as Record<string, Busy>;
 const TAGS = createTagMap(data.tags as Record<string, string>);
