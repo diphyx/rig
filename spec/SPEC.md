@@ -100,15 +100,16 @@ Within a generation, a change MUST only add: an optional key, a field, a busy co
 
 ## 5. Config
 
-| Key         | Type                   | Default    | Definition                               |
-| ----------- | ---------------------- | ---------- | ---------------------------------------- |
-| `rig`       | `uint`                 | —          | the generation: `1`                      |
-| `app`       | `name`                 | —          | this app's name, §13                     |
-| `providers` | `[provider]`           | —          | at least one                             |
-| `kinds`     | `[kind]`               | —          | at least one                             |
-| `guard`     | `"warn"` or `"refuse"` | `"warn"`   | §17                                      |
-| `every`     | `dur`                  | `"30s"`    | time between rounds, §16                 |
-| `store`     | `str`                  | `"./.rig"` | a folder; the core uses `<store>/rig/1/` |
+| Key         | Type                   | Default    | Definition                                      |
+| ----------- | ---------------------- | ---------- | ----------------------------------------------- |
+| `rig`       | `uint`                 | —          | the generation: `1`                             |
+| `app`       | `name`                 | —          | this app's name, §13                            |
+| `providers` | `[provider]`           | —          | at least one                                    |
+| `kinds`     | `[kind]`               | —          | at least one                                    |
+| `guard`     | `"warn"` or `"refuse"` | `"warn"`   | §17                                             |
+| `every`     | `dur`                  | `"30s"`    | time between rounds, §16; `"0"`: only `round()` |
+| `poll`      | `dur`                  | `"5s"`     | time between polls of a wait, §20; not `"0"`    |
+| `store`     | `str`                  | `"./.rig"` | a folder; the core uses `<store>/rig/1/`        |
 
 When the core opens, each of these MUST be a refusal, `config`, naming the key by path (`kinds[worker].try[0].types`):
 
@@ -116,6 +117,7 @@ When the core opens, each of these MUST be a refusal, `config`, naming the key b
 - two kinds with one `name` (two providers with one `name` fail §8 first);
 - an entry whose `provider` is not in `providers`;
 - `spot` in an entry's `market`, its provider without `can.spot`;
+- a kind tag whose key starts with `rig`;
 - a reserved key, §22.
 
 ## 6. Kind
@@ -130,6 +132,7 @@ When the core opens, each of these MUST be a refusal, `config`, naming the key b
 | `risk`     | `?{ max: pct }` | —       | §15                                                   |
 | `life`     | `?dur`          | never   | the core ends the machine after this                  |
 | `recovers` | `?uint`         | `3`     | how many recovers a lost machine may have; `0` = none |
+| `tags`     | `?{str: str}`   | —       | the app's own tags; no key may start with `rig`       |
 
 **entry**
 
@@ -210,12 +213,13 @@ A provider is a plugin: one object with these keys.
 | `disk` | `disk.grow` and `disk.get` are present                | the `disk` calls are refusals: `unsupported`   |
 | `port` | `port.open`, `port.close` and `port.list` are present | the `port` calls are refusals: `unsupported`   |
 
-When the core opens, it MUST check every plugin in this order, and the first failure MUST be a refusal, `plugin`:
+When the core opens, it MUST check every plugin in this order, and the first failure MUST be a refusal, `plugin`, unless named:
 
-1. `rig` is `1`.
-2. `slot` is `"provider"`.
+1. `rig` is `1`; otherwise `generation`, §4.
+2. `slot` is `"provider"`; `"hub"` is a refusal, `config`, §22.
 3. `name` is a `name`, not taken.
 4. Every call that is always present is there, and every call that `can` enables.
+5. If the provider has `check`, the core calls it: a throw is a refusal, `plugin`.
 
 The core MUST NOT list, create or end a machine before every plugin passes.
 
@@ -231,6 +235,7 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 | `list`       | `tags: {str: str}`     | `[machine]`                 | always     |
 | `end`        | `id: str`              | —                           | always     |
 | `reboot`     | `id: str`              | —                           | always     |
+| `check`      | —                      | —                           | optional   |
 | `start`      | `id: str`              | —                           | `can.stop` |
 | `stop`       | `id: str`              | —                           | `can.stop` |
 | `disk.grow`  | `id: str`, `gb: uint`  | —                           | `can.disk` |
@@ -259,7 +264,7 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 | `image`  | `?str`        | the image id; absent → the provider's default         |
 | `disk`   | `?uint`       | GB of the boot disk; absent → the provider's default  |
 | `script` | `?str`        | a startup script, plain text; the provider encodes it |
-| `tags`   | `{str: str}`  | §13                                                   |
+| `tags`   | `{str: str}`  | the rig tags and the kind's own, §13                  |
 | `extra`  | `?{str: any}` | the entry's `extra`, unchanged                        |
 
 **answer**: exactly one of:
@@ -300,6 +305,7 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 | `create` | MUST make exactly one try: no second try, no other place                                  |
 | `create` | MUST put every tag of `spec.tags` on the machine as it is created, or throw               |
 | `create` | MUST answer `busy` only when there is no room, with the code below; else MUST throw       |
+| `check`  | MUST throw when the provider cannot work: wrong keys, no access, an unknown region        |
 | `get`    | an unknown id MUST give `null`, not throw                                                 |
 | `list`   | MUST return every machine with all the given tags, in every status but `ended`, all pages |
 | `end`    | an unknown or ended id MUST succeed                                                       |
@@ -344,7 +350,9 @@ Every machine the core creates MUST carry:
 | `rig-kind` | the kind's name    |
 | `rig-name` | `spec.name`        |
 
-- The core MUST find its machines with `list({ "rig": "1", "rig-app": app })` on every provider.
+The kind's own `tags` MUST be on the machine too. A rig tag wins over a kind tag of the same name; §5 refuses those anyway.
+
+- The core MUST find its machines with `list({ "rig": "1", "rig-app": app })` on every provider, and MUST still drop any machine `list` gives without both tags.
 - The core MUST NOT end, recover or count a machine of another app.
 
 ## 14. Failover
@@ -368,6 +376,7 @@ for entry in kind.try:
 return null
 ```
 
+- The core MUST call an entry's `places` only when the failover reaches that entry.
 - A type that `places` does not return MUST be skipped without a try.
 - Zones MUST be sorted by name, so every failover follows the same order.
 - The core MUST NOT try a place twice in one failover.
@@ -397,7 +406,7 @@ return null
 
 **Close**: end the rounds, write the store. The core MUST NOT end a machine when it closes.
 
-**A round**: every `every`, the core MUST list its machines (§13) and compare them with the store.
+**A round**: every `every`, the core MUST list its machines (§13) and compare them with the store. For each machine still running, the core MUST copy its `status` and `ip` into the store.
 
 | Seen                                                       | Is         | The core MUST                                   |
 | ---------------------------------------------------------- | ---------- | ----------------------------------------------- |
@@ -432,16 +441,16 @@ Until the hub (§22) defines a warning before a take-back, `spot-warn` holds for
 
 ## 18. Events
 
-| Event               | Data                      | When                            |
-| ------------------- | ------------------------- | ------------------------------- |
-| `try`               | `{ kind, place, answer }` | after every try                 |
-| `machine:created`   | `{ machine }`             | `machine.create` gave a machine |
-| `machine:ended`     | `{ machine }`             | the core ended a machine        |
-| `machine:lost`      | `{ machine }`             | §16                             |
-| `machine:recovered` | `{ lost, machine }`       | a recover gave a machine        |
-| `machine:failed`    | `{ machine, recovers }`   | lost, with `recovers` spent     |
-| `machine:orphan`    | `{ machine }`             | §16                             |
-| `guard`             | `{ kind, code }`          | §17                             |
+| Event               | Data                      | When                                            |
+| ------------------- | ------------------------- | ----------------------------------------------- |
+| `try`               | `{ kind, place, answer }` | after every try; a throw is `answer: { error }` |
+| `machine:created`   | `{ machine }`             | `machine.create` gave a machine                 |
+| `machine:ended`     | `{ machine }`             | the core ended a machine                        |
+| `machine:lost`      | `{ machine }`             | §16                                             |
+| `machine:recovered` | `{ lost, machine }`       | a recover gave a machine                        |
+| `machine:failed`    | `{ machine, recovers }`   | lost, with `recovers` spent                     |
+| `machine:orphan`    | `{ machine }`             | §16                                             |
+| `guard`             | `{ kind, code }`          | §17                                             |
 
 An event MUST be emitted only after the change it reports is in the store.
 
@@ -456,6 +465,7 @@ An event MUST be emitted only after the change it reports is in the store.
 | `unsupported` | a call the provider's `can` does not enable |
 | `unknown`     | a machine id the store does not hold, §20   |
 | `closed`      | a call before `open` or after `close`, §20  |
+| `timeout`     | a wait past its `timeout`, §20              |
 
 A refusal carries `reason` and `message`. Code MUST read only `reason`; `message` is for people.
 
@@ -467,29 +477,35 @@ A refusal carries `reason` and `message`. Code MUST read only `reason`; `message
 
 What the app calls on the core. A lib MAY name them in its own style (`machine.create`, `machine_create`), but MUST keep their meaning.
 
-| Call             | Input                   | Output          | Does                                                                           |
-| ---------------- | ----------------------- | --------------- | ------------------------------------------------------------------------------ |
-| `open`           | —                       | —               | §16                                                                            |
-| `close`          | —                       | —               | §16                                                                            |
-| `round`          | —                       | —               | runs a round now, §16                                                          |
-| `on`             | `event: str`, a handler | —               | calls the handler on every such event, §18                                     |
-| `place.list`     | `kind: name`            | `[place]`       | the places a failover would try, in its order, each with `provider` and `risk` |
-| `machine.create` | `kind: name`            | `?machine`      | a failover, §14; `null` when there is no room                                  |
-| `machine.get`    | `id: str`               | `?machine`      | from the store                                                                 |
-| `machine.list`   | `?{ kind?: name }`      | `[machine]`     | from the store                                                                 |
-| `machine.end`    | `id: str`               | —               | the provider's `end`; emits `machine:ended`                                    |
-| `machine.start`  | `id: str`               | —               | the provider's `start`                                                         |
-| `machine.stop`   | `id: str`               | —               | the provider's `stop`                                                          |
-| `machine.reboot` | `id: str`               | —               | the provider's `reboot`                                                        |
-| `disk.grow`      | `id: str`, `gb: uint`   | —               | the provider's                                                                 |
-| `disk.get`       | `id: str`               | `{ gb, ready }` | the provider's                                                                 |
-| `port.open`      | `id: str`, `rule`       | `rule`          | the provider's                                                                 |
-| `port.close`     | `id: str`, `rule: str`  | —               | the provider's                                                                 |
-| `port.list`      | `id: str`               | `[rule]`        | the provider's                                                                 |
+| Call             | Input                                | Output          | Does                                                                                  |
+| ---------------- | ------------------------------------ | --------------- | ------------------------------------------------------------------------------------- |
+| `open`           | —                                    | —               | §16                                                                                   |
+| `close`          | —                                    | —               | §16                                                                                   |
+| `round`          | —                                    | —               | runs a round now, §16                                                                 |
+| `on`             | `event: str`, a handler              | —               | calls the handler on every such event, §18                                            |
+| `place.list`     | `kind: name`                         | `[place]`       | the places a failover would try, in its order, each with `provider` and `risk`        |
+| `machine.create` | `kind: name`                         | `?machine`      | a failover, §14; `null` when there is no room                                         |
+| `machine.get`    | `id: str`                            | `?machine`      | the provider's `get`, copied into the store; `null` for an id the store does not hold |
+| `machine.wait`   | `id: str`, `status`, `?timeout: dur` | `machine`       | `machine.get` every `poll`, until the machine has `status`, or is `ended`             |
+| `machine.list`   | `?{ kind?: name }`                   | `[machine]`     | from the store                                                                        |
+| `machine.end`    | `id: str`                            | —               | the provider's `end`; emits `machine:ended`                                           |
+| `machine.start`  | `id: str`                            | —               | the provider's `start`                                                                |
+| `machine.stop`   | `id: str`                            | —               | the provider's `stop`                                                                 |
+| `machine.reboot` | `id: str`                            | —               | the provider's `reboot`                                                               |
+| `disk.grow`      | `id: str`, `gb: uint`                | —               | the provider's                                                                        |
+| `disk.get`       | `id: str`                            | `{ gb, ready }` | the provider's                                                                        |
+| `disk.wait`      | `id: str`, `?timeout: dur`           | `{ gb, ready }` | `disk.get` every `poll`, until `ready`                                                |
+| `port.open`      | `id: str`, `rule`                    | `rule`          | the provider's                                                                        |
+| `port.close`     | `id: str`, `rule: str`               | —               | the provider's                                                                        |
+| `port.list`      | `id: str`                            | `[rule]`        | the provider's                                                                        |
 
 - Every call but `open` and `on` MUST be a refusal before `open`, and after `close`: `closed`.
 - `on` MAY be called before `open`, so the app hears `guard` while the core opens.
-- A call with a machine id the store does not hold MUST be a refusal: `unknown`.
+- A call with a machine id the store does not hold MUST be a refusal: `unknown`; `machine.get` gives `null` instead.
+- A kind name not in the config MUST be a refusal: `config`; so is a `status` that is not a `status`, and a `timeout` that is not a `dur`.
+- A wait whose machine leaves the store (a round found it lost) MUST end with that machine, `status: "ended"`.
+- A wait MUST check once before its first `poll`, and MUST be a refusal, `timeout`, when `timeout` (default `"10m"`) has passed since it began.
+- A machine the provider no longer has comes back from `machine.get` with `status: "ended"`. The round that follows finds it lost, §16.
 - The machine the app sees is the provider's `machine` (§10) with three more keys: `provider`, `kind` and `name`.
 
 ## 21. Kit
