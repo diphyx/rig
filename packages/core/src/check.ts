@@ -1,21 +1,22 @@
 import { isArray, isFunction, isObject, isString } from "radash";
 
+import { Guard, Market, Reason, Slot } from "./enums.js";
 import { isDur, isPct, isUint, NAME } from "./parse.js";
 import { Refusal } from "./refusal.js";
-import type { Config, Provider } from "./types.js";
+import type { Provider, RigConfig } from "./types.js";
 
 /** The rig generation this core follows. */
 export const RIG = 1;
 
-const ROOT = ["rig", "app", "providers", "kinds", "guard", "every", "poll", "store"];
+const ROOT = ["rig", "app", "providers", "kinds", "guard", "every", "poll", "store", "extra"];
 const KIND = ["name", "try", "image", "disk", "script", "risk", "life", "recovers", "tags"];
 const ENTRY = ["provider", "market", "types", "image", "extra"];
 const RESERVED: Record<string, string[]> = { root: ["hub"], kind: ["node", "save"] };
 
-const MARKETS = ["spot", "demand"];
+const MARKETS: string[] = Object.values(Market);
 
 function fail(path: string, message: string): never {
-    throw new Refusal("config", `${path}: ${message}`);
+    throw new Refusal(Reason.CONFIG, `${path}: ${message}`);
 }
 
 /* Every key of `value` is known; reserved keys and unknown keys are named by path. */
@@ -32,20 +33,20 @@ function keys(path: string, value: Record<string, unknown>, known: string[], res
 }
 
 /* The providers as given, or none when they are not a list; §5 refuses that. */
-function providersOf(config: Config): Provider[] {
+function providersOf(config: RigConfig): Provider[] {
     return isArray(config.providers) ? config.providers : [];
 }
 
 /** §4: the config and every plugin are generation 1. */
-export function generation(config: Config): void {
+export function generation(config: RigConfig): void {
     if (config.rig !== RIG) {
-        throw new Refusal("generation", `config is for rig ${String(config.rig)}, this is rig ${RIG}`);
+        throw new Refusal(Reason.GENERATION, `config is for rig ${String(config.rig)}, this is rig ${RIG}`);
     }
 
     for (const provider of providersOf(config)) {
         if (provider.rig !== RIG) {
             throw new Refusal(
-                "generation",
+                Reason.GENERATION,
                 `provider ${provider.name} is for rig ${String(provider.rig)}, this is rig ${RIG}`,
             );
         }
@@ -80,42 +81,41 @@ function has(provider: Provider, call: string): boolean {
     return isFunction(value);
 }
 
-/** §20: the statuses a machine may have. */
-export const STATUSES = ["pending", "running", "stopping", "stopped", "ending", "ended"];
-
 /** §8: every plugin, in order: slot, name, calls. */
-export function plugins(config: Config): void {
+export function plugins(config: RigConfig): void {
     const names = new Set<string>();
 
     for (const provider of providersOf(config)) {
-        if ((provider.slot as string) === "hub") {
+        if ((provider.slot as Slot) === Slot.HUB) {
             fail(`providers[${provider.name}].slot`, "the hub slot is reserved");
         }
 
-        if (provider.slot !== "provider") {
-            throw new Refusal("plugin", `plugin ${provider.name}: unknown slot ${String(provider.slot)}`);
+        if (provider.slot !== Slot.PROVIDER) {
+            throw new Refusal(Reason.PLUGIN, `plugin ${provider.name}: unknown slot ${String(provider.slot)}`);
         }
 
         if (!NAME.test(provider.name ?? "") || names.has(provider.name)) {
-            throw new Refusal("plugin", `plugin ${provider.name}: name is not a name, or taken`);
+            throw new Refusal(Reason.PLUGIN, `plugin ${provider.name}: name is not a name, or taken`);
         }
 
         names.add(provider.name);
 
-        if (provider.check !== undefined && !isFunction(provider.check)) {
-            throw new Refusal("plugin", `plugin ${provider.name}: check is not a call`);
+        for (const optional of ["check", "shape"] as const) {
+            if (provider[optional] !== undefined && !isFunction(provider[optional])) {
+                throw new Refusal(Reason.PLUGIN, `plugin ${provider.name}: ${optional} is not a call`);
+            }
         }
 
         for (const call of calls(provider)) {
             if (!has(provider, call)) {
-                throw new Refusal("plugin", `plugin ${provider.name}: missing call ${call}`);
+                throw new Refusal(Reason.PLUGIN, `plugin ${provider.name}: missing call ${call}`);
             }
         }
     }
 }
 
 /** §8.5: each provider's own `check`; a throw is a refusal. */
-export async function checks(config: Config): Promise<void> {
+export async function checks(config: RigConfig): Promise<void> {
     for (const provider of providersOf(config)) {
         if (!provider.check) {
             continue;
@@ -124,13 +124,13 @@ export async function checks(config: Config): Promise<void> {
         try {
             await provider.check();
         } catch (error) {
-            throw new Refusal("plugin", `plugin ${provider.name}: check failed: ${String(error)}`);
+            throw new Refusal(Reason.PLUGIN, `plugin ${provider.name}: check failed: ${String(error)}`);
         }
     }
 }
 
 /** §5: every key known, of its type; names unique; entries name installed providers. */
-export function config(config: Config): void {
+export function config(config: RigConfig): void {
     keys("", config as unknown as Record<string, unknown>, ROOT, RESERVED.root);
 
     if (!isString(config.app) || !NAME.test(config.app)) {
@@ -145,7 +145,7 @@ export function config(config: Config): void {
         fail("kinds", "at least one");
     }
 
-    if (config.guard !== undefined && config.guard !== "warn" && config.guard !== "refuse") {
+    if (config.guard !== undefined && !Object.values(Guard).includes(config.guard)) {
         fail("guard", "warn or refuse");
     }
 
@@ -159,6 +159,10 @@ export function config(config: Config): void {
 
     if (config.store !== undefined && !isString(config.store)) {
         fail("store", "not a str");
+    }
+
+    if (config.extra !== undefined && !isObject(config.extra)) {
+        fail("extra", "not an object");
     }
 
     const providers = new Map(
@@ -259,7 +263,7 @@ export function config(config: Config): void {
                 fail(`${at}market`, "a list of spot and demand, at least one, no repeats");
             }
 
-            if (entry.market.includes("spot") && !provider.can?.spot) {
+            if (entry.market.includes(Market.SPOT) && !provider.can?.spot) {
                 fail(`${at}market`, `${provider.name} does not sell spot`);
             }
 

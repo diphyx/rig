@@ -1,11 +1,11 @@
-import { STATUSES } from "./check.js";
+import { Event, Market, Reason, Status } from "./enums.js";
 import { capable, type Context, kindOf, knownOf, live, providerOf, toMachine } from "./context.js";
 import { entrySteps, failover } from "./failover.js";
 import { dur, isDur } from "./parse.js";
 import { Refusal } from "./refusal.js";
 import { end } from "./rounds.js";
-import { placeKey } from "./store.js";
-import type { Listed, Machine, Rule, Status } from "./types.js";
+import { riskOf } from "./risk.js";
+import type { Listed, Machine, Rule } from "./types.js";
 
 type Disk = { gb: number; ready: boolean };
 
@@ -29,7 +29,7 @@ async function wait<T>(
         }
 
         if (context.clock() - start >= limit) {
-            throw new Refusal("timeout", `still waiting after ${timeout ?? TIMEOUT}`);
+            throw new Refusal(Reason.TIMEOUT, `still waiting after ${timeout ?? TIMEOUT}`);
         }
 
         await context.sleep(dur(context.config.poll ?? "5s"));
@@ -38,7 +38,7 @@ async function wait<T>(
 
 function timeoutOf(timeout: string | undefined): string | undefined {
     if (timeout !== undefined && !isDur(timeout)) {
-        throw new Refusal("config", "timeout: not a dur");
+        throw new Refusal(Reason.CONFIG, "timeout: not a dur");
     }
 
     return timeout;
@@ -51,13 +51,13 @@ async function fresh(context: Context, last: Machine): Promise<Machine> {
     });
 
     if (!known) {
-        return { ...last, status: "ended" };
+        return { ...last, status: Status.ENDED };
     }
 
     const now = await providerOf(context, known).get(known.id);
 
     if (!now) {
-        return toMachine({ ...known, status: "ended" });
+        return toMachine({ ...known, status: Status.ENDED });
     }
 
     known.status = now.status;
@@ -86,20 +86,13 @@ export function calls(context: Context) {
                     all.push(...(await entrySteps(context, one, entry)));
                 }
 
-                return all.map((step) => {
-                    return {
-                        ...step,
-                        risk: {
-                            ...(step.rate !== undefined && { rate: step.rate, source: step.provider }),
-                            seen: {
-                                created: 0,
-                                lost: 0,
-                                hours: 0,
-                                ...context.store.risk[placeKey(step.provider, step)],
-                            },
-                        },
-                    };
-                });
+                const listed: Listed[] = [];
+
+                for (const { provider, ...place } of all) {
+                    listed.push({ ...place, provider, risk: await riskOf(context, provider, place) });
+                }
+
+                return listed;
             },
         },
 
@@ -116,7 +109,7 @@ export function calls(context: Context) {
 
                 const machine = toMachine(created);
 
-                context.emit("machine:created", { machine });
+                context.emit(Event.MACHINE_CREATED, { machine });
 
                 return machine;
             },
@@ -136,8 +129,8 @@ export function calls(context: Context) {
             async wait(id: string, status: Status, timeout?: string): Promise<Machine> {
                 let last = toMachine(knownOf(context, id));
 
-                if (!STATUSES.includes(status)) {
-                    throw new Refusal("config", `status: ${String(status)} is not a status`);
+                if (!Object.values(Status).includes(status)) {
+                    throw new Refusal(Reason.CONFIG, `status: ${String(status)} is not a status`);
                 }
 
                 return wait(
@@ -149,7 +142,7 @@ export function calls(context: Context) {
                         return last;
                     },
                     (machine) => {
-                        return machine.status === status || machine.status === "ended";
+                        return machine.status === status || machine.status === Status.ENDED;
                     },
                 );
             },
@@ -182,8 +175,8 @@ export function calls(context: Context) {
                 const known = knownOf(context, id);
                 const provider = capable(context, known, "stop");
 
-                if (known.market === "spot") {
-                    throw new Refusal("unsupported", "a spot machine cannot stop");
+                if (known.market === Market.SPOT) {
+                    throw new Refusal(Reason.UNSUPPORTED, "a spot machine cannot stop");
                 }
 
                 await provider.stop!(known.id);

@@ -1,5 +1,6 @@
 import { sleep } from "radash";
 
+import { State } from "./enums.js";
 import { calls } from "./calls.js";
 import * as check from "./check.js";
 import { type Context, createEmitter, live } from "./context.js";
@@ -7,24 +8,26 @@ import { guard } from "./guard.js";
 import { dur } from "./parse.js";
 import { round } from "./rounds.js";
 import { Store } from "./store.js";
-import type { Config, Options } from "./types.js";
+import type { RigConfig } from "./types.js";
 
 /** A core of rig generation 1, for this config. Nothing runs before `open()`. */
-export function createRig(config: Config, options: Options = {}) {
+export function createRig(config: RigConfig) {
+    const extra = config.extra ?? {};
     const emitter = createEmitter();
     const context: Context = {
         config,
-        clock: options.clock ?? Date.now,
+        clock: extra.clock ?? Date.now,
         sleep:
-            options.sleep ??
+            extra.sleep ??
             (async (ms: number): Promise<void> => {
                 await sleep(ms);
             }),
         store: new Store(config.store ?? "./.rig"),
         providers: new Map(),
         kinds: new Map(),
-        state: "new",
+        state: State.NEW,
         orphans: new Set(),
+        shapes: new Map(),
         emit: emitter.emit,
     };
 
@@ -33,7 +36,7 @@ export function createRig(config: Config, options: Options = {}) {
     return {
         /** §16: check, read the store, run the first round, then a round every `every`. */
         async open(): Promise<void> {
-            if (context.state !== "new") {
+            if (context.state !== State.NEW) {
                 return;
             }
 
@@ -56,12 +59,12 @@ export function createRig(config: Config, options: Options = {}) {
 
             await guard(context);
             context.store.load();
-            context.state = "open";
+            context.state = State.OPEN;
             await round(context);
 
             const every = dur(config.every ?? "30s");
 
-            if (options.rounds !== false && Number.isFinite(every)) {
+            if (extra.rounds !== false && Number.isFinite(every)) {
                 timer = setInterval(() => {
                     round(context).catch(() => {});
                 }, every);
@@ -75,7 +78,7 @@ export function createRig(config: Config, options: Options = {}) {
             live(context);
             clearInterval(timer);
             context.store.save();
-            context.state = "closed";
+            context.state = State.CLOSED;
         },
 
         /** §16: a round now. */

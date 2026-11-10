@@ -1,36 +1,49 @@
+import { Event, Finding, Guard, Market, Reason } from "./enums.js";
 import type { Context } from "./context.js";
-import { top } from "./parse.js";
+import { riskOf } from "./risk.js";
 import { Refusal } from "./refusal.js";
-import type { Code, Kind } from "./types.js";
+import type { Kind } from "./types.js";
 
-/* A published rate above this is a long life's risk. */
+/* A spot place's `takeback` above this is a long life's risk; fewer spot places than this is narrow. */
 const LONG = 10;
+const NARROW = 3;
 
-async function codesOf(context: Context, kind: Kind): Promise<Code[]> {
+async function codesOf(context: Context, kind: Kind): Promise<Finding[]> {
     const spot = kind.try.filter((entry) => {
-        return entry.market.includes("spot");
+        return entry.market.includes(Market.SPOT);
     });
 
     if (spot.length === 0) {
         return [];
     }
 
-    if (kind.life) {
-        return ["spot-warn"];
-    }
+    const places = [];
 
     for (const entry of spot) {
-        const places = await context.providers.get(entry.provider)!.places(entry);
-        const long = places.some((place) => {
-            return place.market === "spot" && place.rate !== undefined && top(place.rate) > LONG;
-        });
-
-        if (long) {
-            return ["spot-warn", "spot-long"];
+        for (const place of await context.providers.get(entry.provider)!.places(entry)) {
+            if (place.market === Market.SPOT) {
+                places.push({ provider: entry.provider, place });
+            }
         }
     }
 
-    return ["spot-warn"];
+    const codes: Finding[] = [Finding.SPOT_WARN];
+
+    if (!kind.life) {
+        for (const { provider, place } of places) {
+            if ((await riskOf(context, provider, place)).takeback > LONG) {
+                codes.push(Finding.SPOT_LONG);
+
+                break;
+            }
+        }
+    }
+
+    if (places.length < NARROW) {
+        codes.push(Finding.SPOT_NARROW);
+    }
+
+    return codes;
 }
 
 /** §17: risk findings, at most once per kind and code; `refuse` turns any into a refusal. */
@@ -40,11 +53,11 @@ export async function guard(context: Context): Promise<void> {
     for (const kind of context.kinds.values()) {
         for (const code of await codesOf(context, kind)) {
             found.push(`${kind.name}: ${code}`);
-            context.emit("guard", { kind: kind.name, code });
+            context.emit(Event.GUARD, { kind: kind.name, code });
         }
     }
 
-    if (context.config.guard === "refuse" && found.length > 0) {
-        throw new Refusal("guard", `guard found ${found.join(", ")}`);
+    if (context.config.guard === Guard.REFUSE && found.length > 0) {
+        throw new Refusal(Reason.GUARD, `guard found ${found.join(", ")}`);
     }
 }

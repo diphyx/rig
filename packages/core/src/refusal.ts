@@ -1,4 +1,4 @@
-export type Reason = "generation" | "plugin" | "config" | "guard" | "unsupported" | "unknown" | "closed" | "timeout";
+import type { Reason } from "./enums.js";
 
 /** The core declining a config, a plugin or a call. Code reads only `reason`. */
 export class Refusal extends Error {

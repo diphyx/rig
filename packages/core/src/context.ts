@@ -1,20 +1,23 @@
+import { Reason, State } from "./enums.js";
 import { Refusal } from "./refusal.js";
 import type { Known, Store } from "./store.js";
-import type { Config, Events, Kind, Machine, Provider } from "./types.js";
+import type { Events, Kind, Machine, Provider, RigConfig, Shape } from "./types.js";
 
 export type Handler<E extends keyof Events> = (data: Events[E]) => void;
 
 /** What every part of one core shares. */
 export type Context = {
-    config: Config;
+    config: RigConfig;
     clock: () => number;
     sleep: (ms: number) => Promise<void>;
     store: Store;
     providers: Map<string, Provider>;
     kinds: Map<string, Kind>;
-    state: "new" | "open" | "closed";
+    state: State;
     /** Orphans already reported, so each is reported once. */
     orphans: Set<string>;
+    /** Shapes asked of providers, by `<provider>/<type>`. */
+    shapes: Map<string, Shape | null>;
     emit<E extends keyof Events>(event: E, data: Events[E]): void;
 };
 
@@ -39,8 +42,8 @@ export function createEmitter() {
 
 /** §20: every call but `open` and `on` needs an open core. */
 export function live(context: Context): void {
-    if (context.state !== "open") {
-        throw new Refusal("closed", context.state === "new" ? "the core is not open" : "the core is closed");
+    if (context.state !== State.OPEN) {
+        throw new Refusal(Reason.CLOSED, context.state === State.NEW ? "the core is not open" : "the core is closed");
     }
 }
 
@@ -56,7 +59,7 @@ export function kindOf(context: Context, name: string): Kind {
     const kind = context.kinds.get(name);
 
     if (!kind) {
-        throw new Refusal("config", `no kind ${name}`);
+        throw new Refusal(Reason.CONFIG, `no kind ${name}`);
     }
 
     return kind;
@@ -71,7 +74,7 @@ export function capable(context: Context, machine: Machine, call: "stop" | "disk
     const provider = providerOf(context, machine);
 
     if (!provider.can?.[call]) {
-        throw new Refusal("unsupported", `${provider.name} cannot ${call}`);
+        throw new Refusal(Reason.UNSUPPORTED, `${provider.name} cannot ${call}`);
     }
 
     return provider;

@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { Reason } from "./enums.js";
 import { Refusal } from "./refusal.js";
 import type { Machine, Place, Seen } from "./types.js";
 
@@ -11,6 +12,8 @@ export type Known = Machine & { chain: number };
 export type Pending = { lost: Machine; chain: number };
 
 type Machines = { machines: Known[]; pending: Pending[] };
+
+const COUNTS = ["tries", "busy", "created", "lost", "hours"] as const;
 
 /** A place's key in `risk.json`: `<provider>/<market>/<type>/<zone>`. */
 export function placeKey(provider: string, place: Place): string {
@@ -25,7 +28,7 @@ function read<T>(file: string, empty: T): T {
     }
 }
 
-/* Written whole, then moved in place, so a crash never leaves half a file. */
+/* Written whole, then moved in place, so a file is always whole. */
 function write(file: string, value: unknown): void {
     writeFileSync(`${file}.tmp`, `${JSON.stringify(value, null, 4)}\n`);
     renameSync(`${file}.tmp`, file);
@@ -63,7 +66,7 @@ export class Store {
         });
 
         if (!known) {
-            throw new Refusal("unknown", `no machine ${id}`);
+            throw new Refusal(Reason.UNKNOWN, `no machine ${id}`);
         }
 
         return known;
@@ -75,10 +78,14 @@ export class Store {
         });
     }
 
-    /** The core's own count for a place, made on first use. */
+    /** The core's own count for a place, made on first use; the same object every time. */
     seen(key: string): Seen {
-        this.risk[key] ??= { created: 0, lost: 0, hours: 0 };
+        const seen = (this.risk[key] ??= { tries: 0, busy: 0, created: 0, lost: 0, hours: 0 });
 
-        return this.risk[key];
+        for (const count of COUNTS) {
+            seen[count] ??= 0;
+        }
+
+        return seen;
     }
 }

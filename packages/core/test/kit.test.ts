@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { isArray } from "radash";
 import { describe, expect, it } from "vitest";
 
-import { createRig, Refusal } from "../src/index.js";
+import { Busy, createRig, Event, Refusal, Slot, Status } from "../src/index.js";
 import { dur } from "../src/parse.js";
-import type { Answer, Config, Place, Provider, ProviderMachine, Rig, Spec, Tags } from "../src/index.js";
+import type { Answer, Place, Provider, ProviderMachine, Rig, RigConfig, Shape, Spec, Tags } from "../src/index.js";
 
 /* The kit's own format: spec/kit/README.md. */
 type Fake = {
@@ -17,6 +17,7 @@ type Fake = {
     boot?: number;
     throws?: string[];
     filter?: boolean;
+    shapes?: Record<string, Shape>;
 };
 
 type Step = { do: string; call?: string; args?: unknown[]; id?: string; by?: string; expect?: Expect };
@@ -33,7 +34,7 @@ type Expect = {
 type Case = {
     id: string;
     description: string;
-    given: { config: Config; fake: Record<string, Fake>; store?: { risk?: unknown } };
+    given: { config: RigConfig; fake: Record<string, Fake>; store?: { risk?: unknown } };
     steps: Step[];
 };
 
@@ -77,7 +78,7 @@ function match(actual: unknown, expected: unknown, path = "$"): void {
 
 /* README §3: a fake provider from data, playing its answers in turn. */
 function fakes(
-    config: Config,
+    config: RigConfig,
     data: Record<string, Fake>,
     clock: () => number,
     stray: string[],
@@ -110,10 +111,15 @@ function fakes(
         machines.set(written.name, own);
 
         const provider: Provider = {
-            slot: "provider",
+            slot: Slot.PROVIDER,
             name: written.name,
             rig: written.rig ?? 1,
             ...(written.can && { can: written.can }),
+            ...(fake.shapes && {
+                async shape(type: string) {
+                    return fake.shapes![type] ?? null;
+                },
+            }),
             ...(written.check && {
                 async check() {
                     if (written.check === "fail") {
@@ -141,7 +147,7 @@ function fakes(
                 }
 
                 if (answer.startsWith("busy ")) {
-                    return { busy: answer.slice(5) as "zone" };
+                    return { busy: answer.slice(5) as Busy };
                 }
 
                 next += 1;
@@ -149,7 +155,7 @@ function fakes(
 
                 own.push({
                     id: `m${next}`,
-                    status: (fake.boot ?? 0) > 0 ? "pending" : "running",
+                    status: (fake.boot ?? 0) > 0 ? Status.PENDING : Status.RUNNING,
                     ip: { private: `10.0.0.${next}` },
                     market: place.market,
                     type: place.type,
@@ -165,11 +171,11 @@ function fakes(
                 const machine = find(id);
                 const left = booting.get(id) ?? 0;
 
-                if (machine?.status === "pending") {
+                if (machine?.status === Status.PENDING) {
                     if (left > 0) {
                         booting.set(id, left - 1);
                     } else {
-                        machine.status = "running";
+                        machine.status = Status.RUNNING;
                     }
                 }
 
@@ -179,7 +185,7 @@ function fakes(
                 return structuredClone(
                     own.filter((machine) => {
                         return (
-                            machine.status !== "ended" &&
+                            machine.status !== Status.ENDED &&
                             (fake.filter === false ||
                                 Object.entries(tags).every(([name, value]) => {
                                     return machine.tags[name] === value;
@@ -192,7 +198,7 @@ function fakes(
                 const machine = find(id);
 
                 if (machine) {
-                    machine.status = "ended";
+                    machine.status = Status.ENDED;
                 }
             },
             async reboot() {},
@@ -208,10 +214,10 @@ function fakes(
             }),
             ...(written.can?.stop && {
                 async start(id: string) {
-                    find(id)!.status = "running";
+                    find(id)!.status = Status.RUNNING;
                 },
                 async stop(id: string) {
-                    find(id)!.status = "stopped";
+                    find(id)!.status = Status.STOPPED;
                 },
             }),
         };
@@ -229,8 +235,8 @@ function fakes(
 }
 
 /* README §5's `try` short form. */
-function short(event: string, data: Record<string, unknown>): Record<string, unknown> {
-    if (event !== "try") {
+function short(event: Event, data: Record<string, unknown>): Record<string, unknown> {
+    if (event !== Event.TRY) {
         return { event, ...data };
     }
 
@@ -257,7 +263,7 @@ async function act(rig: Rig, step: Step, time: { now: number }, machines: Map<st
             for (const own of machines.values()) {
                 for (const machine of own) {
                     if (machine.id === step.id) {
-                        machine.status = "ended";
+                        machine.status = Status.ENDED;
                     }
                 }
             }
@@ -295,19 +301,10 @@ async function play(one: Case): Promise<void> {
         time.now += ms;
     };
 
-    const rig = createRig({ ...one.given.config, providers, store: folder }, { clock, sleep, rounds: false });
+    const rig = createRig({ ...one.given.config, providers, store: folder, extra: { clock, sleep, rounds: false } });
     const events: Record<string, unknown>[] = [];
 
-    for (const event of [
-        "try",
-        "machine:created",
-        "machine:ended",
-        "machine:lost",
-        "machine:recovered",
-        "machine:failed",
-        "machine:orphan",
-        "guard",
-    ] as const) {
+    for (const event of Object.values(Event)) {
         rig.on(event, (data) => {
             events.push(short(event, data as Record<string, unknown>));
         });

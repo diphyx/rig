@@ -1,18 +1,19 @@
+import { Event, Status } from "./enums.js";
 import { type Context, providerOf, toMachine } from "./context.js";
 import { failover } from "./failover.js";
 import { dur } from "./parse.js";
-import { type Known, type Pending, placeKey } from "./store.js";
+import { countLeft } from "./risk.js";
+import type { Known, Pending } from "./store.js";
 import type { ProviderMachine } from "./types.js";
-
-const HOUR = 3_600_000;
 
 /** The provider's `end`, then out of the store. */
 export async function end(context: Context, known: Known): Promise<void> {
     await providerOf(context, known).end(known.id);
 
+    countLeft(context, known, false);
     context.store.forget(known);
     context.store.save();
-    context.emit("machine:ended", { machine: toMachine({ ...known, status: "ended" }) });
+    context.emit(Event.MACHINE_ENDED, { machine: toMachine({ ...known, status: Status.ENDED }) });
 }
 
 /* §16: replace a lost machine, up to its kind's `recovers`; no room waits for the next round. */
@@ -30,7 +31,7 @@ async function recover(context: Context, pending: Pending): Promise<void> {
     if (!kind || pending.chain >= recovers) {
         drop();
         store.save();
-        emit("machine:failed", { machine: pending.lost, recovers });
+        emit(Event.MACHINE_FAILED, { machine: pending.lost, recovers });
 
         return;
     }
@@ -48,24 +49,20 @@ async function recover(context: Context, pending: Pending): Promise<void> {
 
     drop();
     store.save();
-    emit("machine:recovered", { lost: pending.lost, machine: toMachine(known) });
+    emit(Event.MACHINE_RECOVERED, { lost: pending.lost, machine: toMachine(known) });
 }
 
-/* §15, §16: count the loss and the hours it ran, then recover. */
+/* §15.1, §16: count the loss and the hours it ran, then recover. */
 async function lose(context: Context, known: Known): Promise<void> {
     const { store } = context;
-    const seen = store.seen(placeKey(known.provider, known));
-    const hours = (context.clock() - known.created) / HOUR;
-
-    seen.hours = Math.round((seen.hours * seen.lost + hours) / (seen.lost + 1));
-    seen.lost += 1;
+    countLeft(context, known, true);
 
     store.forget(known);
     store.save();
 
-    const lost = toMachine({ ...known, status: "ended" });
+    const lost = toMachine({ ...known, status: Status.ENDED });
 
-    context.emit("machine:lost", { machine: lost });
+    context.emit(Event.MACHINE_LOST, { machine: lost });
     await recover(context, { lost, chain: known.chain });
 }
 
@@ -108,7 +105,7 @@ export async function round(context: Context): Promise<void> {
     for (const known of before) {
         const now = listed.get(`${known.provider}/${known.id}`);
 
-        if (!now || now.machine.status === "ended") {
+        if (!now || now.machine.status === Status.ENDED) {
             await lose(context, known);
 
             continue;
@@ -128,7 +125,7 @@ export async function round(context: Context): Promise<void> {
     }
 
     for (const [at, { provider, machine }] of listed) {
-        if (held.has(at) || machine.status === "ended") {
+        if (held.has(at) || machine.status === Status.ENDED) {
             continue;
         }
 
@@ -139,7 +136,7 @@ export async function round(context: Context): Promise<void> {
             store.machines.push(found);
         } else if (!context.orphans.has(at)) {
             context.orphans.add(at);
-            emit("machine:orphan", { machine: toMachine(found) });
+            emit(Event.MACHINE_ORPHAN, { machine: toMachine(found) });
         }
     }
 

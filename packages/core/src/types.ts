@@ -1,11 +1,4 @@
-/** How a machine is paid: `spot` may be taken back by the provider, `demand` stays. */
-export type Market = "spot" | "demand";
-
-/** Why a try found no room. */
-export type Busy = "zone" | "type" | "market" | "account";
-
-/** A machine's status, mapped from the provider's own. */
-export type Status = "pending" | "running" | "stopping" | "stopped" | "ending" | "ended";
+import type { Arch, Busy, Event, Finding, Guard, Market, Proto, Slot, Status } from "./enums.js";
 
 export type Tags = Record<string, string>;
 
@@ -37,8 +30,16 @@ export type Place = {
     market: Market;
     type: string;
     zone: string;
+    /** For people. */
     price?: string;
-    rate?: string;
+};
+
+/** A type, as risk sees it. */
+export type Shape = {
+    cpu: number;
+    mem: number;
+    gpu?: string;
+    arch: Arch;
 };
 
 /** What to create, filled by the core. */
@@ -71,7 +72,7 @@ export type Rule = {
     id?: string;
     port: number;
     to?: number;
-    proto?: "tcp" | "udp";
+    proto?: Proto;
     from: string;
 };
 
@@ -84,12 +85,14 @@ export type Can = {
 
 /** A plugin for one cloud. */
 export type Provider = {
-    slot: "provider";
+    slot: Slot.PROVIDER;
     name: string;
     rig: number;
     can?: Can;
     /** Optional: throws when the provider cannot work, checked at open. */
     check?(): Promise<void>;
+    /** Optional: a type's shape, from the provider's own data; `null` when unknown. */
+    shape?(type: string): Promise<Shape | null>;
     places(entry: Entry): Promise<Place[]>;
     create(place: Place, spec: Spec): Promise<Answer>;
     get(id: string): Promise<ProviderMachine | null>;
@@ -109,15 +112,18 @@ export type Provider = {
     };
 };
 
-export type Config = {
+/** §5: the core's config. */
+export type RigConfig = {
     rig: number;
     app: string;
     providers: Provider[];
     kinds: Kind[];
-    guard?: "warn" | "refuse";
+    guard?: Guard;
     every?: string;
     poll?: string;
     store?: string;
+    /** §5: the lib's own settings. */
+    extra?: RigExtra;
 };
 
 /** A machine as the app sees it. */
@@ -128,32 +134,32 @@ export type Machine = ProviderMachine & {
 };
 
 /** The core's own count for one place. */
-export type Seen = { created: number; lost: number; hours: number };
+export type Seen = { tries: number; busy: number; created: number; lost: number; hours: number };
 
-export type Risk = { rate?: string; source?: string; seen: Seen };
+/** The core's estimate for one place, in percent a month. */
+export type Risk = { takeback: number; pressure: number; prior: number; seen: Seen };
 
 /** A place as `place.list` gives it. */
 export type Listed = Place & { provider: string; risk: Risk };
 
-export type Code = "spot-warn" | "spot-long";
-
+/** §18: each event's data. */
 export type Events = {
-    try: { kind: string; place: Place & { provider: string }; answer: Answer | { error: unknown } };
-    "machine:created": { machine: Machine };
-    "machine:ended": { machine: Machine };
-    "machine:lost": { machine: Machine };
-    "machine:recovered": { lost: Machine; machine: Machine };
-    "machine:failed": { machine: Machine; recovers: number };
-    "machine:orphan": { machine: Machine };
-    guard: { kind: string; code: Code };
+    [Event.TRY]: { kind: string; place: Place & { provider: string }; answer: Answer | { error: unknown } };
+    [Event.MACHINE_CREATED]: { machine: Machine };
+    [Event.MACHINE_ENDED]: { machine: Machine };
+    [Event.MACHINE_LOST]: { machine: Machine };
+    [Event.MACHINE_RECOVERED]: { lost: Machine; machine: Machine };
+    [Event.MACHINE_FAILED]: { machine: Machine; recovers: number };
+    [Event.MACHINE_ORPHAN]: { machine: Machine };
+    [Event.GUARD]: { kind: string; code: Finding };
 };
 
-/** What a lib adds to the config; not part of the spec. */
-export type Options = {
+/** The TypeScript core's own settings, under `extra`. */
+export type RigExtra = {
     /** The clock, in unix ms; the kit sets its own. */
     clock?: () => number;
-    /** Run rounds every `every`; `false` leaves them to `round()`. */
-    rounds?: boolean;
     /** The wait between polls; the kit moves its clock instead. */
     sleep?: (ms: number) => Promise<void>;
+    /** Run rounds every `every`; `false` leaves them to `round()`. */
+    rounds?: boolean;
 };
