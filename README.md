@@ -24,7 +24,7 @@ On `spot`, the provider may take a machine back. Rig estimates how often that ha
 
 ## 2. A Taste
 
-The planned TypeScript API.
+The TypeScript API: the core, and a provider per cloud.
 
 ```ts
 import { createRig, Event, Status } from "@diphyx/rig";
@@ -93,14 +93,15 @@ At least one provider: official, or your own.
 
 ## 4. Develop
 
-| Path             | Is                             |
-| ---------------- | ------------------------------ |
-| `spec/SPEC.md`   | the contract                   |
-| `spec/kit/`      | the conformance suite, as data |
-| `packages/core`  | `@diphyx/rig`, passes the kit  |
-| `packages/aws`   | `@diphyx/rig-aws`, draft       |
-| `packages/gcp`   | `@diphyx/rig-gcp`, draft       |
-| `packages/azure` | `@diphyx/rig-azure`, planned   |
+| Path             | Is                                                      |
+| ---------------- | ------------------------------------------------------- |
+| `spec/SPEC.md`   | the contract                                            |
+| `spec/kit/`      | the conformance suite, as data                          |
+| `packages/core`  | `@diphyx/rig`, passes the kit                           |
+| `packages/aws`   | `@diphyx/rig-aws`, draft                                |
+| `packages/gcp`   | `@diphyx/rig-gcp`, draft                                |
+| `packages/azure` | `@diphyx/rig-azure`, draft                              |
+| `test/`          | the same checks for every provider, and the kit's files |
 
 ```bash
 pnpm install
