@@ -119,7 +119,7 @@ describe("grid files", () => {
 
     it("gives a share push its own path: not the space, no push or pull at it or holding it", () => {
         const steps = [{ cmd: "exec" }];
-        const share = { from: "/data", to: "datasets/a/entries", isShared: true };
+        const share = { from: "/data", to: "datasets/a/entries", share: true };
 
         expect(shareProblem({ tag: "python", steps, push: [share], pull: [{ path: "out", into: "/x" }] })).toBeNull();
         expect(shareProblem({ tag: "python", steps, push: [{ ...share, to: "." }] })).toMatch(/not the space/);

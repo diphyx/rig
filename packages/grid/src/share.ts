@@ -16,12 +16,12 @@ function isUnder(inner: string, outer: string): boolean {
 export function shareProblem(job: GridJob): string | null {
     const pushes = job.push ?? [];
 
-    for (const [index, share] of pushes.entries()) {
-        if (!share.isShared) {
+    for (const [index, push] of pushes.entries()) {
+        if (!push.share) {
             continue;
         }
 
-        const to = spacePath(share.to);
+        const to = spacePath(push.to);
 
         if (to === ".") {
             return `push ${index + 1}: a share needs a \`to\`, not the space`;

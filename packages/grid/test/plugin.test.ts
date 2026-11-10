@@ -8,7 +8,7 @@ import { createRig, Market, type Provider, Slot } from "@diphyx/rig";
 import { sleep } from "radash";
 import { afterAll, describe, expect, it } from "vitest";
 
-import { createGrid, RELEASE as RELEASE_DEFAULT } from "../src/index.js";
+import { createGrid, JobEvent, RELEASE as RELEASE_DEFAULT } from "../src/index.js";
 import { keypairOf } from "../src/noise.js";
 import { dialGrid } from "../src/wire.js";
 
@@ -184,6 +184,58 @@ describe("grid: the hub plugin", () => {
         await grid.close();
     });
 
+    it("lists its waiting jobs and nodes with filters, kills a job by its name, and tells each end", async () => {
+        const grid = createGrid({ ip: "127.0.0.1", identity: keys().private, release: RELEASE, port: freePort() });
+        const ends: string[] = [];
+
+        grid.on(JobEvent.ENDED, ({ job, outcome }) => {
+            ends.push(`${job.name}:${outcome?.state ?? "closed"}`);
+        });
+
+        await grid.open();
+
+        /* A node nothing answers at: the job waits for it. */
+        await grid.add({ name: "m1", ip: { public: "127.0.0.1" }, key: keys().public, tags: ["build"] });
+
+        const running = grid.run({ name: "req-42", tag: "build", steps: [{ cmd: "make" }] });
+
+        await sleep(100);
+
+        expect(grid.jobs()).toMatchObject([{ name: "req-42", tag: "build", state: "waiting", tries: 0 }]);
+        expect(grid.jobs({ tag: "test" })).toEqual([]);
+        expect(grid.job("req-42")).toMatchObject({ name: "req-42", session: false });
+        expect(grid.job("none")).toBeNull();
+        expect(grid.nodes({ tag: "build", lost: false })).toMatchObject([{ name: "m1", jobs: [] }]);
+        expect(grid.nodes({ beating: true })).toEqual([]);
+
+        /* A live job's name is its own. */
+        expect(await grid.run({ name: "req-42", tag: "build", steps: [{ cmd: "make" }] })).toMatchObject({
+            state: "failed",
+            message: "a job req-42 runs already",
+        });
+
+        expect(grid.kill("req-42")).toBe(true);
+        expect(await running).toMatchObject({ name: "req-42", state: "stopped" });
+        expect(grid.jobs()).toEqual([]);
+        expect(grid.kill("req-42")).toBe(false);
+
+        /* A session waits as a job does, and a kill stops it before it starts. */
+        const session = grid.session({ name: "s1", tag: "build" });
+
+        await sleep(100);
+        expect(grid.jobs({ state: "waiting" })).toMatchObject([{ name: "s1", session: true }]);
+        expect(grid.kill("s1")).toBe(true);
+        await expect(session).rejects.toThrow("stopped before it started");
+
+        expect(ends).toEqual(["req-42:stopped", "s1:closed"]);
+
+        expect(() => {
+            return grid.watch("none", () => {});
+        }).toThrow("no job none");
+
+        await grid.close();
+    });
+
     it("updates a node it knows in place, counts a dropped one as lost, and tries a port that would not bind again", async () => {
         const grid = createGrid({ ip: "127.0.0.1", identity: keys().private, release: RELEASE });
 
@@ -319,6 +371,115 @@ describe.skipIf(!hasGrid)("grid: with grid's own node", () => {
 
         expect(outcome).toMatchObject({ state: "done" });
         expect(existsSync(path.join(into, "hi.txt")) || existsSync(path.join(into, "out", "hi.txt"))).toBe(true);
+
+        await grid.close();
+    }, 30_000);
+
+    it("runs a session on a real grid node: push, exec, pull, each the app's own call", async () => {
+        const hub = keys();
+        const port = freePort();
+        const base = path.join(folder, "session");
+
+        execFileSync("mkdir", ["-p", path.join(base, "src")]);
+        writeFileSync(path.join(base, "src", "job.sh"), 'mkdir -p out && echo "hi $1" > out/hi.txt\n');
+        execFileSync("grid", ["key", "new", path.join(base, "node")]);
+        writeFileSync(path.join(base, "hub.pub"), `${hub.public}\n`);
+
+        writeFileSync(
+            path.join(base, "node.toml"),
+            [
+                "grid = 2",
+                `identity = "${path.join(base, "node.key")}"`,
+                'tags = ["build"]',
+                `port = ${port}`,
+                "",
+                "[[hubs]]",
+                'ip = "127.0.0.1"',
+                `trust = "${path.join(base, "hub.pub")}"`,
+                "",
+                "[jobs]",
+                `path = "${path.join(base, "jobs")}"`,
+                "",
+                "[history]",
+                `path = "${path.join(base, "history")}"`,
+                "",
+                "[share]",
+                `path = "${path.join(base, "share")}"`,
+                "",
+                "[cmds.run]",
+                'exec = ["sh"]',
+                "",
+                "[cmds.wait]",
+                'exec = ["sleep", "30"]',
+                "",
+            ].join("\n"),
+        );
+
+        const node = spawn("grid", ["node", "run", "--config", path.join(base, "node.toml")], { stdio: "ignore" });
+
+        nodes.push(node);
+        await sleep(1000);
+
+        const grid = createGrid({ ip: "127.0.0.1", identity: hub.private, release: RELEASE, port });
+        const placed: string[] = [];
+
+        grid.on(JobEvent.PLACED, ({ job }) => {
+            placed.push(`${job.name}@${job.node ?? ""}`);
+        });
+
+        await grid.open();
+        const key = readFileSync(path.join(base, "node.pub"), "utf8").trim();
+        const into = path.join(base, "pulled");
+
+        await grid.add({ name: "m1", ip: { public: "127.0.0.1" }, key, tags: ["build"] });
+
+        const session = await grid.session({ name: "req-7", tag: "build" });
+        const events: string[] = [];
+        const unwatch = grid.watch("req-7", (event) => {
+            events.push(event.type);
+        });
+
+        expect(session.node).toBe("m1");
+        expect(grid.nodes()).toMatchObject([{ name: "m1", jobs: ["req-7"] }]);
+
+        /* A share push, kept on the node, linked read only at its `to`; a pull that takes it in is refused. */
+        expect(await session.push({ from: path.join(base, "src"), to: "lib", share: true })).toMatchObject({
+            to: "lib",
+        });
+
+        await expect(session.pull({ path: ".", into })).rejects.toThrow("a share");
+        expect(await session.exec({ cmd: "run", args: ["lib/job.sh", "there"] })).toMatchObject({ state: "done" });
+        expect(grid.job("req-7")).toMatchObject({ state: "running", step: "run", session: true });
+
+        await session.pull({ path: "out", into });
+        unwatch();
+
+        expect(await session.close()).toMatchObject({
+            name: "req-7",
+            state: "done",
+            steps: [{ cmd: "run", state: "done" }],
+        });
+
+        const pulled = [path.join(into, "hi.txt"), path.join(into, "out", "hi.txt")].find((file) => {
+            return existsSync(file);
+        });
+
+        expect(readFileSync(pulled!, "utf8")).toBe("hi there\n");
+        expect(events).toContain("state");
+        expect(placed).toEqual(["req-7@m1"]);
+        expect(grid.jobs()).toEqual([]);
+        await expect(session.exec({ cmd: "run" })).rejects.toThrow("closed");
+
+        /* A kill stops the step it runs; what it kept is still pulled, then it closes as stopped. */
+        const killed = await grid.session({ name: "req-8", tag: "build" });
+        const waiting = killed.exec({ cmd: "wait" });
+
+        await sleep(500);
+        expect(grid.kill("req-8")).toBe(true);
+        expect(await waiting).toMatchObject({ cmd: "wait", state: "stopped" });
+        await expect(killed.exec({ cmd: "run" })).rejects.toThrow("killed");
+        expect(await killed.pull({ path: ".", into: path.join(base, "kept") })).toEqual(expect.any(Array));
+        expect(await killed.close()).toMatchObject({ state: "stopped", message: "killed" });
 
         await grid.close();
     }, 30_000);

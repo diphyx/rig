@@ -26,6 +26,21 @@ export interface GridNodeEntry {
     share: boolean;
 }
 
+/** A node of the hub, by its machine's name. */
+export type GridNode = {
+    name: string;
+    ip: string;
+    tags: string[];
+    /** It beats, with signal. */
+    beating: boolean;
+    lost: boolean;
+    /** The names of the jobs it runs now. */
+    jobs: string[];
+};
+
+/** Which nodes `grid.nodes` gives: those with every key given. */
+export type GridNodeFilter = { tag?: string; beating?: boolean; lost?: boolean };
+
 /* One node from the config: its one shared connection, and whether it still answers. */
 export class NodeLink {
     private connection: GridConnection | null = null;

@@ -29,19 +29,21 @@ export interface GridPush {
     from: string;
     to?: string;
     /* A share push (spec §10): kept on the node for the jobs after, linked read only at `to`. */
-    isShared?: boolean;
+    share?: boolean;
 }
 
 export interface GridPull {
     path: string;
     into: string;
     /* Only what the steps wrote: files changed since the first step ran. */
-    isSinceStart?: boolean;
+    fresh?: boolean;
     /* Pulled after a kill too, once the steps have stopped: what a stopped step wrote to resume from. */
-    isKept?: boolean;
+    keep?: boolean;
 }
 
 export interface GridJob {
+    /* The app's own name for it, unique among the hub's live jobs: what `grid.job`, `kill` and `watch` take. */
+    name?: string;
     tag: string;
     push?: GridPush[];
     steps: GridStep[];
@@ -68,6 +70,8 @@ export interface GridPushed {
 }
 
 export interface GridOutcome {
+    /* The job's name: the app's, or the one the hub made. */
+    name: string;
     state: "done" | "failed" | "stopped";
     message: string;
     node: string | null;
@@ -76,18 +80,18 @@ export interface GridOutcome {
     files: PulledFile[];
 }
 
-/* The job on its node, for `onStep`: what the steps wrote so far, pulled while the job goes on. */
+/* The job on its node, for `next`: what the steps wrote so far, pulled while the job goes on. */
 export interface GridJobFiles {
     pull(pull: GridPull): Promise<PulledFile[]>;
 }
 
 export interface GridRunOptions {
     signal?: AbortSignal;
-    onEvent?: (event: GridEvent) => void;
+    watch?: (event: GridEvent) => void;
     /* After a step that ends done: it may pull from the job, and the steps it returns run next, in the same job. */
-    onStep?: (step: GridStepResult, files: GridJobFiles) => Promise<GridStep[] | void>;
+    next?: (step: GridStepResult, files: GridJobFiles) => Promise<GridStep[] | void>;
     /* Where the job runs, once a node takes it: what `GridHub.recover` needs after a restart. */
-    onPlaced?: (placed: { node: string; job: string }) => void | Promise<void>;
+    placed?: (placed: { node: string; job: string }) => void | Promise<void>;
 }
 
 /* A job that cannot go on here, like a cmd the node does not have: no retry fixes it. */
@@ -99,14 +103,14 @@ export class GridLost extends Error {
     }
 }
 
-interface StateEvent {
+export interface StateEvent {
     state: StepState;
     cmd: string;
     message: string;
     time: number;
 }
 
-function stateOf(event: GridEvent): StateEvent | null {
+export function stateOf(event: GridEvent): StateEvent | null {
     if (event.type !== "state" || !isObject(event.data)) {
         return null;
     }
@@ -166,7 +170,7 @@ class Follower {
     constructor(
         private readonly link: NodeLink,
         private readonly job: string,
-        private readonly onEvent?: (event: GridEvent) => void,
+        private readonly watch?: (event: GridEvent) => void,
     ) {
         void this.run();
     }
@@ -220,7 +224,7 @@ class Follower {
         }
 
         this.lastSeq = event.seq;
-        this.onEvent?.(event);
+        this.watch?.(event);
 
         const state = stateOf(event);
 
@@ -274,7 +278,7 @@ class Follower {
     }
 }
 
-class Attempt implements GridJobFiles {
+export class Attempt implements GridJobFiles {
     readonly steps: GridStepResult[];
     private readonly follower: Follower;
     /* The node's clock when the first step ran: a pull `since` it takes only what the steps wrote. */
@@ -292,7 +296,12 @@ class Attempt implements GridJobFiles {
             return { cmd: step.cmd, state: "idle", message: "" };
         });
 
-        this.follower = new Follower(link, nodeJob, options.onEvent);
+        this.follower = new Follower(link, nodeJob, options.watch);
+    }
+
+    /** Its node's address: `<ip>:<port>`. */
+    get address(): string {
+        return this.link.address;
     }
 
     private get isHalted(): boolean {
@@ -303,29 +312,41 @@ class Attempt implements GridJobFiles {
         const pushed: GridPushed[] = [];
 
         for (const [index, push] of (this.job.push ?? []).entries()) {
-            const { file, sum } = packed[index]!;
-            /* The push id: the tar's sha256, its first 16 bytes. */
-            const id = push.isShared ? sum.slice(0, 32) : undefined;
-
-            const how = await onNode(this.link, (connection) => {
-                return pushTar(connection, {
-                    job: this.nodeJob,
-                    to: push.to,
-                    file,
-                    sum,
-                    id,
-                    signal: this.options.signal,
-                });
-            });
-
-            if (push.isShared) {
-                this.link.shares(how !== "normal");
-            }
-
-            pushed.push({ to: spacePath(push.to), how });
+            pushed.push(await this.pushOne(push, packed[index]!));
         }
 
         return pushed;
+    }
+
+    /** One push, packed: into the job's space, or kept on the node as a share. */
+    async pushOne(push: GridPush, packed: PackedPush): Promise<GridPushed> {
+        const { file, sum } = packed;
+        /* The push id: the tar's sha256, its first 16 bytes. */
+        const id = push.share ? sum.slice(0, 32) : undefined;
+
+        const how = await onNode(this.link, (connection) => {
+            return pushTar(connection, {
+                job: this.nodeJob,
+                to: push.to,
+                file,
+                sum,
+                id,
+                signal: this.options.signal,
+            });
+        });
+
+        if (push.share) {
+            this.link.shares(how !== "normal");
+        }
+
+        return { to: spacePath(push.to), how };
+    }
+
+    /** One step: its cmd run, then its end; a kill stops it. */
+    async step(step: GridStep): Promise<StateEvent> {
+        await this.exec(step);
+
+        return this.waitEnd(step);
     }
 
     private async exec(step: GridStep) {
@@ -417,9 +438,8 @@ class Attempt implements GridJobFiles {
         for (let index = 0; index < steps.length; index += 1) {
             const step = steps[index]!;
             this.steps[index]!.state = "running";
-            await this.exec(step);
 
-            const ended = await this.waitEnd(step);
+            const ended = await this.step(step);
             this.steps[index] = { cmd: step.cmd, state: ended.state, message: ended.message };
 
             if (this.isHalted) {
@@ -433,7 +453,7 @@ class Attempt implements GridJobFiles {
                 return { state: "failed", message: `step ${index + 1} (${step.cmd}): ${ended.state}${reason}` };
             }
 
-            const more = (await this.options.onStep?.(this.steps[index]!, this)) ?? [];
+            const more = (await this.options.next?.(this.steps[index]!, this)) ?? [];
             steps.push(...more);
 
             this.steps.push(
@@ -457,7 +477,7 @@ class Attempt implements GridJobFiles {
                 path: each.path,
                 part: path.join(this.folder, `pull-${this.pulls}.part`),
                 into: each.into,
-                since: each.isSinceStart ? this.startedAt : undefined,
+                since: each.fresh ? this.startedAt : undefined,
                 signal: signal ?? undefined,
             });
         });
@@ -468,7 +488,7 @@ class Attempt implements GridJobFiles {
         const pulled: PulledFile[] = [];
 
         for (const each of this.job.pull ?? []) {
-            if (!isStopped || each.isKept) {
+            if (!isStopped || each.keep) {
                 pulled.push(...(await this.pull(each, isStopped ? null : (this.options.signal ?? null))));
             }
         }
@@ -499,7 +519,13 @@ export async function runAttempt(
 
     return (async (): Promise<GridOutcome> => {
         const pushed = await attempt.push(packed);
-        const base = { node: link.address, steps: attempt.steps, pushed, files: [] as PulledFile[] };
+        const base = {
+            name: job.name ?? "",
+            node: link.address,
+            steps: attempt.steps,
+            pushed,
+            files: [] as PulledFile[],
+        };
 
         if (options.signal?.aborted) {
             return { ...base, state: "stopped", message: "killed" };

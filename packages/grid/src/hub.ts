@@ -3,15 +3,18 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { isString, sleep, tryit } from "radash";
 
-import { GridLost, RETRY_EVERY_MS, runAttempt } from "./job.js";
+import { Attempt, GridLost, RETRY_EVERY_MS, runAttempt } from "./job.js";
 import { NodeLink } from "./nodes.js";
+import { GridSession } from "./session.js";
 import { shareProblem } from "./share.js";
 import { TarStore } from "./tars.js";
 import { GridHalted, pullTar } from "./transfer.js";
 import { GridReject } from "./wire.js";
 
 import type { GridJob, GridOutcome, GridPull, GridRunOptions } from "./job.js";
-import type { GridNodeEntry, Log } from "./nodes.js";
+import type { JobBook, Live } from "./book.js";
+import type { GridSessionOptions } from "./session.js";
+import type { GridNode, GridNodeEntry, GridNodeFilter, Log } from "./nodes.js";
 import type { Keypair } from "./noise.js";
 import type { PackedPush } from "./tars.js";
 
@@ -20,11 +23,11 @@ const RECOVER_WAIT_MS = 15_000;
 const noLog: Log = () => {};
 
 function nameOf(job: GridJob): string {
-    return job.steps
+    return `${job.name ?? "job"} (${job.steps
         .map((step) => {
             return step.cmd;
         })
-        .join(", ");
+        .join(", ")})`;
 }
 
 /* The share pushes a node already had, and those it kept: "1 hit, 1 installed"; empty without any. */
@@ -59,12 +62,14 @@ function ended(job: GridJob, state: "failed" | "stopped", message: string, node:
         return { cmd: step.cmd, state: "idle" as const, message: "" };
     });
 
-    return { state, message, node, steps, pushed: [], files: [] };
+    return { name: job.name ?? "", state, message, node, steps, pushed: [], files: [] };
 }
 
 /** The hub side of grid/2: it knows the nodes, places each job on one with its tag, and runs it there. */
 export class GridHub {
     readonly links: NodeLink[] = [];
+    /** Its live jobs: waiting, running, or in a session; the grid's own, so it is heard before the hub opens. */
+    readonly book: JobBook;
     private readonly tars: TarStore;
     private readonly log: Log;
     /* Tags no more nodes come for: a job waiting for one of them fails. */
@@ -72,8 +77,9 @@ export class GridHub {
 
     constructor(
         private readonly local: Keypair,
-        options: { tars?: string; log?: Log } = {},
+        options: { book: JobBook; tars?: string; log?: Log },
     ) {
+        this.book = options.book;
         this.tars = new TarStore(options.tars ?? path.join(tmpdir(), "grid-tars"));
         this.log = options.log ?? noLog;
     }
@@ -115,6 +121,33 @@ export class GridHub {
         }
     }
 
+    /** Its nodes, those with every key the filter gives, each with the jobs it runs now. */
+    nodes(filter: GridNodeFilter = {}): GridNode[] {
+        const jobs = this.book.list();
+
+        return this.links
+            .map((link) => {
+                const { name, ip, tags } = link.entry;
+
+                const on = jobs
+                    .filter((job) => {
+                        return job.node === name;
+                    })
+                    .map((job) => {
+                        return job.name;
+                    });
+
+                return { name, ip, tags: [...tags], beating: link.isBeating, lost: link.isLost, jobs: on };
+            })
+            .filter((node) => {
+                return (
+                    (filter.tag === undefined || node.tags.includes(filter.tag)) &&
+                    (filter.beating === undefined || node.beating === filter.beating) &&
+                    (filter.lost === undefined || node.lost === filter.lost)
+                );
+            });
+    }
+
     /** The node at this IP, for a connection it dials in, with signal. */
     nodeAt(ip: string): NodeLink | undefined {
         return this.links.find((link) => {
@@ -138,26 +171,20 @@ export class GridHub {
     }
 
     /* Opens the job on the first node that takes it; while none does, the job waits. */
-    private async place(job: GridJob, signal: AbortSignal | undefined) {
-        const isSharing = Boolean(
-            job.push?.some((push) => {
-                return push.isShared;
-            }),
-        );
-
+    private async place(tag: string, isSharing: boolean, label: string, signal: AbortSignal | undefined) {
         let isWaitNoted = false;
 
         while (!signal?.aborted) {
             let isFull = false;
 
             /* No node has the tag, and none comes for it (rig spec §22.1, `spent`). */
-            if (this.spentTags.has(job.tag) && this.candidates(job.tag, isSharing).length === 0) {
+            if (this.spentTags.has(tag) && this.candidates(tag, isSharing).length === 0) {
                 return "spent" as const;
             }
 
-            for (const link of this.candidates(job.tag, isSharing)) {
+            for (const link of this.candidates(tag, isSharing)) {
                 const [problem, opened] = await tryit(async () => {
-                    return (await link.connect()).request("open", { tag: job.tag });
+                    return (await link.connect()).request("open", { tag });
                 })();
 
                 if (!problem && isString(opened.job)) {
@@ -175,7 +202,7 @@ export class GridHub {
 
             /* Waiting for room is worth one line; a node that does not answer has told its own. */
             if (isFull && !isWaitNoted) {
-                this.log(`${nameOf(job)} waits: no ${job.tag} node has room`);
+                this.log(`${label} waits: no ${tag} node has room`);
                 isWaitNoted = true;
             }
 
@@ -204,16 +231,103 @@ export class GridHub {
         return packed;
     }
 
-    async run(job: GridJob, options: GridRunOptions = {}): Promise<GridOutcome> {
-        const started = Date.now();
-        const outcome = await this.runJob(job, options);
+    /* A job begins in the book, by its name: a problem when the name is not one, or taken. */
+    private begin(
+        name: string | undefined,
+        tag: string,
+        session: boolean,
+        given: AbortSignal | undefined,
+    ): { one: Live; signal: AbortSignal } | string {
+        if (name !== undefined && (!isString(name) || name === "")) {
+            return "name: not a str";
+        }
 
+        const one = this.book.start(name, tag, session);
+
+        if (!one) {
+            return `a job ${name} runs already`;
+        }
+
+        /* Its own signal, or a kill by its name. */
+        return { one, signal: given ? AbortSignal.any([given, one.abort.signal]) : one.abort.signal };
+    }
+
+    async run(given: GridJob, options: GridRunOptions = {}): Promise<GridOutcome> {
+        const begun = this.begin(given.name, given.tag, false, options.signal);
+
+        if (isString(begun)) {
+            return ended(given, "failed", begun);
+        }
+
+        const { one, signal } = begun;
+        const job = { ...given, name: one.view.name };
+        const started = Date.now();
+
+        const outcome = await this.runJob(job, one, {
+            ...options,
+            signal,
+            watch: (event) => {
+                options.watch?.(event);
+                this.book.event(one, event);
+            },
+        });
+
+        this.book.end(one, outcome);
         report(job, outcome, started, this.log);
 
         return outcome;
     }
 
-    private async runJob(job: GridJob, options: GridRunOptions): Promise<GridOutcome> {
+    /** A job on one node, its calls the app's: it waits for a node with the tag, as a job does. */
+    async session(given: GridSessionOptions): Promise<GridSession> {
+        const begun = this.begin(given.name, given.tag, true, given.signal);
+
+        if (isString(begun)) {
+            throw new Error(`grid: ${begun}`);
+        }
+
+        const { one, signal } = begun;
+        const placed = await this.place(given.tag, Boolean(given.share), one.view.name, signal);
+
+        if (!placed || placed === "spent") {
+            this.book.end(one);
+
+            throw new Error(
+                placed ? `grid: no ${given.tag} node comes for ${one.view.name}` : "grid: stopped before it started",
+            );
+        }
+
+        this.book.placed(one, placed.link.entry.name);
+
+        await tryit(async () => {
+            return given.placed?.({ node: placed.link.address, job: placed.nodeJob });
+        })();
+
+        const job: GridJob = { name: one.view.name, tag: given.tag, steps: [] };
+        const started = Date.now();
+        const folder = await mkdtemp(path.join(tmpdir(), "grid-job-"));
+
+        const attempt = new Attempt(
+            placed.link,
+            placed.nodeJob,
+            job,
+            {
+                signal,
+                watch: (event) => {
+                    given.watch?.(event);
+                    this.book.event(one, event);
+                },
+            },
+            folder,
+        );
+
+        return new GridSession(attempt, this.tars, one, folder, placed.link.entry.name, (outcome) => {
+            this.book.end(one, outcome);
+            report({ ...job, steps: outcome.steps }, outcome, started, this.log);
+        });
+    }
+
+    private async runJob(job: GridJob, one: Live, options: GridRunOptions): Promise<GridOutcome> {
         const problem = shareProblem(job);
 
         if (problem) {
@@ -228,15 +342,26 @@ export class GridHub {
             return ended(job, "failed", `push: ${packProblem.message}`);
         }
 
-        return this.attempts(job, packed, options).finally(() => {
+        return this.attempts(job, one, packed, options).finally(() => {
             return this.tars.release(packed);
         });
     }
 
     /* Each attempt on a node that takes the job; a lost node runs it again from the start elsewhere. */
-    private async attempts(job: GridJob, packed: PackedPush[], options: GridRunOptions): Promise<GridOutcome> {
+    private async attempts(
+        job: GridJob,
+        one: Live,
+        packed: PackedPush[],
+        options: GridRunOptions,
+    ): Promise<GridOutcome> {
+        const isSharing = Boolean(
+            job.push?.some((push) => {
+                return push.share;
+            }),
+        );
+
         for (let attempt = 0; attempt <= (job.retries ?? 0); attempt += 1) {
-            const placed = await this.place(job, options.signal);
+            const placed = await this.place(job.tag, isSharing, nameOf(job), options.signal);
 
             if (!placed) {
                 return ended(job, "stopped", "stopped before it started");
@@ -246,8 +371,10 @@ export class GridHub {
                 return ended(job, "failed", `no ${job.tag} node comes for it`);
             }
 
+            this.book.placed(one, placed.link.entry.name);
+
             await tryit(async () => {
-                return options.onPlaced?.({ node: placed.link.address, job: placed.nodeJob });
+                return options.placed?.({ node: placed.link.address, job: placed.nodeJob });
             })();
 
             const [problem, outcome] = await tryit(() => {
@@ -268,6 +395,10 @@ export class GridHub {
 
             if (!isGone) {
                 return ended(job, "failed", problem.message, placed.link.address);
+            }
+
+            if (attempt < (job.retries ?? 0)) {
+                this.book.retried(one, placed.link.entry.name);
             }
         }
 

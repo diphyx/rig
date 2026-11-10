@@ -32,7 +32,12 @@ const rig = createRig({
         aws.presets.compute({
             name: "builder",
             life: "8h", // job machines are short-lived
-            worker: { tags: ["build"], cmds: { make: { exec: ["make", "-j8"], timeout: "1h" } } },
+            worker: {
+                tags: ["build"],
+                cmds: {
+                    make: { exec: ["make", "-j8"], timeout: "1h" },
+                },
+            },
         }),
     ],
 });
@@ -77,6 +82,21 @@ Every option has a default: `createGrid()` is a whole hub.
 | `cmds`   | the only cmds it runs: grid's `[cmds.<name>]`, `exec` and `timeout`; at least one       |
 | `signal` | grid's `signal`: the node also dials the hub, with heartbeats; needs the hub's `listen` |
 
+One kind, cmds per machine: `rig.machine.create(kind, { worker })` gives one machine its own `tags` and `cmds`, over the kind's.
+
+```ts
+await rig.machine.create("builder", {
+    worker: {
+        tags: ["req-42"],
+        cmds: {
+            train: { exec: ["python", "train.py"], timeout: "4h" },
+        },
+    },
+});
+
+await grid.run({ tag: "req-42", steps: [{ cmd: "train" }] });
+```
+
 ## A Machine's First Boot
 
 At its create, each machine gets its own grid key pair, and these first-boot lines, after its `login` and before its `script`:
@@ -93,22 +113,77 @@ It also gets the hub's port, open to the hub's IP only. The private key is in th
 
 `grid.run(job, options)` places a job on a node with its tag and runs it there:
 
-| Job key   | Is                                                                                                     |
-| --------- | ------------------------------------------------------------------------------------------------------ |
-| `tag`     | which nodes may run it: a node `tags` it                                                               |
-| `push`    | `{ from, to, isShared? }`: files sent into the job's space; a share is kept on the node for later jobs |
-| `steps`   | `{ cmd, args?, env? }`: the node's cmds, in order; the first that fails ends the job                   |
-| `pull`    | `{ path, into, isSinceStart?, isKept? }`: files brought back                                           |
-| `retries` | how many times a lost node's job starts over elsewhere; `0`                                            |
+| Job key   | Is                                                                                                                |
+| --------- | ----------------------------------------------------------------------------------------------------------------- |
+| `name`    | the app's own name for it, unique among live jobs: a request's id; by default `job-<8 hex>`                       |
+| `tag`     | which nodes may run it: a node `tags` it                                                                          |
+| `push`    | `{ from, to, share? }`: files sent into the job's space; a share is kept on the node for later jobs               |
+| `steps`   | `{ cmd, args?, env? }`: the node's cmds, in order; the first that fails ends the job                              |
+| `pull`    | `{ path, into, fresh?, keep? }`: files brought back; `fresh`: only what its steps wrote; `keep`: after a kill too |
+| `retries` | how many times a lost node's job starts over elsewhere; `0`                                                       |
 
-`options` has `signal` (an `AbortSignal` that kills it), `onEvent` (its log lines and events), `onStep` (more steps after one ends done), and `onPlaced` (where it runs, for `grid.recover` after a restart).
+`options` has `signal` (an `AbortSignal` that kills it), `watch` (its log lines and events), `next` (more steps after one ends done), and `placed` (where it runs, for `grid.recover` after a restart).
 
 - **A machine is lost:** rig replaces it, up to its kind's `recovers`; the job starts over on any free node with its tag, up to its `retries`, the replacement too.
 - **No node comes:** when rig stops replacing a kind's machines, it tells the hub (`spent`), and a job no node can take fails.
 - **A job keeps its own work:** a take-back may come with little warning, or none. Save progress in the job's own steps, and resume from there.
-- **New cmds:** a new tag for them (`build-v2`) keeps jobs off machines made with the old ones.
+- **New cmds:** a new tag for them (`build-v2`) keeps jobs off machines made with the old ones; or give them to one machine at its create.
 
-`grid.nodes()` lists every node: its machine's name, IP and tags, whether it beats, and whether it is lost.
+## Sessions
+
+`grid.session(options)` opens a job on a node with its tag, for the app's own calls, one at a time; it waits for a node with room, as a job does:
+
+```ts
+const job = await grid.session({ tag: "req-42", name: "req-42" });
+
+await job.push({ from: "./tools", to: "tools", share: true }); // kept on the node for later jobs
+await job.push({ from: "./inputs", to: "." });
+
+// { cmd, state, message }, once the step ends
+const step = await job.exec({
+    cmd: "train",
+    args: ["--epochs", "3"],
+    env: { SEED: "1" },
+});
+
+await job.pull({ path: "out", into: "./results", fresh: true });
+
+// the node drops it, its slot is free: done, failed or stopped
+const outcome = await job.close();
+```
+
+| Option   | Is                                                                      |
+| -------- | ----------------------------------------------------------------------- |
+| `tag`    | which nodes may take it                                                 |
+| `name`   | the app's own name for it, as a job's                                   |
+| `share`  | its pushes have a share: a node with its share on is tried first        |
+| `signal` | an `AbortSignal` that kills it: while it waits, or the step it runs     |
+| `watch`  | its node's log lines and events, from its first                         |
+| `placed` | where it runs, once a node takes it: for `grid.recover` after a restart |
+
+- **Its calls:** `push`, `exec` and `pull` take what a job's `push`, `steps` and `pull` do, shares too, checked the same way; `exec` waits for the step's end. `steps`, `pushed` and `files` keep what each gave.
+- **Its outcome:** `close` gives it as `run` does: `stopped` by a kill, `failed` when a step did not end done, else `done`.
+- **A kill:** its signal or `grid.kill(name)` stops the step it runs; then only `pull`, for what it kept, and `close`.
+- **No retries:** a lost node fails the call; the app opens another session.
+
+## Views
+
+Each takes a filter: those with every key given.
+
+| Call                                    | Gives                                                                                            |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `grid.jobs({ tag?, state?, node? })`    | its live jobs: `name`, `tag`, `state` (`waiting`, `running`), `node`, `step`, `tries`, `started` |
+| `grid.job(name)`                        | one live job; `null` once it ends                                                                |
+| `grid.nodes({ tag?, beating?, lost? })` | its nodes: the machine's `name`, `ip`, `tags`, `beating`, `lost`, and the `jobs` it runs         |
+
+| Call                        | Does                                                                        |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `grid.kill(name)`           | stops a live job, or a session; `false` when none has the name              |
+| `grid.watch(name, handler)` | a live job's log lines and events from now on; the call it gives stops them |
+| `grid.on(JobEvent.*, ...)`  | its jobs: `PLACED` on a node, `RETRIED` after a lost one, `ENDED`           |
+
+- **In memory:** the hub's own, so after a restart `grid.jobs()` is empty; `placed` and `grid.recover` take back what ran.
+- **A node is its machine:** `node` and `nodes()`'s `name` are rig's machine names, as `rig.machine.list({ tag })` gives them.
 
 ## Signal
 

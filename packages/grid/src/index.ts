@@ -8,11 +8,13 @@ import { tryit } from "radash";
 
 import data from "./grid.json" with { type: "json" };
 import { GridHub } from "./hub.js";
-import type { GridJob, GridOutcome, GridPull, GridRunOptions } from "./job.js";
+import type { GridEvent, GridJob, GridOutcome, GridPull, GridRunOptions } from "./job.js";
+import { type GridJobFilter, type GridJobView, JobBook, type JobEvent, type JobEvents } from "./book.js";
 import { type Listener, listenGrid } from "./listen.js";
-import type { Log } from "./nodes.js";
+import type { GridNode, GridNodeFilter, Log } from "./nodes.js";
 import { type Keypair, keypairOf } from "./noise.js";
 import { checkWorker, type GridWorker, type HubSide, hubRule, makeGridKey, nodePart } from "./setup.js";
+import type { GridSession, GridSessionOptions } from "./session.js";
 import { DEFAULT_PORT } from "./wire.js";
 
 export type {
@@ -29,7 +31,10 @@ export type {
     StepState,
 } from "./job.js";
 
-export type { Log } from "./nodes.js";
+export { JobEvent } from "./book.js";
+export type { GridJobFilter, GridJobView, JobEvents } from "./book.js";
+export type { GridNode, GridNodeFilter, Log } from "./nodes.js";
+export type { GridSession, GridSessionOptions } from "./session.js";
 export type { GridWorker } from "./setup.js";
 
 /* A grid key: raw X25519, 32 bytes, base64. */
@@ -84,8 +89,20 @@ export type Grid = Worker & {
     run(job: GridJob, options?: GridRunOptions): Promise<GridOutcome>;
     /** A job this hub opened before a restart: stopped if it still runs, its files pulled, then dropped. */
     recover(node: string, job: string, pulls: GridPull[]): Promise<boolean>;
-    /** Every node it has: its machine's name, IP and tags, whether it beats (signal), and whether it is lost. */
-    nodes(): { name: string; ip: string; tags: string[]; beating: boolean; lost: boolean }[];
+    /** A job on a node with its tag, for the app's own calls: push, exec, pull, then close. */
+    session(given: GridSessionOptions): Promise<GridSession>;
+    /** Its nodes, those with every key the filter gives: each machine's name, IP and tags, whether it beats and is lost, and its jobs. */
+    nodes(filter?: GridNodeFilter): GridNode[];
+    /** Its live jobs, waiting or running, those with every key the filter gives. */
+    jobs(filter?: GridJobFilter): GridJobView[];
+    /** One live job, by its name; null when none has it. */
+    job(name: string): GridJobView | null;
+    /** Stops a live job, by its name: the step it runs is killed; false when none has it. */
+    kill(name: string): boolean;
+    /** A live job's node events from now on, its log lines too; the call it gives stops them. */
+    watch(name: string, handler: (event: GridEvent) => void): () => void;
+    /** Hears its jobs: placed on a node, run again after a lost one, ended. */
+    on<E extends JobEvent>(event: E, handler: (data: JobEvents[E]) => void): void;
     /** Closes every connection, and stops listening. */
     close(): Promise<void>;
 };
@@ -147,6 +164,7 @@ export function createGrid(config: GridConfig = {}): Grid {
 
     const port = config.port ?? DEFAULT_PORT;
     const log: Log = config.extra?.log ?? (() => {});
+    const book = new JobBook();
 
     /* What it finds out when rig opens it: its key, its IP, and the hub itself. */
     let opened: { local: Keypair; side: HubSide; hub: GridHub } | null = null;
@@ -194,7 +212,7 @@ export function createGrid(config: GridConfig = {}): Grid {
                 release: config.release ?? RELEASE,
             };
 
-            const hub = new GridHub(local, { ...(config.extra?.tars && { tars: config.extra.tars }), log });
+            const hub = new GridHub(local, { ...(config.extra?.tars && { tars: config.extra.tars }), log, book });
 
             opened = { local, side, hub };
         },
@@ -268,12 +286,33 @@ export function createGrid(config: GridConfig = {}): Grid {
             return ready().hub.recover(node, job, pulls);
         },
 
-        nodes() {
-            return (opened?.hub.links ?? []).map((link) => {
-                const { name, ip, tags } = link.entry;
+        session(given) {
+            return ready().hub.session(given);
+        },
 
-                return { name, ip, tags, beating: link.isBeating, lost: link.isLost };
-            });
+        nodes(filter) {
+            return opened?.hub.nodes(filter) ?? [];
+        },
+
+        jobs(filter) {
+            return book.list(filter);
+        },
+
+        job(name) {
+            return book.get(name);
+        },
+
+        kill(name) {
+            return book.kill(name);
+        },
+
+        watch(name, handler) {
+            return book.watch(name, handler);
+        },
+
+        /* Before rig opens too: the book is the grid's own. */
+        on(event, handler) {
+            book.on(event, handler);
         },
 
         async close() {
