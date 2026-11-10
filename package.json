@@ -3,10 +3,11 @@
     "private": true,
     "type": "module",
     "scripts": {
+        "build": "pnpm -r build",
         "test": "vitest run",
         "lint": "eslint ./ --fix",
         "format": "prettier ./ --write",
-        "check": "eslint ./ && prettier ./ --check && vitest run"
+        "check": "tsc -b && eslint ./ --max-warnings 0 && prettier ./ --check && vitest run"
     },
     "devDependencies": {
         "@diphyx/eslint-plugin": "^1.3.1",
