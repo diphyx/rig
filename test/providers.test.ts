@@ -131,6 +131,18 @@ describe.each(PROVIDERS)("provider $name", ({ name, table, keys, make }) => {
         expect(() => {
             return provider.presets.compute({ name: "k", image: "mine", arch: PresetArch.ANY });
         }).toThrow(Refusal);
+
+        expect(provider.presets.small({ name: "k" }).disk).toBe(30);
+        expect(provider.presets.general({ name: "k" }).disk).toBe(40);
+        expect(provider.presets.compute({ name: "k", cpu: 16 }).disk).toBe(110);
+        expect(provider.presets.memory({ name: "k", mem: 128 }).disk).toBe(100);
+        expect(provider.presets.gpu({ name: "k" }).disk).toBe(200);
+        expect(provider.presets.compute({ name: "k", disk: 500 }).disk).toBe(500);
+        expect(provider.presets.compute({ name: "k", image: "mine", arch: PresetArch.X86 }).disk).toBeUndefined();
+
+        expect(provider.presets.small({ name: "k", ports: [{ port: 22, from: "1.2.3.4/32" }] }).ports).toEqual([
+            { port: 22, from: "1.2.3.4/32" },
+        ]);
     });
 
     it("reads a shape for every type its presets list, on the arch it is listed under", async () => {
