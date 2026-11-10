@@ -1,5 +1,4 @@
-import { Reason, Refusal } from "@diphyx/rig";
-import { isString } from "radash";
+import { checkFactory } from "@diphyx/rig";
 
 import type { Auth } from "./auth.js";
 import type { Request } from "./gce.js";
@@ -29,26 +28,9 @@ export type GcpExtra = {
     request?: Request;
 };
 
-const CONFIG = ["region", "name", "auth", "identity", "extra"];
 const EXTRA = ["project", "network", "subnet", "request"];
 
-/** §8.2: a key outside the table is a refusal; gcp's own go in `extra`, and gcp checks those too. */
+/** §8.2: the standard keys and gcp's own `extra` keys; `region` is required. */
 export function checkConfig(config: GcpConfig): void {
-    const unknown = (keys: string[], known: string[], at: string): void => {
-        for (const key of keys) {
-            if (!known.includes(key)) {
-                throw new Refusal(
-                    Reason.CONFIG,
-                    `gcp: unknown key ${at}${key}${at === "" ? "; gcp's own go in extra" : ""}`,
-                );
-            }
-        }
-    };
-
-    unknown(Object.keys(config), CONFIG, "");
-    unknown(Object.keys(config.extra ?? {}), EXTRA, "extra.");
-
-    if (!isString(config.region) || config.region === "") {
-        throw new Refusal(Reason.CONFIG, "gcp: region is required");
-    }
+    checkFactory("gcp", config, EXTRA);
 }

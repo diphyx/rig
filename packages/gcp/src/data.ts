@@ -1,4 +1,4 @@
-import type { Busy, PresetTable, Tags } from "@diphyx/rig";
+import { type Busy, createTagMap, type PresetTable } from "@diphyx/rig";
 
 import data from "./gcp.json" with { type: "json" };
 
@@ -15,33 +15,15 @@ export const SHAPES = data.shapes as {
 };
 
 const BUSY = data.busy as Record<string, Busy>;
-const TAGS = data.tags as Record<string, string>;
-
-const BACK = Object.fromEntries(
-    Object.entries(TAGS).map(([rig, gcp]) => {
-        return [gcp, rig];
-    }),
-);
+const TAGS = createTagMap(data.tags as Record<string, string>);
 
 /** The busy answer for a Compute Engine error code; none means it is not about room. */
 export function busyOf(code: string): Busy | undefined {
     return BUSY[code];
 }
 
-/** §12: rig's tag names onto names GCP can hold. */
-export function toGcp(tags: Tags): Tags {
-    return Object.fromEntries(
-        Object.entries(tags).map(([name, value]) => {
-            return [TAGS[name] ?? name, value];
-        }),
-    );
-}
+/** §12: rig's tag names onto names gcp can hold. */
+export const toGcp = TAGS.to;
 
-/** §12: GCP's tag names back onto rig's, so the core only sees its own. */
-export function fromGcp(tags: Tags): Tags {
-    return Object.fromEntries(
-        Object.entries(tags).map(([name, value]) => {
-            return [BACK[name] ?? name, value];
-        }),
-    );
-}
+/** §12: gcp's tag names back onto rig's, so the core only sees its own. */
+export const fromGcp = TAGS.from;

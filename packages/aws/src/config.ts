@@ -1,6 +1,5 @@
 import type { EC2Client } from "@aws-sdk/client-ec2";
-import { Reason, Refusal } from "@diphyx/rig";
-import { isString } from "radash";
+import { checkFactory } from "@diphyx/rig";
 
 import type { Auth } from "./auth.js";
 
@@ -26,26 +25,9 @@ export type AwsExtra = {
     client?: Pick<EC2Client, "send">;
 };
 
-const CONFIG = ["region", "name", "auth", "identity", "extra"];
 const EXTRA = ["subnets", "key", "client"];
 
-/** §8.2: a key outside the table is a refusal; aws's own go in `extra`, and aws checks those too. */
+/** §8.2: the standard keys and aws's own `extra` keys; `region` is required. */
 export function checkConfig(config: AwsConfig): void {
-    const unknown = (keys: string[], known: string[], at: string): void => {
-        for (const key of keys) {
-            if (!known.includes(key)) {
-                throw new Refusal(
-                    Reason.CONFIG,
-                    `aws: unknown key ${at}${key}${at === "" ? "; aws's own go in extra" : ""}`,
-                );
-            }
-        }
-    };
-
-    unknown(Object.keys(config), CONFIG, "");
-    unknown(Object.keys(config.extra ?? {}), EXTRA, "extra.");
-
-    if (!isString(config.region) || config.region === "") {
-        throw new Refusal(Reason.CONFIG, "aws: region is required");
-    }
+    checkFactory("aws", config, EXTRA);
 }
