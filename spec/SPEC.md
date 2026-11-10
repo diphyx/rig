@@ -357,7 +357,7 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 | `shape`  | MUST come from the provider's own data, never from a call to the cloud; a type it does not know is `null`                       |
 | `get`    | an unknown id MUST give `null`, not throw                                                                                       |
 | `list`   | MUST return every machine with all the given tags, in every status but `ended`, all pages                                       |
-| `end`    | an unknown or ended id MUST succeed                                                                                             |
+| `end`    | an unknown or ended id MUST succeed, and still remove what that machine left                                                    |
 | `end`    | MUST also remove what the machine leaves: its port rules, its unattached disks                                                  |
 | `stop`   | on a `spot` machine MUST be a refusal: `unsupported`                                                                            |
 | status   | MUST map the provider's own statuses onto `status`; after a take-back, `ended`                                                  |
@@ -492,13 +492,13 @@ takeback = 100 × (lost + p × 2) ÷ (months + 2)                 2 machine-mont
 
 **A round**: every `every`, the core MUST list its machines (§13) and compare them with the store. For each machine still running, the core MUST copy its `status` and `ip` into the store.
 
-| Seen                                                       | Is         | The core MUST                                   |
-| ---------------------------------------------------------- | ---------- | ----------------------------------------------- |
-| in the store, now `ended` or absent, not ended by the core | **lost**   | count it (§15), emit `machine:lost`, recover it |
-| in the store, ended by the core                            | **ended**  | remove it from the store                        |
-| in the store, older than its kind's `life`                 | **old**    | end it, emit `machine:ended`                    |
-| not in the store, its kind in the config                   | **found**  | add it to the store                             |
-| not in the store, its kind not in the config               | **orphan** | emit `machine:orphan`; MUST NOT end it          |
+| Seen                                                       | Is         | The core MUST                                                                                  |
+| ---------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
+| in the store, now `ended` or absent, not ended by the core | **lost**   | count it (§15), `end` it so the provider removes what it left, emit `machine:lost`, recover it |
+| in the store, ended by the core                            | **ended**  | remove it from the store                                                                       |
+| in the store, older than its kind's `life`                 | **old**    | end it, emit `machine:ended`                                                                   |
+| not in the store, its kind in the config                   | **found**  | add it to the store                                                                            |
+| not in the store, its kind not in the config               | **orphan** | emit `machine:orphan`; MUST NOT end it                                                         |
 
 **Recover**: a failover (§14) for the lost machine's kind, from its first entry.
 
