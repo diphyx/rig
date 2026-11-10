@@ -78,6 +78,16 @@ importers:
         specifier: workspace:^
         version: link:../core
 
+  packages/grid:
+    dependencies:
+      radash:
+        specifier: ^12.1.1
+        version: 12.1.1
+    devDependencies:
+      '@diphyx/rig':
+        specifier: workspace:^
+        version: link:../core
+
 packages:
 
   '@aws-sdk/client-ec2@3.1165.0':

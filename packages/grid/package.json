@@ -1,0 +1,48 @@
+{
+    "name": "@diphyx/rig-grid",
+    "version": "1.0.0",
+    "description": "The grid worker for rig: jobs on its machines, over grid/2",
+    "keywords": [
+        "rig",
+        "rig-worker",
+        "grid",
+        "jobs"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/diphyx/rig.git",
+        "directory": "packages/grid"
+    },
+    "homepage": "https://github.com/diphyx/rig#readme",
+    "bugs": {
+        "url": "https://github.com/diphyx/rig/issues"
+    },
+    "license": "MIT",
+    "author": "Amir Reza Dalir",
+    "type": "module",
+    "sideEffects": false,
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc -b"
+    },
+    "engines": {
+        "node": ">=22"
+    },
+    "dependencies": {
+        "radash": "^12.1.1"
+    },
+    "devDependencies": {
+        "@diphyx/rig": "workspace:^"
+    },
+    "peerDependencies": {
+        "@diphyx/rig": "workspace:^"
+    }
+}

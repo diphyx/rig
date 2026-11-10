@@ -1,0 +1,95 @@
+{
+    "prologue": "grid/2",
+    "initiator": {
+        "private": "G9v0BCxsJkRMorsBQJo83PLpOAe1TmqLCGA1795hpnE=",
+        "public": "tFHToU1zMIbJctw3bZ+4j/vO+yShoaRwyPVIa/ONzi4=",
+        "ephemeral": "4c6a8811d7527e21ec328962312af8d94feaa279cd9eaea11a08f3c66d4584b2"
+    },
+    "responder": {
+        "private": "DhBOmxl5O5JHZtEIGzssexWQBDYYfVXh6pZK3f1zEeY=",
+        "public": "RC5Ai3Ik7I/KutSiFvF5FhOzyC01WibAun0p3lmrKms=",
+        "ephemeral": "712fd67c273a59dd5327def1a8a48b039854b60992bed431a5c81e961d2828bb"
+    },
+    "handshake": [
+        "0060c55e7e3bdbd123fc52c1451fd705a60888b8a39860adba05aef4f815335c9767162022c7621f25f54d635da3cb5b9f7fa6c2b8045efaca8e2d0b86b866cb07cc9aaf135b5612dbbb0adf796f674dc0139684121460b3f31ec7a9dc9dcb6adf1c",
+        "00304f329f6ba74d0d9e10dca9604b42567558e5ddeafa35124d4f1910f4802bfc3368027fc14460a1e63e02b7783cb0ce2e"
+    ],
+    "transport": [
+        {
+            "from": "initiator",
+            "plain": "a36269640164626f6479a1636a6f62782039643736666539613632366266396139363631386638623837643563323038666463616c6c6473746174",
+            "frame": "004bc95f63563375ee44a38f3aa2dbf2a83a3cdef5d9e4ac40ddc44216bbf1be5432bc9bf5794d9ee4fb60460b5b27d19b532aa6fc8034b6ab416be2e9349159f8c99c58ce4a64c56b81e03055"
+        },
+        {
+            "from": "responder",
+            "plain": "a262696401626f6ba16573746174656469646c65",
+            "frame": "00245cf518e5915c80818971476737c907b96b9ac03ff24bcb3be618db800aa1f893cc2e925b"
+        }
+    ],
+    "envelopes": [
+        {
+            "name": "call open",
+            "cbor": "a36269640164626f6479a163746167656275696c646463616c6c646f70656e"
+        },
+        {
+            "name": "ok open",
+            "cbor": "a262696401626f6ba2636a6f627820396437366665396136323662663961393636313866386238376435633230386667657870697265731a000927c0"
+        },
+        {
+            "name": "call exec",
+            "cbor": "a36269640264626f6479a463636d64656275696c6463656e76a162434365636c616e67636a6f6278203964373666653961363236626639613936363138663862383764356332303866646172677381656c696e75786463616c6c6465786563"
+        },
+        {
+            "name": "ok empty",
+            "cbor": "a262696402626f6ba0"
+        },
+        {
+            "name": "reject",
+            "cbor": "a2626964036672656a656374a266726561736f6e6772756e6e696e67676d6573736167656d616e2065786563206973206f6e"
+        },
+        {
+            "name": "data event",
+            "cbor": "a2626964046464617461a463736571016464617461a2646c696e656568656c6c6f6673747265616d636f75746474696d651b0000018bcfe568006474797065636c6f67"
+        },
+        {
+            "name": "data bytes",
+            "cbor": "a2626964056464617461456368756e6b"
+        },
+        {
+            "name": "data push offset",
+            "cbor": "a2626964056464617461a26468617665f4666f666673657400"
+        },
+        {
+            "name": "call push share",
+            "cbor": "a36269640764626f6479a362696478206533623063343432393866633163313439616662663463383939366662393234636a6f62782039643736666539613632366266396139363631386638623837643563323038666470617468656d6f64656c6463616c6c6470757368"
+        },
+        {
+            "name": "data push have",
+            "cbor": "a2626964076464617461a26468617665f5666f666673657400"
+        },
+        {
+            "name": "ok push share",
+            "cbor": "a262696407626f6ba2657368617265f5667368613235365820e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+            "name": "call beat",
+            "cbor": "a36269640864626f6479a3646672656502647461677381656275696c64657368617265f56463616c6c6462656174"
+        },
+        {
+            "name": "end pull",
+            "cbor": "a26269640663656e64a1667368613235365820e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+            "name": "cancel",
+            "cbor": "a2626964046663616e63656ca0"
+        },
+        {
+            "name": "ping",
+            "cbor": "a16470696e67a0"
+        },
+        {
+            "name": "pong",
+            "cbor": "a164706f6e67a0"
+        }
+    ]
+}

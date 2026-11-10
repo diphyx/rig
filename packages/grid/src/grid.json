@@ -1,0 +1,9 @@
+{
+    "release": {
+        "version": "2.0.0",
+        "sha256": {
+            "arm": "18b2cb9ea66a1180acf77e9c29c0c142b3dea38f670f74e052ac3e9f11fe6120",
+            "x86": "854c975a26a00b41876f2be972114f578cefd4fc6a87d546d876ae4ca98104ce"
+        }
+    }
+}
