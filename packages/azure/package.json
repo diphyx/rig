@@ -1,0 +1,50 @@
+{
+    "name": "@diphyx/rig-azure",
+    "version": "1.0.0",
+    "description": "The azure provider for rig: Virtual Machines, spot and demand",
+    "keywords": [
+        "rig",
+        "rig-provider",
+        "azure",
+        "virtual-machines",
+        "spot"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/diphyx/rig.git",
+        "directory": "packages/azure"
+    },
+    "homepage": "https://github.com/diphyx/rig#readme",
+    "bugs": {
+        "url": "https://github.com/diphyx/rig/issues"
+    },
+    "license": "MIT",
+    "author": "Amir Reza Dalir",
+    "type": "module",
+    "sideEffects": false,
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc -b"
+    },
+    "engines": {
+        "node": ">=22"
+    },
+    "dependencies": {
+        "@azure/identity": "^4.14.1",
+        "radash": "^12.1.1"
+    },
+    "devDependencies": {
+        "@diphyx/rig": "workspace:^"
+    },
+    "peerDependencies": {
+        "@diphyx/rig": "workspace:^"
+    }
+}

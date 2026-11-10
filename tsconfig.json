@@ -9,6 +9,9 @@
         },
         {
             "path": "packages/gcp"
+        },
+        {
+            "path": "packages/azure"
         }
     ]
 }

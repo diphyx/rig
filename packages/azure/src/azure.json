@@ -1,0 +1,134 @@
+{
+    "rig": 1,
+    "name": "azure",
+    "busy": {
+        "ZonalAllocationFailed": "zone",
+        "AllocationFailed": "zone",
+        "OverconstrainedAllocationRequest": "zone",
+        "OverconstrainedZonalAllocationRequest": "zone",
+        "SkuNotAvailable": "zone",
+        "QuotaExceeded": "account",
+        "OperationNotAllowed": "account"
+    },
+    "tags": {},
+    "presets": {
+        "small": {
+            "arm": ["Standard_B2pls_v2", "Standard_B2ps_v2"],
+            "x86": ["Standard_B2s", "Standard_B2als_v2"]
+        },
+        "general": {
+            "arm": {
+                "2": ["Standard_D2ps_v6", "Standard_D2ps_v5"],
+                "4": ["Standard_D4ps_v6", "Standard_D4ps_v5"],
+                "8": ["Standard_D8ps_v6", "Standard_D8ps_v5"],
+                "16": ["Standard_D16ps_v6", "Standard_D16ps_v5"],
+                "32": ["Standard_D32ps_v6", "Standard_D32ps_v5"],
+                "48": ["Standard_D48ps_v6", "Standard_D48ps_v5"],
+                "64": ["Standard_D64ps_v6", "Standard_D64ps_v5"]
+            },
+            "x86": {
+                "2": ["Standard_D2s_v6", "Standard_D2as_v6", "Standard_D2s_v5", "Standard_D2as_v5"],
+                "4": ["Standard_D4s_v6", "Standard_D4as_v6", "Standard_D4s_v5", "Standard_D4as_v5"],
+                "8": ["Standard_D8s_v6", "Standard_D8as_v6", "Standard_D8s_v5", "Standard_D8as_v5"],
+                "16": ["Standard_D16s_v6", "Standard_D16as_v6", "Standard_D16s_v5", "Standard_D16as_v5"],
+                "32": ["Standard_D32s_v6", "Standard_D32as_v6", "Standard_D32s_v5", "Standard_D32as_v5"],
+                "48": ["Standard_D48s_v6", "Standard_D48as_v6", "Standard_D48s_v5", "Standard_D48as_v5"],
+                "64": ["Standard_D64s_v6", "Standard_D64as_v6", "Standard_D64s_v5", "Standard_D64as_v5"]
+            }
+        },
+        "compute": {
+            "arm": {
+                "2": ["Standard_D2pls_v6", "Standard_D2pls_v5"],
+                "4": ["Standard_D4pls_v6", "Standard_D4pls_v5"],
+                "8": ["Standard_D8pls_v6", "Standard_D8pls_v5"],
+                "16": ["Standard_D16pls_v6", "Standard_D16pls_v5"],
+                "32": ["Standard_D32pls_v6", "Standard_D32pls_v5"],
+                "48": ["Standard_D48pls_v6", "Standard_D48pls_v5"],
+                "64": ["Standard_D64pls_v6", "Standard_D64pls_v5"]
+            },
+            "x86": {
+                "2": ["Standard_F2as_v6", "Standard_F2s_v2"],
+                "4": ["Standard_F4as_v6", "Standard_F4s_v2"],
+                "8": ["Standard_F8as_v6", "Standard_F8s_v2"],
+                "16": ["Standard_F16as_v6", "Standard_F16s_v2"],
+                "32": ["Standard_F32as_v6", "Standard_F32s_v2"],
+                "48": ["Standard_F48as_v6", "Standard_F48s_v2"],
+                "64": ["Standard_F64as_v6", "Standard_F64s_v2"]
+            }
+        },
+        "memory": {
+            "arm": {
+                "16": ["Standard_E2ps_v6", "Standard_E2ps_v5"],
+                "32": ["Standard_E4ps_v6", "Standard_E4ps_v5"],
+                "64": ["Standard_E8ps_v6", "Standard_E8ps_v5"],
+                "128": ["Standard_E16ps_v6", "Standard_E16ps_v5"],
+                "256": ["Standard_E32ps_v6", "Standard_E32ps_v5"],
+                "512": ["Standard_E64ps_v6", "Standard_E64ps_v5"]
+            },
+            "x86": {
+                "16": ["Standard_E2s_v6", "Standard_E2as_v6", "Standard_E2s_v5", "Standard_E2as_v5"],
+                "32": ["Standard_E4s_v6", "Standard_E4as_v6", "Standard_E4s_v5", "Standard_E4as_v5"],
+                "64": ["Standard_E8s_v6", "Standard_E8as_v6", "Standard_E8s_v5", "Standard_E8as_v5"],
+                "128": ["Standard_E16s_v6", "Standard_E16as_v6", "Standard_E16s_v5", "Standard_E16as_v5"],
+                "256": ["Standard_E32s_v6", "Standard_E32as_v6", "Standard_E32s_v5", "Standard_E32as_v5"],
+                "512": ["Standard_E64s_v6", "Standard_E64as_v6", "Standard_E64s_v5", "Standard_E64as_v5"]
+            }
+        },
+        "gpu": {
+            "x86": {
+                "t4": ["Standard_NC4as_T4_v3", "Standard_NC8as_T4_v3"],
+                "a100": ["Standard_NC24ads_A100_v4"],
+                "h100": ["Standard_NC40ads_H100_v5"]
+            }
+        }
+    },
+    "shapes": {
+        "memory": {
+            "B": 4,
+            "D": 4,
+            "E": 8,
+            "F": 2
+        },
+        "low": 2,
+        "fixed": {
+            "Standard_B2s": {
+                "cpu": 2,
+                "mem": 4
+            },
+            "Standard_B2als_v2": {
+                "cpu": 2,
+                "mem": 4
+            },
+            "Standard_B2pls_v2": {
+                "cpu": 2,
+                "mem": 4,
+                "arm": true
+            },
+            "Standard_B2ps_v2": {
+                "cpu": 2,
+                "mem": 8,
+                "arm": true
+            },
+            "Standard_NC4as_T4_v3": {
+                "cpu": 4,
+                "mem": 28,
+                "gpu": "t4"
+            },
+            "Standard_NC8as_T4_v3": {
+                "cpu": 8,
+                "mem": 56,
+                "gpu": "t4"
+            },
+            "Standard_NC24ads_A100_v4": {
+                "cpu": 24,
+                "mem": 220,
+                "gpu": "a100"
+            },
+            "Standard_NC40ads_H100_v5": {
+                "cpu": 40,
+                "mem": 320,
+                "gpu": "h100"
+            }
+        }
+    }
+}
