@@ -1,0 +1,465 @@
+{
+    "$schema": "./schema.json",
+    "rig": 1,
+    "area": "guard",
+    "description": "spot-warn, spot-long, and guard refuse.",
+    "cases": [
+        {
+            "id": "guard/spot-warn",
+            "description": "a kind with spot warns once",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open",
+                    "expect": {
+                        "events": [
+                            {
+                                "event": "guard",
+                                "kind": "w",
+                                "code": "spot-warn"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "guard/demand-quiet",
+            "description": "a demand-only kind has no finding",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open",
+                    "expect": {
+                        "events": []
+                    }
+                }
+            ]
+        },
+        {
+            "id": "guard/spot-long",
+            "description": "spot, no life, a published rate above 10%",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za",
+                                "rate": "15-20%"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open",
+                    "expect": {
+                        "events": [
+                            {
+                                "event": "guard",
+                                "kind": "w",
+                                "code": "spot-warn"
+                            },
+                            {
+                                "event": "guard",
+                                "kind": "w",
+                                "code": "spot-long"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "guard/spot-long-with-life",
+            "description": "a life removes spot-long",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ],
+                            "life": "6h"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za",
+                                "rate": "15-20%"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open",
+                    "expect": {
+                        "events": [
+                            {
+                                "event": "guard",
+                                "kind": "w",
+                                "code": "spot-warn"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "guard/refuse",
+            "description": "guard refuse turns a finding into a refusal",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ]
+                        }
+                    ],
+                    "guard": "refuse"
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open",
+                    "expect": {
+                        "refusal": "guard"
+                    }
+                }
+            ]
+        }
+    ]
+}

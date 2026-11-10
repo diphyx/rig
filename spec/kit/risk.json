@@ -1,0 +1,805 @@
+{
+    "$schema": "./schema.json",
+    "rig": 1,
+    "area": "risk",
+    "description": "risk.max, and the core's own count of lost machines.",
+    "cases": [
+        {
+            "id": "risk/rate-above-max",
+            "description": "a published rate above risk.max removes the place",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ],
+                            "risk": {
+                                "max": "10%"
+                            }
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za",
+                                "rate": ">20%"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "spot/t1/zb": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["w"],
+                    "expect": {
+                        "events": [
+                            {
+                                "event": "try",
+                                "kind": "w",
+                                "place": "a/spot/t1/zb",
+                                "answer": "ok"
+                            },
+                            {
+                                "event": "machine:created"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "risk/rate-at-max",
+            "description": "a rate whose upper bound equals risk.max is kept",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ],
+                            "risk": {
+                                "max": "10%"
+                            }
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za",
+                                "rate": "5-10%"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "spot/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["w"],
+                    "expect": {
+                        "events": [
+                            {
+                                "event": "try",
+                                "kind": "w",
+                                "place": "a/spot/t1/za",
+                                "answer": "ok"
+                            },
+                            {
+                                "event": "machine:created"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "risk/seen-above-max",
+            "description": "the core's own count above risk.max removes the place",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ],
+                            "risk": {
+                                "max": "10%"
+                            }
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "spot/t1/zb": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                },
+                "store": {
+                    "risk": {
+                        "a/spot/t1/za": {
+                            "created": 10,
+                            "lost": 2,
+                            "hours": 5
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["w"],
+                    "expect": {
+                        "events": [
+                            {
+                                "event": "try",
+                                "kind": "w",
+                                "place": "a/spot/t1/zb",
+                                "answer": "ok"
+                            },
+                            {
+                                "event": "machine:created"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "risk/seen-too-few",
+            "description": "fewer than 10 created does not count",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ],
+                            "risk": {
+                                "max": "10%"
+                            }
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "spot/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                },
+                "store": {
+                    "risk": {
+                        "a/spot/t1/za": {
+                            "created": 9,
+                            "lost": 9,
+                            "hours": 1
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["w"],
+                    "expect": {
+                        "events": [
+                            {
+                                "event": "try",
+                                "kind": "w",
+                                "place": "a/spot/t1/za",
+                                "answer": "ok"
+                            },
+                            {
+                                "event": "machine:created"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "risk/count-lost",
+            "description": "a lost machine counts, with the hours it ran",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "spot/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["w"]
+                },
+                {
+                    "do": "clock",
+                    "by": "3h"
+                },
+                {
+                    "do": "take-back",
+                    "id": "m1"
+                },
+                {
+                    "do": "round",
+                    "expect": {
+                        "store": {
+                            "risk": {
+                                "a/spot/t1/za": {
+                                    "created": 2,
+                                    "lost": 1,
+                                    "hours": 3
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "risk/ended-not-lost",
+            "description": "a machine the core ends does not count as lost",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "spot/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["w"]
+                },
+                {
+                    "do": "call",
+                    "call": "machine.end",
+                    "args": ["m1"]
+                },
+                {
+                    "do": "round",
+                    "expect": {
+                        "store": {
+                            "risk": {
+                                "a/spot/t1/za": {
+                                    "created": 1,
+                                    "lost": 0,
+                                    "hours": 0
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "risk/place-list",
+            "description": "place.list gives the failover's places, in order, with risk",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ],
+                            "risk": {
+                                "max": "10%"
+                            }
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za",
+                                "rate": ">20%"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za",
+                                "rate": "<5%"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "place.list",
+                    "args": ["w"],
+                    "expect": {
+                        "result": [
+                            {
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za",
+                                "risk": {
+                                    "rate": "<5%",
+                                    "source": "a"
+                                }
+                            },
+                            {
+                                "provider": "a",
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "provider": "b",
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

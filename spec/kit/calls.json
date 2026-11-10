@@ -1,0 +1,512 @@
+{
+    "$schema": "./schema.json",
+    "rig": 1,
+    "area": "calls",
+    "description": "The app's calls: unknown ids, unsupported calls, end, list.",
+    "cases": [
+        {
+            "id": "calls/unknown-id",
+            "description": "an id the store does not hold is a refusal",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.end",
+                    "args": ["zz"],
+                    "expect": {
+                        "refusal": "unknown"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/end",
+            "description": "machine.end ends the machine and emits machine:ended",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "machine.end",
+                    "args": ["m1"],
+                    "expect": {
+                        "events": [
+                            {
+                                "event": "machine:ended",
+                                "machine": {
+                                    "id": "m1"
+                                }
+                            }
+                        ],
+                        "fake": {
+                            "a": {
+                                "machines": [
+                                    {
+                                        "id": "m1",
+                                        "status": "ended"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/unsupported",
+            "description": "a call the provider's can does not enable is a refusal",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "b",
+                                    "market": ["demand"],
+                                    "types": ["t3"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t3/za": "ok"
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "machine.stop",
+                    "args": ["m1"],
+                    "expect": {
+                        "refusal": "unsupported"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/stop-spot",
+            "description": "stop on a spot machine is a refusal",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot"],
+                                    "types": ["t2"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "spot/t2/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["w"]
+                },
+                {
+                    "do": "call",
+                    "call": "machine.stop",
+                    "args": ["m1"],
+                    "expect": {
+                        "refusal": "unsupported"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/list-by-kind",
+            "description": "machine.list filters by kind",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        },
+                        {
+                            "name": "e",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["e"]
+                },
+                {
+                    "do": "call",
+                    "call": "machine.list",
+                    "args": [
+                        {
+                            "kind": "e"
+                        }
+                    ],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "m2",
+                                "kind": "e"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

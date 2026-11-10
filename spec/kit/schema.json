@@ -1,0 +1,143 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://github.com/diphyx/rig/spec/kit/schema.json",
+    "title": "rig kit file, generation 1",
+    "type": "object",
+    "required": ["rig", "area", "description", "cases"],
+    "additionalProperties": false,
+    "properties": {
+        "$schema": { "type": "string" },
+        "rig": { "const": 1 },
+        "area": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "description": { "type": "string" },
+        "cases": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/case" } }
+    },
+    "$defs": {
+        "case": {
+            "type": "object",
+            "required": ["id", "description", "given", "steps"],
+            "additionalProperties": false,
+            "properties": {
+                "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*/[a-z][a-z0-9-]*$" },
+                "description": { "type": "string" },
+                "given": { "$ref": "#/$defs/given" },
+                "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/step" } }
+            }
+        },
+        "given": {
+            "type": "object",
+            "required": ["config", "fake"],
+            "additionalProperties": false,
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "description": "the core's config; each provider written as a fake, README §3"
+                },
+                "fake": {
+                    "type": "object",
+                    "additionalProperties": { "$ref": "#/$defs/fake" }
+                },
+                "store": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": { "risk": { "type": "object" } }
+                }
+            }
+        },
+        "fake": {
+            "type": "object",
+            "required": ["places", "answers"],
+            "additionalProperties": false,
+            "properties": {
+                "places": { "type": "array", "items": { "type": "object" } },
+                "answers": {
+                    "type": "object",
+                    "propertyNames": { "pattern": "^(spot|demand)/[^/]+/[^/]+$" },
+                    "additionalProperties": {
+                        "oneOf": [
+                            { "$ref": "#/$defs/answer" },
+                            { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/answer" } }
+                        ]
+                    }
+                },
+                "machines": { "type": "array", "items": { "type": "object" } }
+            }
+        },
+        "answer": {
+            "type": "string",
+            "pattern": "^(ok|throw|busy (zone|type|market|account))$"
+        },
+        "step": {
+            "type": "object",
+            "required": ["do"],
+            "properties": {
+                "do": { "enum": ["open", "close", "round", "call", "take-back", "clock"] },
+                "expect": { "$ref": "#/$defs/expect" }
+            },
+            "allOf": [
+                {
+                    "if": { "properties": { "do": { "const": "call" } } },
+                    "then": {
+                        "required": ["call", "args"],
+                        "properties": {
+                            "do": true,
+                            "expect": true,
+                            "call": { "type": "string" },
+                            "args": { "type": "array" }
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                {
+                    "if": { "properties": { "do": { "const": "take-back" } } },
+                    "then": {
+                        "required": ["id"],
+                        "properties": { "do": true, "expect": true, "id": { "type": "string" } },
+                        "additionalProperties": false
+                    }
+                },
+                {
+                    "if": { "properties": { "do": { "const": "clock" } } },
+                    "then": {
+                        "required": ["by"],
+                        "properties": {
+                            "do": true,
+                            "expect": true,
+                            "by": { "type": "string", "pattern": "^[0-9]+(s|m|h|d)$" }
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                {
+                    "if": { "properties": { "do": { "enum": ["open", "close", "round"] } } },
+                    "then": {
+                        "properties": { "do": true, "expect": true },
+                        "additionalProperties": false
+                    }
+                }
+            ]
+        },
+        "expect": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "result": {},
+                "refusal": {
+                    "enum": ["generation", "plugin", "config", "guard", "unsupported", "unknown", "closed"]
+                },
+                "throws": { "const": true },
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": ["event"],
+                        "properties": { "event": { "type": "string" } }
+                    }
+                },
+                "store": { "type": "object" },
+                "fake": { "type": "object" }
+            },
+            "not": { "required": ["refusal", "throws"] }
+        }
+    }
+}
