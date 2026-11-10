@@ -7,6 +7,7 @@ import { type Context, createEmitter, live } from "./context.js";
 import { guard } from "./guard.js";
 import { dur } from "./parse.js";
 import { round } from "./rounds.js";
+import { openWorkers } from "./workers.js";
 import { Store } from "./store.js";
 import type { RigConfig } from "./types.js";
 
@@ -43,7 +44,9 @@ export function createRig(config: RigConfig) {
 
             check.generation(config);
             check.plugins(config);
+            check.workers(config);
             await check.checks(config);
+            await openWorkers(config);
             check.config(config);
 
             context.providers = new Map(
@@ -58,8 +61,17 @@ export function createRig(config: RigConfig) {
                 }),
             );
 
-            await guard(context);
             context.store.load();
+
+            /* §22.2: a worker may keep its machines in memory only: every machine with a worker is added to it again. */
+            for (const known of context.store.machines) {
+                if (known.worker) {
+                    known.worker = { name: known.worker.name, key: known.worker.key, tags: known.worker.tags };
+                }
+            }
+
+            /* §17: after the store, so the guard reads its counts too. */
+            await guard(context);
             context.state = State.OPEN;
             await round(context);
 

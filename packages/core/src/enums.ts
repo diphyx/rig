@@ -36,15 +36,13 @@ export enum Distro {
     DEBIAN = "debian",
 }
 
-/** §10, §20: where a rule lets traffic in from, besides a CIDR of its own: anywhere on IPv4, on IPv6, or on both. */
+/** §10, §20: where a rule lets traffic in from, besides an IP or a CIDR: anywhere, on IPv4 and IPv6. */
 export enum From {
     ANY = "any",
-    ANY4 = "0.0.0.0/0",
-    ANY6 = "::/0",
 }
 
 /** §10: a port rule's protocol. */
-export enum Proto {
+export enum Protocol {
     TCP = "tcp",
     UDP = "udp",
 }
@@ -52,7 +50,7 @@ export enum Proto {
 /** §8: the slot a plugin fills. */
 export enum Slot {
     PROVIDER = "provider",
-    HUB = "hub",
+    WORKER = "worker",
 }
 
 /** §5, §17: what a guard finding does. */
@@ -66,6 +64,12 @@ export enum Finding {
     SPOT_WARN = "spot-warn",
     SPOT_LONG = "spot-long",
     SPOT_NARROW = "spot-narrow",
+}
+
+/** §18: why the core ended a machine on its own, besides its `life`. */
+export enum Why {
+    /** A job machine a round found: its worker cannot take it without the key the store lost (§22.2). */
+    FOUND = "found",
 }
 
 /** §18: the events the core emits. */

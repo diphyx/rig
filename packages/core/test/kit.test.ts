@@ -32,7 +32,15 @@ type Fake = {
     shapes?: Record<string, Shape>;
 };
 
-type Step = { do: string; call?: string; args?: unknown[]; id?: string; by?: string; expect?: Expect };
+type Step = {
+    do: string;
+    call?: string;
+    args?: unknown[];
+    id?: string;
+    by?: string;
+    ip?: { public?: string; private?: string };
+    expect?: Expect;
+};
 
 type Expect = {
     result?: unknown;
@@ -41,6 +49,7 @@ type Expect = {
     events?: Record<string, unknown>[];
     store?: { risk?: unknown };
     fake?: Record<string, { machines?: unknown[]; ends?: string[]; scripts?: (string | null)[] }>;
+    workers?: Record<string, { adds?: unknown[]; drops?: unknown[]; spents?: unknown[] }>;
 };
 
 type Case = {
@@ -349,6 +358,16 @@ async function act(rig: Rig, step: Step, time: { now: number }, machines: Map<st
             time.now += dur(step.by!);
 
             return;
+        case "ip":
+            for (const own of machines.values()) {
+                for (const machine of own) {
+                    if (machine.id === step.id) {
+                        machine.ip = { ...step.ip };
+                    }
+                }
+            }
+
+            return;
         default: {
             const [group, name] = step.call!.split(".") as [string, string];
             const target = (rig as unknown as Record<string, Record<string, (...args: unknown[]) => unknown>>)[group]!;
@@ -377,7 +396,79 @@ async function play(one: Case): Promise<void> {
         time.now += ms;
     };
 
-    const rig = createRig({ ...one.given.config, providers, store: folder, extra: { clock, sleep, rounds: false } });
+    /* §3: the config's workers, written as data: fakes that keep what they are asked to add, drop and spend. */
+    type Kept = { adds: unknown[]; drops: unknown[]; spents: unknown[] };
+    const records = new Map<string, Kept>();
+    let keys = 0;
+
+    const workers = ((one.given.config.workers ?? []) as unknown as Record<string, unknown>[]).map((written) => {
+        const record: Kept = { adds: [], drops: [], spents: [] };
+
+        records.set(String(written.name), record);
+
+        /* §3: `"fails": n` makes its first n `add`s throw; `"missing"` names a call it has not; `"open": "fail"`, an `open` that throws. */
+        let fails = Number(written.fails ?? 0);
+
+        const fake: Record<string, unknown> = {
+            slot: Slot.WORKER,
+            rig: 1,
+            ...written,
+            ...(written.open === "fail" && {
+                async open() {
+                    throw new Error("the fake worker will not open");
+                },
+            }),
+            check(worker: Record<string, unknown>) {
+                if (worker.refuse) {
+                    throw new Error("the fake worker refuses it");
+                }
+            },
+            setup(machine: { name: string }) {
+                const isTrial = machine.name.endsWith("-00000000");
+
+                keys += isTrial ? 0 : 1;
+
+                return {
+                    script: ["echo worker"],
+                    ports: (written.ports as unknown[] | undefined) ?? [{ port: 9420, from: "203.0.113.9/32" }],
+                    key: isTrial ? "trial" : `key-${keys}`,
+                };
+            },
+            async add(machine: unknown) {
+                if (fails > 0) {
+                    fails -= 1;
+
+                    throw new Error("the fake worker fails this add");
+                }
+
+                record.adds.push(machine);
+            },
+            async drop(name: string) {
+                record.drops.push({ name });
+            },
+            async spent(tags: string[]) {
+                record.spents.push(tags);
+            },
+        };
+
+        delete fake.fails;
+
+        if (written.missing) {
+            delete fake[String(written.missing)];
+            delete fake.missing;
+        }
+
+        return fake;
+    });
+
+    const rig = createRig({
+        ...one.given.config,
+        providers,
+        ...(one.given.config.workers !== undefined && { workers: workers as never }),
+        store: folder,
+        extra: { clock, sleep, rounds: false },
+    });
+
     const events: Record<string, unknown>[] = [];
 
     for (const event of Object.values(Event)) {
@@ -441,6 +532,10 @@ async function play(one: Case): Promise<void> {
             if (fake.scripts) {
                 match(scripts.get(name), fake.scripts, `${at}: fake ${name} scripts`);
             }
+        }
+
+        for (const [name, want_] of Object.entries(want.workers ?? {})) {
+            match(records.get(name), want_, `${at}: worker ${name}`);
         }
     }
 }

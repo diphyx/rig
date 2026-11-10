@@ -1,8 +1,8 @@
-import { isArray, isObject, isString } from "radash";
+import { isObject, isString } from "radash";
 
 import { distroOf, DISTROS } from "./distro.js";
 import { Reason } from "./enums.js";
-import { NAME } from "./parse.js";
+import { base64Of, isStrings, NAME } from "./parse.js";
 import { Refusal } from "./refusal.js";
 import type { Kind } from "./types.js";
 
@@ -17,28 +17,14 @@ function refuse(path: string, message: string): never {
     throw new Refusal(Reason.CONFIG, `${path}: ${message}`);
 }
 
-/* §6.2: a `str` as it is, or lines joined by `\n`, with one more at the end; as base64, on one line. */
-function base64Of(text: string | string[]): string {
-    return Buffer.from(isString(text) ? text : `${text.join("\n")}\n`).toString("base64");
-}
-
-function strings(value: unknown): value is string[] {
-    return (
-        isArray(value) &&
-        value.every((one) => {
-            return isString(one);
-        })
-    );
-}
-
 /** §6.1, §6.2: the kind's login user: its own, or its distro's; none without a `login`. */
 export function userOf(kind: Kind): string | undefined {
     return kind.login ? (kind.login.user ?? DISTROS[distroOf(kind.distro).name].user) : undefined;
 }
 
-/** §6.2: the first-boot script from the kind's `login` and `script`: once, as root, logged; none without either. */
-export function buildBoot(kind: Kind): string | undefined {
-    if (!kind.login && kind.script === undefined) {
+/** §6.2: the first-boot script from the kind's `login`, its worker's lines (§22.2) and `script`: once, as root, logged; none without any. */
+export function buildBoot(kind: Kind, worker?: string[]): string | undefined {
+    if (!kind.login && !worker && kind.script === undefined) {
         return undefined;
     }
 
@@ -68,6 +54,7 @@ export function buildBoot(kind: Kind): string | undefined {
                   "chmod 440 /etc/sudoers.d/rig-login",
               ]
             : []),
+        ...(worker ?? []),
         ...(kind.script !== undefined
             ? [
                   `echo '${base64Of(kind.script)}' | base64 -d > /var/lib/rig/script`,
@@ -79,7 +66,7 @@ export function buildBoot(kind: Kind): string | undefined {
 }
 
 /** §5, §6.2: a kind's `login` and `script` are each one, and its first-boot script fits; else a refusal naming the key. */
-export function checkBoot(path: string, kind: Kind): void {
+export function checkBoot(path: string, kind: Kind, worker?: string[]): void {
     const { login, script } = kind as { login?: unknown; script?: unknown };
 
     if (login !== undefined) {
@@ -99,7 +86,7 @@ export function checkBoot(path: string, kind: Kind): void {
             refuse(`${path}login.user`, "a name, not root");
         }
 
-        if (!strings(keys) || keys.length === 0) {
+        if (!isStrings(keys) || keys.length === 0) {
             refuse(`${path}login.keys`, "at least one SSH public key");
         }
 
@@ -110,11 +97,11 @@ export function checkBoot(path: string, kind: Kind): void {
         }
     }
 
-    if (script !== undefined && !isString(script) && !strings(script)) {
+    if (script !== undefined && !isString(script) && !isStrings(script)) {
         refuse(`${path}script`, "not a str, or a list of lines");
     }
 
-    const size = Buffer.byteLength(buildBoot(kind) ?? "");
+    const size = Buffer.byteLength(buildBoot(kind, worker) ?? "");
 
     if (size > MOST) {
         refuse(`${path}script`, `a first-boot script of ${size} bytes, above ${MOST}`);

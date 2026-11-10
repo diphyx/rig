@@ -1,9 +1,10 @@
 import { isArray, isFunction, isObject, isString } from "radash";
 
 import { Guard, Market, Reason, Slot } from "./enums.js";
-import { isDur, isPct, isUint, NAME } from "./parse.js";
+import { dur, isDur, isPct, isUint, NAME } from "./parse.js";
 import { Refusal } from "./refusal.js";
 import { checkBoot } from "./boot.js";
+import { checkKindWorker, checkWorkers } from "./workers.js";
 import { DISTROS, distroOf } from "./distro.js";
 import { checkRule } from "./rules.js";
 
@@ -12,13 +13,26 @@ import type { Provider, RigConfig } from "./types.js";
 /** The rig generation this core follows. */
 export const RIG = 1;
 
-const ROOT = ["rig", "app", "providers", "kinds", "guard", "every", "poll", "store", "extra"];
+const ROOT = ["rig", "app", "providers", "kinds", "guard", "every", "poll", "store", "workers", "extra"];
 /* §6: the smallest boot disk, in GB: room for every distro's image on every cloud. */
 const DISK = 30;
 
-const KIND = ["name", "try", "distro", "disk", "login", "script", "risk", "life", "recovers", "tags", "ports"];
+const KIND = [
+    "name",
+    "try",
+    "distro",
+    "disk",
+    "login",
+    "worker",
+    "script",
+    "risk",
+    "life",
+    "recovers",
+    "tags",
+    "ports",
+];
+
 const ENTRY = ["provider", "market", "types", "image", "extra"];
-const RESERVED: Record<string, string[]> = { root: ["hub"], kind: ["node", "save"] };
 
 const MARKETS: string[] = Object.values(Market);
 
@@ -26,13 +40,9 @@ function fail(path: string, message: string): never {
     throw new Refusal(Reason.CONFIG, `${path}: ${message}`);
 }
 
-/* Every key of `value` is known; reserved keys and unknown keys are named by path. */
-function keys(path: string, value: Record<string, unknown>, known: string[], reserved: string[] = []): void {
+/* Every key of `value` is known; an unknown key is named by path. */
+function keys(path: string, value: Record<string, unknown>, known: string[]): void {
     for (const key of Object.keys(value)) {
-        if (reserved.includes(key)) {
-            fail(`${path}${key}`, "reserved key");
-        }
-
         if (!known.includes(key)) {
             fail(`${path}${key}`, "unknown key");
         }
@@ -48,6 +58,15 @@ function providersOf(config: RigConfig): Provider[] {
 export function generation(config: RigConfig): void {
     if (config.rig !== RIG) {
         throw new Refusal(Reason.GENERATION, `config is for rig ${String(config.rig)}, this is rig ${RIG}`);
+    }
+
+    for (const worker of isArray(config.workers) ? config.workers : []) {
+        if (worker.rig !== RIG) {
+            throw new Refusal(
+                Reason.GENERATION,
+                `worker ${worker.name} is for rig ${String(worker.rig)}, this is rig ${RIG}`,
+            );
+        }
     }
 
     for (const provider of providersOf(config)) {
@@ -100,8 +119,8 @@ export function plugins(config: RigConfig): void {
     const names = new Set<string>();
 
     for (const provider of providersOf(config)) {
-        if ((provider.slot as Slot) === Slot.HUB) {
-            fail(`providers[${provider.name}].slot`, "the hub slot is reserved");
+        if ((provider.slot as Slot) === Slot.WORKER) {
+            fail(`providers[${provider.name}].slot`, "a worker goes in workers, §22");
         }
 
         if (provider.slot !== Slot.PROVIDER) {
@@ -137,7 +156,16 @@ export function plugins(config: RigConfig): void {
     }
 }
 
-/** §8.5: each provider's own `check`; a throw is a refusal. */
+/** §22.1: the config's workers, when it has any. */
+export function workers(config: RigConfig): void {
+    if (config.workers !== undefined && !isArray(config.workers)) {
+        fail("workers", "a list of workers");
+    }
+
+    checkWorkers(config);
+}
+
+/** §8 step 6: each provider's own `check`; a throw is a refusal. */
 export async function checks(config: RigConfig): Promise<void> {
     for (const provider of providersOf(config)) {
         if (!provider.check) {
@@ -154,7 +182,7 @@ export async function checks(config: RigConfig): Promise<void> {
 
 /** §5: every key known, of its type; names unique; entries name installed providers. */
 export function config(config: RigConfig): void {
-    keys("", config as unknown as Record<string, unknown>, ROOT, RESERVED.root);
+    keys("", config as unknown as Record<string, unknown>, ROOT);
 
     if (!isString(config.app) || !NAME.test(config.app)) {
         fail("app", "not a name");
@@ -176,7 +204,7 @@ export function config(config: RigConfig): void {
         fail("every", "not a dur");
     }
 
-    if (config.poll !== undefined && (!isDur(config.poll) || config.poll === "0")) {
+    if (config.poll !== undefined && (!isDur(config.poll) || !Number.isFinite(dur(config.poll)))) {
         fail("poll", "not a dur");
     }
 
@@ -208,7 +236,7 @@ export function config(config: RigConfig): void {
         }
 
         names.add(kind.name);
-        keys(path, kind, KIND, RESERVED.kind);
+        keys(path, kind, KIND);
 
         if (kind.distro !== undefined) {
             if (!isObject(kind.distro)) {
@@ -238,7 +266,10 @@ export function config(config: RigConfig): void {
             fail(`${path}disk`, `a uint from ${DISK}`);
         }
 
-        checkBoot(path, kind);
+        /* §22.2: a trial setup, for the first-boot script's size and the ports the worker needs. */
+        const setup = kind.worker !== undefined ? checkKindWorker(path, kind, config) : undefined;
+
+        checkBoot(path, kind, setup?.script);
 
         if (kind.risk !== undefined) {
             if (!isObject(kind.risk)) {
@@ -320,6 +351,10 @@ export function config(config: RigConfig): void {
 
             if (kind.ports !== undefined && !provider.can?.port) {
                 fail(`${path}ports`, `${provider.name} cannot open ports`);
+            }
+
+            if (setup && setup.ports.length > 0 && !provider.can?.port) {
+                fail(`${path}worker`, `${provider.name} cannot open the ports its worker needs`);
             }
 
             if (entry.market.includes(Market.SPOT) && !provider.can?.spot) {

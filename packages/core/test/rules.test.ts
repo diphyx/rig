@@ -42,7 +42,7 @@ describe("rules", () => {
             async reboot() {},
             port: {
                 async open(_id, rule) {
-                    if (rule.from === From.ANY6) {
+                    if (rule.from === "::/0") {
                         throw new Error("no IPv6 here");
                     }
 

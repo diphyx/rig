@@ -9,7 +9,7 @@ export const FACTORY_KEYS = ["region", "name", "auth", "identity", "extra"];
 
 /**
  * §8.2: a provider factory's config: a key outside the standard ones is a refusal, and so is one outside
- * the provider's own `extra` keys; `region` is required.
+ * the provider's own `extra` keys; a `region` given is a str.
  */
 export function checkFactory(cloud: string, config: object, extra: string[]): void {
     const given = config as Record<string, unknown>;
@@ -28,9 +28,24 @@ export function checkFactory(cloud: string, config: object, extra: string[]): vo
     unknown(Object.keys(given), FACTORY_KEYS, "");
     unknown(Object.keys(isObject(given.extra) ? given.extra : {}), extra, "extra.");
 
-    if (!isString(given.region) || given.region === "") {
-        throw new Refusal(Reason.CONFIG, `${cloud}: region is required`);
+    if (given.region !== undefined && (!isString(given.region) || given.region === "")) {
+        throw new Refusal(Reason.CONFIG, `${cloud}: region is not a region`);
     }
+}
+
+/** §8.2: a factory's region: the one given, else the cloud's own env var's, else the cloud's default region. */
+export function regionOf(given: string | undefined, env: string[], fallback: string): string {
+    return (
+        given ??
+        env
+            .map((name) => {
+                return process.env[name];
+            })
+            .find((value) => {
+                return isString(value) && value !== "";
+            }) ??
+        fallback
+    );
 }
 
 /** §12: a provider's tag renames, both ways, so the core only sees its own names. */

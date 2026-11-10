@@ -8,7 +8,10 @@ import type { Kind } from "./types.js";
 export type PresetTable = Record<string, Record<string, string[] | Record<string, string[]>>>;
 
 /** The kind keys a preset passes on unchanged, §7.2. */
-type Pass = Pick<Kind, "distro" | "disk" | "login" | "script" | "risk" | "life" | "recovers" | "tags" | "ports">;
+type Pass = Pick<
+    Kind,
+    "distro" | "disk" | "login" | "worker" | "script" | "risk" | "life" | "recovers" | "tags" | "ports"
+>;
 
 type Common = Pass & {
     name: string;
@@ -56,7 +59,7 @@ function diskOf(preset: PresetName, wanted: unknown): number {
     return Math.ceil((disk.base + disk.per * asked) / 10) * 10;
 }
 
-const PASS = ["distro", "disk", "login", "script", "risk", "life", "recovers", "tags", "ports"];
+const PASS = ["distro", "disk", "login", "worker", "script", "risk", "life", "recovers", "tags", "ports"];
 const ARCHES = [Arch.ARM, Arch.X86];
 
 function refuse(preset: PresetName, message: string): never {

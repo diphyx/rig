@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { checkFactory, createTagMap, Reason, type Refusal } from "../src/index.js";
+import { checkFactory, createTagMap, Reason, type Refusal, regionOf } from "../src/index.js";
 
 describe("factory", () => {
     it("takes the standard keys and the provider's own extra keys", () => {
@@ -9,7 +9,7 @@ describe("factory", () => {
         }).not.toThrow();
     });
 
-    it("refuses a key outside them, or no region, naming the key", () => {
+    it("refuses a key outside them, or an empty region, naming the key", () => {
         const refusal = (config: object): Refusal => {
             try {
                 checkFactory("mine", config, ["zone"]);
@@ -29,7 +29,28 @@ describe("factory", () => {
             message: expect.stringContaining("extra.zones"),
         });
 
-        expect(refusal({})).toMatchObject({ message: expect.stringContaining("region is required") });
+        expect(refusal({ region: "" })).toMatchObject({ message: expect.stringContaining("region is not a region") });
+
+        expect(() => {
+            checkFactory("mine", {}, []);
+        }).not.toThrow();
+    });
+
+    it("takes the region given, else the cloud's env var's, else its default", () => {
+        const before = process.env.RIG_TEST_REGION;
+
+        delete process.env.RIG_TEST_REGION;
+        expect(regionOf(undefined, ["RIG_TEST_REGION"], "home-1")).toBe("home-1");
+
+        process.env.RIG_TEST_REGION = "env-1";
+        expect(regionOf(undefined, ["RIG_TEST_REGION"], "home-1")).toBe("env-1");
+        expect(regionOf("given-1", ["RIG_TEST_REGION"], "home-1")).toBe("given-1");
+
+        if (before === undefined) {
+            delete process.env.RIG_TEST_REGION;
+        } else {
+            process.env.RIG_TEST_REGION = before;
+        }
     });
 });
 

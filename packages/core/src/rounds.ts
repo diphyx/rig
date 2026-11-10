@@ -1,5 +1,8 @@
+import { tryit } from "radash";
+
 import { userOf } from "./boot.js";
-import { Event, Status } from "./enums.js";
+import { addWorker, dropWorker, spentWorker } from "./workers.js";
+import { Event, Status, Why } from "./enums.js";
 import { type Context, providerOf, toMachine } from "./context.js";
 import { failover } from "./failover.js";
 import { dur } from "./parse.js";
@@ -14,6 +17,7 @@ export async function end(context: Context, known: Known): Promise<void> {
     countLeft(context, known, false);
     context.store.forget(known);
     context.store.save();
+    await dropWorker(context, known);
     context.emit(Event.MACHINE_ENDED, { machine: toMachine({ ...known, status: Status.ENDED }) });
 }
 
@@ -33,6 +37,7 @@ async function recover(context: Context, pending: Pending): Promise<void> {
         drop();
         store.save();
         emit(Event.MACHINE_FAILED, { machine: pending.lost, recovers });
+        await spentWorker(context, pending.lost);
 
         return;
     }
@@ -56,11 +61,14 @@ async function recover(context: Context, pending: Pending): Promise<void> {
 /* §15.1, §16: count the loss and the hours it ran, `end` it so the provider removes what it left, then recover. */
 async function lose(context: Context, known: Known): Promise<void> {
     const { store } = context;
-    countLeft(context, known, true);
+
+    /* Counted once its provider has ended it: an `end` that throws leaves it for the next round, not counted twice. */
     await providerOf(context, known).end(known.id);
+    countLeft(context, known, true);
 
     store.forget(known);
     store.save();
+    await dropWorker(context, known);
 
     const lost = toMachine({ ...known, status: Status.ENDED });
 
@@ -133,6 +141,8 @@ async function pass(context: Context): Promise<void> {
             known.image = now.machine.image;
         }
 
+        await addWorker(context, known);
+
         const life = kinds.get(known.kind)?.life;
 
         if (life && context.clock() - known.created > dur(life)) {
@@ -163,7 +173,19 @@ async function pass(context: Context): Promise<void> {
             chain: 0,
         };
 
-        if (kinds.has(kind)) {
+        /* §22.2: a found job machine has no key in the store, so its worker cannot take it: it is ended, and said why. */
+        if (kinds.get(kind)?.worker) {
+            const [problem] = await tryit(async () => {
+                await providerOf(context, found).end(found.id);
+            })();
+
+            if (!problem) {
+                emit(Event.MACHINE_ENDED, {
+                    machine: toMachine({ ...found, status: Status.ENDED }),
+                    reason: Why.FOUND,
+                });
+            }
+        } else if (kinds.has(kind)) {
             store.machines.push(found);
         } else if (!context.orphans.has(at)) {
             context.orphans.add(at);

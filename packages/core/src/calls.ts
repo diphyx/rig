@@ -5,6 +5,7 @@ import { capable, type Context, kindOf, knownOf, live, providerOf, toMachine } f
 import { entrySteps, failover } from "./failover.js";
 import { dur, isDur, isUint } from "./parse.js";
 import { Refusal } from "./refusal.js";
+import { addWorker } from "./workers.js";
 import { end } from "./rounds.js";
 import { riskOf } from "./risk.js";
 import { checkMatch, expandRule, matchesRule, sameRule } from "./rules.js";
@@ -72,6 +73,8 @@ async function fresh(context: Context, last: Machine): Promise<Machine> {
     if (now.image) {
         known.image = now.image;
     }
+
+    await addWorker(context, known);
 
     context.store.save();
 

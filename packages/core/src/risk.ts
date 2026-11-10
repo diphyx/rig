@@ -45,7 +45,7 @@ export async function shapeOf(context: Context, provider: string, type: string):
 }
 
 /** The hours a machine has run so far. */
-export function hoursOf(context: Context, known: Known): number {
+function hoursOf(context: Context, known: Known): number {
     return (context.clock() - known.created) / HOUR;
 }
 

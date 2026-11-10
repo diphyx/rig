@@ -4,10 +4,11 @@ import { Busy, Event, Market, Status } from "./enums.js";
 import type { Context } from "./context.js";
 import { distroOf } from "./distro.js";
 import { buildBoot, userOf } from "./boot.js";
-import { expandRule } from "./rules.js";
+import { workerOf } from "./workers.js";
+import { expandRule, sameRule } from "./rules.js";
 import { countCreated, countTry, within } from "./risk.js";
-import type { Known } from "./store.js";
-import type { Answer, Entry, Kind, Place, Spec } from "./types.js";
+import { type Known, placeKey } from "./store.js";
+import type { Answer, Entry, Kind, Place, Rule, Spec } from "./types.js";
 
 /** A place in failover order, with the provider that sells it. */
 export type Step = Place & { provider: string };
@@ -38,27 +39,41 @@ export async function entrySteps(context: Context, kind: Kind, entry: Entry): Pr
     });
 }
 
+/* The rules, each once: a kind's port its worker needs too is opened once. */
+function uniqueRules(rules: Rule[]): Rule[] {
+    return rules.filter((rule, index) => {
+        return (
+            rules.findIndex((other) => {
+                return sameRule(other, rule);
+            }) === index
+        );
+    });
+}
+
 /* §10: what to create, with the kind's tags and the rig tags of §13. */
-function specOf(context: Context, kind: Kind, entry: Entry): Spec {
+function specOf(context: Context, kind: Kind, entry: Entry): { spec: Spec; worker?: Known["worker"] } {
     const { app } = context.config;
     const name = `${app}-${kind.name}-${randomBytes(4).toString("hex")}`;
 
+    /* §22.2: the worker's part of the machine: its first-boot lines, the ports it needs, and what it knows it by. */
+    const plugin = kind.worker && workerOf(context.config, kind.worker);
+    const setup = plugin && kind.worker && plugin.setup({ name, tags: kind.worker.tags, worker: kind.worker });
+    const script = buildBoot(kind, setup?.script);
+
     return {
-        name,
-        tags: { ...kind.tags, rig: "1", "rig-app": app, "rig-kind": kind.name, "rig-name": name },
-        ports: (kind.ports ?? []).flatMap(expandRule),
-        ...(entry.image !== undefined ? { image: entry.image } : { distro: distroOf(kind.distro) }),
-        ...(kind.disk !== undefined && { disk: kind.disk }),
-        ...((kind.login || kind.script !== undefined) && { script: buildBoot(kind)! }),
-        ...(entry.extra !== undefined && { extra: entry.extra }),
+        spec: {
+            name,
+            tags: { ...kind.tags, rig: "1", "rig-app": app, "rig-kind": kind.name, "rig-name": name },
+            ports: uniqueRules([...(kind.ports ?? []), ...(setup?.ports ?? [])].flatMap(expandRule)),
+            ...(entry.image !== undefined ? { image: entry.image } : { distro: distroOf(kind.distro) }),
+            ...(kind.disk !== undefined && { disk: kind.disk }),
+            ...(script !== undefined && { script }),
+            ...(entry.extra !== undefined && { extra: entry.extra }),
+        },
+        ...(plugin &&
+            setup &&
+            kind.worker && { worker: { name: plugin.name, key: setup.key, tags: [...kind.worker.tags] } }),
     };
-}
-
-/* §14: what a busy answer skips in its entry: the rest of its type, or of its market. */
-type Skip = { market: string; type?: string } | null;
-
-function skipped(skip: Skip, step: Step): boolean {
-    return skip !== null && step.market === skip.market && (skip.type === undefined || step.type === skip.type);
 }
 
 /* One try at one place, counted and reported as `try` whatever it gives. */
@@ -85,15 +100,24 @@ async function attempt(context: Context, kind: Kind, step: Step, spec: Spec): Pr
 export async function failover(context: Context, kind: Kind, chain: number): Promise<Known | null> {
     const { store } = context;
 
+    /* §14: no place is tried twice in one failover, across its entries too. */
+    const tried = new Set<string>();
+
     entries: for (const entry of kind.try) {
-        let skip: Skip = null;
+        /* What busy answers skip in this entry: a type in every market, a market for every type. */
+        const types = new Set<string>();
+        const markets = new Set<string>();
 
         for (const step of await entrySteps(context, kind, entry)) {
-            if (skipped(skip, step)) {
+            const at = placeKey(step.provider, step);
+
+            if (tried.has(at) || types.has(step.type) || markets.has(step.market)) {
                 continue;
             }
 
-            const spec = specOf(context, kind, entry);
+            tried.add(at);
+
+            const { spec, worker } = specOf(context, kind, entry);
             const answer = await attempt(context, kind, step, spec);
 
             if ("ok" in answer) {
@@ -109,6 +133,7 @@ export async function failover(context: Context, kind: Kind, chain: number): Pro
                     kind: kind.name,
                     name: spec.name,
                     ...(kind.login && { user: userOf(kind)! }),
+                    ...(worker && { worker }),
                     chain,
                 };
 
@@ -124,10 +149,10 @@ export async function failover(context: Context, kind: Kind, chain: number): Pro
 
             switch (busy) {
                 case Busy.TYPE:
-                    skip = { market: step.market, type: step.type };
+                    types.add(step.type);
                     break;
                 case Busy.MARKET:
-                    skip = { market: step.market };
+                    markets.add(step.market);
                     break;
                 case Busy.ACCOUNT:
                     continue entries;

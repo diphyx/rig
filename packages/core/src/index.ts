@@ -11,14 +11,15 @@ export {
     Distro,
     PresetArch,
     PresetName,
-    Proto,
+    Protocol,
     Reason,
     Slot,
     State,
     Status,
+    Why,
 } from "./enums.js";
 
-export { checkFactory, createTagMap, FACTORY_KEYS } from "./factory.js";
+export { checkFactory, createTagMap, FACTORY_KEYS, regionOf } from "./factory.js";
 export { createDistroTable, DISTROS, type DistroTable } from "./distro.js";
 export { createPresets, type Presets, type PresetTable } from "./presets.js";
 export { Refusal } from "./refusal.js";

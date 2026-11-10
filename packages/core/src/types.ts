@@ -1,6 +1,44 @@
-import type { Arch, Busy, Event, Finding, Guard, Market, Distro, Proto, Slot, Status } from "./enums.js";
+import type { Arch, Busy, Event, Why, Finding, Guard, Market, Distro, Protocol, Slot, Status } from "./enums.js";
 
 export type Tags = Record<string, string>;
+
+/** §22.2: what makes a kind's machines work for a worker: which worker, its tags, and the worker's own keys. */
+export type KindWorker = {
+    /** The worker's `name`; the only one, when the config has one. */
+    name?: string;
+    /** The kinds of work its machines do: a job runs only on a machine with its tag. */
+    tags: string[];
+    /** The worker's own keys, as it defines them: grid's `cmds`, `signal`. */
+    [key: string]: unknown;
+};
+
+/** §22.1: a worker: a plugin that runs jobs on the machines of kinds with a `worker`. */
+export type Worker = {
+    slot: Slot.WORKER;
+    name: string;
+    rig: number;
+    /** Optional: what it finds out first, like its own address; called once, when the core opens, before any `setup`. */
+    open?(): Promise<void>;
+    /** Throws when a kind's `worker` is not one: its own keys, as the worker defines them. */
+    check(worker: KindWorker): void;
+    /** For one machine, at its create: its first-boot lines, the inbound rules it needs, and what the worker knows it by. */
+    setup(machine: { name: string; tags: string[]; worker: KindWorker }): {
+        script: string[];
+        ports: Rule[];
+        key: string;
+    };
+    /** Takes a machine, by its name, its IPs, its key and its tags. */
+    add(machine: {
+        name: string;
+        ip: { public?: string; private?: string };
+        key: string;
+        tags: string[];
+    }): Promise<void>;
+    /** Forgets a machine, by its name. */
+    drop(name: string): Promise<void>;
+    /** No more machines come for these tags: a job waiting for them may fail. */
+    spent(tags: string[]): Promise<void>;
+};
 
 /** §6.2: who can sign in over SSH: the keys, for the user; by default the distro's. */
 export type Login = { user?: string; keys: string[] };
@@ -30,6 +68,8 @@ export type Kind = {
     disk?: number;
     /** Who can sign in over SSH, at first boot. */
     login?: Login;
+    /** Every machine works for a worker: §22. */
+    worker?: KindWorker;
     /** What every machine runs once, at first boot: a script, or its lines. */
     script?: string | string[];
     risk?: { max: string };
@@ -95,12 +135,12 @@ export type Rule = {
     id?: string;
     port: number;
     to?: number;
-    proto?: Proto;
+    protocol?: Protocol;
     from: string;
 };
 
 /** §10: the rules `port.close` closes: those with every key it gives. */
-export type Match = { port?: number; to?: number; proto?: Proto; from?: string };
+export type Match = { port?: number; to?: number; protocol?: Protocol; from?: string };
 
 export type Can = {
     spot?: boolean;
@@ -150,6 +190,8 @@ export type RigConfig = {
     every?: string;
     poll?: string;
     store?: string;
+    /** §22: the plugins that run jobs on the machines of kinds with a `worker`. */
+    workers?: Worker[];
     /** §5: the lib's own settings. */
     extra?: RigExtra;
 };
@@ -161,6 +203,8 @@ export type Machine = ProviderMachine & {
     name: string;
     /** The login user, when its kind has a `login`. */
     user?: string;
+    /** When its kind has a `worker`: which worker, what it knows the machine by, its tags (fixed at its create), and the IPs the worker has, once it has it. */
+    worker?: { name: string; key: string; tags: string[]; ip?: { public?: string; private?: string } };
 };
 
 /** The core's own count for one place. */
@@ -176,7 +220,7 @@ export type Listed = Place & { provider: string; risk: Risk };
 export type Events = {
     [Event.TRY]: { kind: string; place: Place & { provider: string }; answer: Answer | { error: unknown } };
     [Event.MACHINE_CREATED]: { machine: Machine };
-    [Event.MACHINE_ENDED]: { machine: Machine };
+    [Event.MACHINE_ENDED]: { machine: Machine; reason?: Why };
     [Event.MACHINE_LOST]: { machine: Machine };
     [Event.MACHINE_RECOVERED]: { lost: Machine; machine: Machine };
     [Event.MACHINE_FAILED]: { machine: Machine; recovers: number };

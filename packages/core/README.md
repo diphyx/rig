@@ -21,7 +21,7 @@ The core and at least one provider: [aws](../aws), [gcp](../gcp), [azure](../azu
 import { createRig, Distro, Event, Status } from "@diphyx/rig";
 import { createAws } from "@diphyx/rig-aws";
 
-const aws = createAws({ region: "us-east-1" });
+const aws = createAws(); // its region: AWS_REGION, else us-east-1
 
 const rig = createRig({
     rig: 1,
@@ -32,7 +32,9 @@ const rig = createRig({
             name: "worker",
             cpu: 8,
             distro: { name: Distro.DEBIAN },
-            login: { keys: ["ssh-ed25519 AAAA... me@laptop"] },
+            login: {
+                keys: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGm5nRrnDrU0H8wXkVhQvTq1aXj4Q0bQ0aQ0bQ0aQ0bQ me@laptop"],
+            },
             ports: [{ port: 22, from: "1.2.3.4/32" }],
         }),
     ],
@@ -69,7 +71,7 @@ A kind is a named recipe for machines. A preset makes one from a name ([Presets]
     ],
     distro: { name: Distro.UBUNTU },
     disk: 100,
-    login: { keys: ["ssh-ed25519 AAAA..."] },
+    login: { keys: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGm5nRrnDrU0H8wXkVhQvTq1aXj4Q0bQ0aQ0bQ0aQ0bQ me@laptop"] },
     script: ["apt-get update", "apt-get install -y nginx"],
     ports: [{ port: 443, from: From.ANY }],
     risk: { max: "10%" },
@@ -85,6 +87,7 @@ A kind is a named recipe for machines. A preset makes one from a name ([Presets]
 | `login`    | none           | SSH keys for a user with `sudo`: [Login and Script](#login-and-script)      |
 | `script`   | none           | what every machine runs once, at first boot                                 |
 | `ports`    | none           | the only inbound ports open: [Disk and Ports](#disk-and-ports)              |
+| `worker`   | none           | its machines run jobs for a worker: [Workers](#workers)                     |
 | `risk`     | none           | `{ max: "10%" }`: places with a higher take-back rate a month are not tried |
 | `life`     | never          | the core ends each machine after this: `"8h"`                               |
 | `recovers` | `3`            | how many times a lost machine is replaced                                   |
@@ -118,7 +121,7 @@ The provider finds the version's newest image each time it creates a machine, so
 const web = aws.presets.small({
     name: "web",
     distro: { name: Distro.DEBIAN },
-    login: { keys: ["ssh-ed25519 AAAA... me@laptop"] }, // ssh debian@<ip>, on every cloud
+    login: { keys: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGm5nRrnDrU0H8wXkVhQvTq1aXj4Q0bQ0aQ0bQ0aQ0bQ me@laptop"] }, // ssh debian@<ip>, on every cloud
     script: ["apt-get update", "apt-get install -y nginx", "systemctl enable --now nginx"], // or one str
 });
 ```
@@ -129,7 +132,9 @@ const web = aws.presets.small({
 | `login.user` | who they sign in as, with `sudo`; by default the distro's login user; required with an entry's `image`      |
 | `script`     | a script of your own, or its lines, joined by newlines; one with its own `#!` runs under it, else by `bash` |
 
-At first boot, once, as root, every machine signs in its `login`, then runs its `script`: the core builds both into one bash script, the same on every provider and distro (spec §6.2). Its output goes to `/var/log/rig/boot.log`, and its exit code to `/var/lib/rig/boot.exit`; a failed first boot is not run again. `machine.user` is the login user.
+- **Once, as root, at first boot:** the `login`, then the worker's lines, then the `script`, in one bash script, the same on every provider and distro (spec §6.2).
+- **Its output:** `/var/log/rig/boot.log`, its exit code `/var/lib/rig/boot.exit`; a failed first boot is not run again.
+- **`machine.user`:** the login user.
 
 ### Disk and Ports
 
@@ -141,27 +146,68 @@ const worker = aws.presets.compute({ name: "worker", disk: 100, ports: [{ port: 
 await rig.disk.grow(machine.id, 200);
 await rig.disk.wait(machine.id);
 await rig.port.open(machine.id, { port: 443, from: From.ANY }); // two rules: 0.0.0.0/0 and ::/0
-await rig.port.open(machine.id, { port: 53, proto: Proto.UDP, from: "10.0.0.0/8" });
+await rig.port.open(machine.id, { port: 22, from: "1.2.3.4" }); // 1.2.3.4/32
+await rig.port.open(machine.id, { port: 53, protocol: Protocol.UDP, from: "10.0.0.0/8" });
 
 await rig.port.close(machine.id, { port: 443 }); // every rule a match matches; or a rule's id
-await rig.port.close(machine.id, { proto: Proto.UDP, from: "10.0.0.0/8" });
+await rig.port.close(machine.id, { protocol: Protocol.UDP, from: "10.0.0.0/8" });
 ```
 
 The provider sets the kind's ports as it makes the machine, so it is never open before they are.
 
-| Call         | Rule                                                                                                                                  |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `disk.grow`  | only grows: a size not above the disk's now is a refusal                                                                              |
-| `port.open`  | `port` and `to` from `1` to `65535`, `proto` a `Proto` (`TCP` by default), `from` a CIDR or a `From`; else a refusal naming the field |
-| `port.open`  | gives back the rules it opened: two for `From.ANY`; a rule the machine already has is given back, not added twice                     |
-| `port.close` | takes a rule's id, or a match: `port`, `to`, `proto`, `from`, any of them; closes every rule it matches, and gives them back          |
-| `port.close` | a rule already gone, or a match with none, is `[]`                                                                                    |
+| Call         | Rule                                                                                                                                                  |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `disk.grow`  | only grows: a size not above the disk's now is a refusal                                                                                              |
+| `port.open`  | `port` and `to` from `1` to `65535`, `protocol` a `Protocol` (`TCP` by default), `from` an IP, a CIDR, or `From.ANY`; else a refusal naming the field |
+| `port.open`  | gives back the rules it opened: two for `From.ANY`; a rule the machine already has is given back, not added twice                                     |
+| `port.close` | takes a rule's id, or a match: `port`, `to`, `protocol`, `from`, any of them; closes every rule it matches, and gives them back                       |
+| `port.close` | a rule already gone, or a match with none, is `[]`                                                                                                    |
 
-| `From` | Is                            |
-| ------ | ----------------------------- |
-| `ANY`  | anywhere: IPv4 and IPv6       |
-| `ANY4` | anywhere on IPv4: `0.0.0.0/0` |
-| `ANY6` | anywhere on IPv6: `::/0`      |
+`from` becomes a CIDR by its value: an IPv4 address its `/32`, an IPv6 address its `/128`, and `From.ANY` two rules, `0.0.0.0/0` and `::/0`.
+
+## Workers
+
+A worker runs jobs on machines, as a provider makes them: `workers: [grid]`, as `providers: [aws]`. The official one is [@diphyx/rig-grid](../grid), over [grid](https://github.com/diphyx/grid); its README has its own keys.
+
+| Kind             | Machines                                           | A change                                                       |
+| ---------------- | -------------------------------------------------- | -------------------------------------------------------------- |
+| without `worker` | live as long as the app wants them                 | the app's own, on its machines                                 |
+| with `worker`    | job machines: short-lived, often spot, replaceable | a new machine: the `worker`, like the type, is fixed at create |
+
+```ts
+import { createRig } from "@diphyx/rig";
+import { createAws } from "@diphyx/rig-aws";
+import { createGrid } from "@diphyx/rig-grid";
+
+const aws = createAws(); // its region: AWS_REGION, else us-east-1
+const grid = createGrid(); // every option has a default; its README has them
+
+const rig = createRig({
+    rig: 1,
+    app: "my-app",
+    providers: [aws],
+    workers: [grid],
+    kinds: [
+        aws.presets.compute({
+            name: "builder",
+            life: "8h",
+            worker: { tags: ["build"], cmds: { make: { exec: ["make", "-j8"], timeout: "1h" } } },
+        }),
+    ],
+});
+```
+
+| `worker` key | Is                                                                           |
+| ------------ | ---------------------------------------------------------------------------- |
+| `name`       | the worker's `name`; without it, the config's only worker                    |
+| `tags`       | the kinds of work its machines do: a job runs only on a machine with its tag |
+| the others   | the worker's own: grid's `cmds` and `signal`                                 |
+
+- **Fixed at create:** a job machine is reached at its first boot, then only through its worker. To change what it runs, change the kind: new machines get it, and the old ones end by `life`, `machine.end`, or a take-back. A short `life` suits job machines; a new tag (`build-v2`) keeps jobs off the old ones.
+- **Joining:** at create, the worker gives the machine's first-boot lines and the ports it needs. Once it has an IP, the core gives it to the worker, again when its IPs change, and after the core opens; once it is ended or lost, the core drops it. `machine.worker` shows its worker, key, tags, and the IPs the worker has.
+- **A machine is lost:** rig replaces it, up to `recovers`, and the worker runs its job again on any machine with its tags, the replacement too. When rig stops replacing it, it tells the worker (`spent`), so the job does not wait for a machine that will not come.
+- **A lost store:** a job machine a round finds, with no key left in the store, is ended: `MACHINE_ENDED`, `reason: Why.FOUND`.
+- **A job keeps its own work:** a take-back may come with little warning, or none. Save progress in the job's own steps, and resume from there.
 
 ## Presets
 
@@ -200,16 +246,16 @@ A call that cannot be done is a `Refusal`, with a `reason`: `Reason.CONFIG`, `UN
 
 ## Events
 
-| `Event`             | Data                      | When                                     |
-| ------------------- | ------------------------- | ---------------------------------------- |
-| `TRY`               | `{ kind, place, answer }` | after every try                          |
-| `MACHINE_CREATED`   | `{ machine }`             | `machine.create` gave a machine          |
-| `MACHINE_ENDED`     | `{ machine }`             | the core ended a machine                 |
-| `MACHINE_LOST`      | `{ machine }`             | a machine ended without the core         |
-| `MACHINE_RECOVERED` | `{ lost, machine }`       | a recover gave a machine                 |
-| `MACHINE_FAILED`    | `{ machine, recovers }`   | lost, with its `recovers` spent          |
-| `MACHINE_ORPHAN`    | `{ machine }`             | a machine of this app, of no kind it has |
-| `GUARD`             | `{ kind, code }`          | a risky kind, when the core opens        |
+| `Event`             | Data                      | When                                                                          |
+| ------------------- | ------------------------- | ----------------------------------------------------------------------------- |
+| `TRY`               | `{ kind, place, answer }` | after every try                                                               |
+| `MACHINE_CREATED`   | `{ machine }`             | `machine.create` gave a machine                                               |
+| `MACHINE_ENDED`     | `{ machine, reason? }`    | the core ended a machine; `Why.FOUND`: a job machine whose key the store lost |
+| `MACHINE_LOST`      | `{ machine }`             | a machine ended without the core                                              |
+| `MACHINE_RECOVERED` | `{ lost, machine }`       | a recover gave a machine                                                      |
+| `MACHINE_FAILED`    | `{ machine, recovers }`   | lost, with its `recovers` spent                                               |
+| `MACHINE_ORPHAN`    | `{ machine }`             | a machine of this app, of no kind it has                                      |
+| `GUARD`             | `{ kind, code }`          | a risky kind, when the core opens                                             |
 
 ## Config
 
@@ -223,6 +269,7 @@ A call that cannot be done is a `Refusal`, with a `reason`: `Reason.CONFIG`, `UN
 | `every`     | `"30s"`      | time between rounds; `"0"`: only `rig.round()` |
 | `poll`      | `"5s"`       | time between polls of a wait                   |
 | `store`     | `"./.rig"`   | the folder for what the core knows             |
+| `workers`   | —            | the plugins that run jobs: [Workers](#workers) |
 | `extra`     | —            | `clock`, `sleep`, `rounds`: for tests          |
 
 ## Enums
@@ -236,9 +283,10 @@ Every fixed set of values in the spec is an enum; each value is the spec's own s
 | `Busy`       | `ZONE`, `TYPE`, `MARKET`, `ACCOUNT`                                                                                         |
 | `Arch`       | `ARM`, `X86`                                                                                                                |
 | `Distro`     | `UBUNTU`, `DEBIAN`                                                                                                          |
-| `From`       | `ANY`, `ANY4`, `ANY6`                                                                                                       |
-| `Proto`      | `TCP`, `UDP`                                                                                                                |
-| `Slot`       | `PROVIDER`, `HUB`                                                                                                           |
+| `From`       | `ANY`                                                                                                                       |
+| `Protocol`   | `TCP`, `UDP`                                                                                                                |
+| `Why`        | `FOUND`                                                                                                                     |
+| `Slot`       | `PROVIDER`, `WORKER`                                                                                                        |
 | `Guard`      | `WARN`, `REFUSE`                                                                                                            |
 | `Finding`    | `SPOT_WARN`, `SPOT_LONG`, `SPOT_NARROW`                                                                                     |
 | `Event`      | `TRY`, `MACHINE_CREATED`, `MACHINE_ENDED`, `MACHINE_LOST`, `MACHINE_RECOVERED`, `MACHINE_FAILED`, `MACHINE_ORPHAN`, `GUARD` |
@@ -251,12 +299,26 @@ Every fixed set of values in the spec is an enum; each value is the spec's own s
 
 A provider is an object with the calls of spec §9, made by a factory that takes the same config as the official ones (spec §8.2); `can` names what it supports. The core gives it the helpers the official ones use:
 
-| Helper              | Makes                                                         |
-| ------------------- | ------------------------------------------------------------- |
-| `createPresets`     | the five presets, from its type table                         |
-| `createDistroTable` | its `distros`, and each version's pointer to its newest image |
-| `checkFactory`      | the check of its factory's config                             |
-| `createTagMap`      | its tag names, both ways                                      |
+| Helper              | Makes                                                                   |
+| ------------------- | ----------------------------------------------------------------------- |
+| `createPresets`     | the five presets, from its type table                                   |
+| `createDistroTable` | its `distros`, and each version's pointer to its newest image           |
+| `checkFactory`      | the check of its factory's config                                       |
+| `regionOf`          | its region: the one given, else its cloud's env var's, else its default |
+| `createTagMap`      | its tag names, both ways                                                |
+
+## Your Own Worker
+
+A worker is an object with the calls of spec §22.1, in the config's `workers`, `slot: "worker"`:
+
+| Call    | Does                                                                                          |
+| ------- | --------------------------------------------------------------------------------------------- |
+| `open`  | optional: what it finds out when rig opens, before any `setup`, like its own address          |
+| `check` | refuses a kind's `worker` whose own keys are not one                                          |
+| `setup` | for one machine, at its create: its first-boot lines, the ports it needs, what it knows it by |
+| `add`   | takes a machine, by its name, IPs, key and tags                                               |
+| `drop`  | forgets a machine                                                                             |
+| `spent` | hears that no more machines come for some tags                                                |
 
 ## Spec
 
