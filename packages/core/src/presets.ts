@@ -8,10 +8,12 @@ import type { Kind } from "./types.js";
 export type PresetTable = Record<string, Record<string, string[] | Record<string, string[]>>>;
 
 /** The kind keys a preset passes on unchanged, §7.2. */
-type Pass = Pick<Kind, "image" | "disk" | "script" | "risk" | "life" | "recovers" | "tags" | "ports">;
+type Pass = Pick<Kind, "distro" | "disk" | "login" | "script" | "risk" | "life" | "recovers" | "tags" | "ports">;
 
 type Common = Pass & {
     name: string;
+    /** This provider's image id, booted as it is: the entry's `image`, in place of `distro`. */
+    image?: string;
     market?: Market[];
     arch?: PresetArch;
 };
@@ -54,7 +56,7 @@ function diskOf(preset: PresetName, wanted: unknown): number {
     return Math.ceil((disk.base + disk.per * asked) / 10) * 10;
 }
 
-const PASS = ["image", "disk", "script", "risk", "life", "recovers", "tags", "ports"];
+const PASS = ["distro", "disk", "login", "script", "risk", "life", "recovers", "tags", "ports"];
 const ARCHES = [Arch.ARM, Arch.X86];
 
 function refuse(preset: PresetName, message: string): never {
@@ -141,7 +143,15 @@ export function createPresets(provider: string, table: PresetTable): Presets {
     function make(preset: PresetName, options: Sized & Record<string, unknown>): Kind {
         const rule = PRESETS[preset];
         const sized = preset !== PresetName.SMALL && preset !== PresetName.GPU;
-        const taken = ["name", "market", "arch", ...PASS, ...(rule.size ? [rule.size] : []), ...(sized ? ["up"] : [])];
+        const taken = [
+            "name",
+            "market",
+            "arch",
+            "image",
+            ...PASS,
+            ...(rule.size ? [rule.size] : []),
+            ...(sized ? ["up"] : []),
+        ];
 
         if (!isString(options.name)) {
             refuse(preset, "a name is required");
@@ -151,6 +161,10 @@ export function createPresets(provider: string, table: PresetTable): Presets {
             if (!taken.includes(key)) {
                 refuse(preset, `${key} is not an option of this preset`);
             }
+        }
+
+        if (options.image !== undefined && options.distro !== undefined) {
+            refuse(preset, "image with distro: the image is booted in place of it");
         }
 
         const wanted = rule.size ? options[rule.size] : undefined;
@@ -182,7 +196,14 @@ export function createPresets(provider: string, table: PresetTable): Presets {
             ...(options.image === undefined && { disk: diskOf(preset, wanted) }),
             ...pass,
             name: options.name,
-            try: [{ provider, market: options.market ?? [...rule.market], types }],
+            try: [
+                {
+                    provider,
+                    market: options.market ?? [...rule.market],
+                    types,
+                    ...(options.image !== undefined && { image: options.image }),
+                },
+            ],
         };
     }
 

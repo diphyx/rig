@@ -30,6 +30,19 @@ export enum Arch {
     X86 = "x86",
 }
 
+/** §6.1: the Linux distribution a machine boots. */
+export enum Distro {
+    UBUNTU = "ubuntu",
+    DEBIAN = "debian",
+}
+
+/** §10, §20: where a rule lets traffic in from, besides a CIDR of its own: anywhere on IPv4, on IPv6, or on both. */
+export enum From {
+    ANY = "any",
+    ANY4 = "0.0.0.0/0",
+    ANY6 = "::/0",
+}
+
 /** §10: a port rule's protocol. */
 export enum Proto {
     TCP = "tcp",

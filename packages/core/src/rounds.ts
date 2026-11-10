@@ -1,3 +1,4 @@
+import { userOf } from "./boot.js";
 import { Event, Status } from "./enums.js";
 import { type Context, providerOf, toMachine } from "./context.js";
 import { failover } from "./failover.js";
@@ -128,6 +129,10 @@ async function pass(context: Context): Promise<void> {
             known.ip = now.machine.ip;
         }
 
+        if (now.machine.image) {
+            known.image = now.machine.image;
+        }
+
         const life = kinds.get(known.kind)?.life;
 
         if (life && context.clock() - known.created > dur(life)) {
@@ -148,7 +153,15 @@ async function pass(context: Context): Promise<void> {
         }
 
         const kind = machine.tags["rig-kind"] ?? "";
-        const found: Known = { ...machine, provider, kind, name: machine.tags["rig-name"] ?? "", chain: 0 };
+        const user = kinds.has(kind) ? userOf(kinds.get(kind)!) : undefined;
+        const found: Known = {
+            ...machine,
+            provider,
+            kind,
+            name: machine.tags["rig-name"] ?? "",
+            ...(user && { user }),
+            chain: 0,
+        };
 
         if (kinds.has(kind)) {
             store.machines.push(found);

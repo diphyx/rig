@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { all } from "radash";
 import { describe, expect, it } from "vitest";
 
-import { createRig, Event, Market, type Provider, type ProviderMachine, Slot, Status } from "../src/index.js";
+import { createRig, Event, Market, DISTROS, type Provider, type ProviderMachine, Slot, Status } from "../src/index.js";
 
 /* A provider whose `list`, once held, waits until the test lets it go, so a round can be caught mid-list. */
 function slow() {
@@ -18,6 +18,11 @@ function slow() {
         slot: Slot.PROVIDER,
         name: "a",
         rig: 1,
+        distros: Object.fromEntries(
+            Object.entries(DISTROS).map(([distro, { versions }]) => {
+                return [distro, versions];
+            }),
+        ),
         async places() {
             return [{ market: Market.DEMAND, type: "t", zone: "z" }];
         },

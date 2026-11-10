@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { isArray } from "radash";
 import { describe, expect, it } from "vitest";
 
-import { Busy, createRig, Event, Refusal, Slot, Status } from "../src/index.js";
+import { Busy, createRig, Event, DISTROS, Refusal, Slot, Status } from "../src/index.js";
 import { dur } from "../src/parse.js";
 
 import type {
@@ -40,7 +40,7 @@ type Expect = {
     throws?: true;
     events?: Record<string, unknown>[];
     store?: { risk?: unknown };
-    fake?: Record<string, { machines?: unknown[]; ends?: string[] }>;
+    fake?: Record<string, { machines?: unknown[]; ends?: string[]; scripts?: (string | null)[] }>;
 };
 
 type Case = {
@@ -51,6 +51,13 @@ type Case = {
 };
 
 type Kit = { rig: number; area: string; cases: Case[] };
+
+/* The fake offers every distro version of §6.1, unless the case names its own. */
+const EVERY_DISTRO = Object.fromEntries(
+    Object.entries(DISTROS).map(([distro, { versions }]) => {
+        return [distro, versions];
+    }),
+);
 
 const KIT = join(import.meta.dirname, "../../../spec/kit");
 
@@ -94,14 +101,26 @@ function fakes(
     data: Record<string, Fake>,
     clock: () => number,
     stray: string[],
-): { providers: Provider[]; machines: Map<string, ProviderMachine[]>; ends: Map<string, string[]> } {
+): {
+    providers: Provider[];
+    machines: Map<string, ProviderMachine[]>;
+    ends: Map<string, string[]>;
+    scripts: Map<string, (string | null)[]>;
+} {
     const machines = new Map<string, ProviderMachine[]>();
     const ends = new Map<string, string[]>();
+    const scripts = new Map<string, (string | null)[]>();
     let next = 0;
     let rules = 0;
 
     const providers = (
-        config.providers as unknown as { name: string; can?: Provider["can"]; rig?: number; check?: string }[]
+        config.providers as unknown as {
+            name: string;
+            can?: Provider["can"];
+            rig?: number;
+            check?: string;
+            distros?: Provider["distros"];
+        }[]
     ).map((written) => {
         const fake = data[written.name] ?? { places: [], answers: {} };
         const own: ProviderMachine[] = structuredClone(fake.machines ?? []);
@@ -125,11 +144,13 @@ function fakes(
 
         machines.set(written.name, own);
         ends.set(written.name, []);
+        scripts.set(written.name, []);
 
         const provider: Provider = {
             slot: Slot.PROVIDER,
             name: written.name,
             rig: written.rig ?? 1,
+            distros: written.distros ?? EVERY_DISTRO,
             ...(written.can && { can: written.can }),
             ...(fake.shapes && {
                 async shape(type: string) {
@@ -166,6 +187,7 @@ function fakes(
                     return { busy: answer.slice(5) as Busy };
                 }
 
+                scripts.get(written.name)!.push(spec.script ?? null);
                 next += 1;
                 booting.set(`m${next}`, fake.boot ?? 0);
 
@@ -187,6 +209,7 @@ function fakes(
                     market: place.market,
                     type: place.type,
                     zone: place.zone,
+                    image: spec.image ?? `${spec.distro!.name}-${spec.distro!.version}`,
                     tags: spec.tags,
                     created: clock(),
                 });
@@ -284,7 +307,7 @@ function fakes(
         return provider;
     });
 
-    return { providers, machines, ends };
+    return { providers, machines, ends, scripts };
 }
 
 /* README §5's `try` short form. */
@@ -343,7 +366,7 @@ async function play(one: Case): Promise<void> {
 
     const folder = mkdtempSync(join(tmpdir(), "rig-kit-"));
     const stray: string[] = [];
-    const { providers, machines, ends } = fakes(one.given.config, one.given.fake, clock, stray);
+    const { providers, machines, ends, scripts } = fakes(one.given.config, one.given.fake, clock, stray);
 
     if (one.given.store?.risk) {
         mkdirSync(join(folder, "rig", "1"), { recursive: true });
@@ -413,6 +436,10 @@ async function play(one: Case): Promise<void> {
 
             if (fake.ends) {
                 match(ends.get(name), fake.ends, `${at}: fake ${name} ends`);
+            }
+
+            if (fake.scripts) {
+                match(scripts.get(name), fake.scripts, `${at}: fake ${name} scripts`);
             }
         }
     }

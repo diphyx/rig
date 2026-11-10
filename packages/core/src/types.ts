@@ -1,12 +1,22 @@
-import type { Arch, Busy, Event, Finding, Guard, Market, Proto, Slot, Status } from "./enums.js";
+import type { Arch, Busy, Event, Finding, Guard, Market, Distro, Proto, Slot, Status } from "./enums.js";
 
 export type Tags = Record<string, string>;
+
+/** §6.2: who can sign in over SSH: the keys, for the user; by default the distro's. */
+export type Login = { user?: string; keys: string[] };
+
+/** §6.1: a distro, by its name and major version; without a version, its default. */
+export type KindDistro = { name: Distro; version?: string };
+
+/** §10: a distro as a provider gets it: its version always filled in. */
+export type SpecDistro = { name: Distro; version: string };
 
 /** One item of a kind's `try` list. */
 export type Entry = {
     provider: string;
     market: Market[];
     types: string[];
+    /** This provider's image id, booted as it is in place of the kind's `distro`. */
     image?: string;
     extra?: Record<string, unknown>;
 };
@@ -15,9 +25,13 @@ export type Entry = {
 export type Kind = {
     name: string;
     try: Entry[];
-    image?: string;
+    /** The distro every machine boots, but on an entry with its own `image`; `ubuntu` at its default version when absent. */
+    distro?: KindDistro;
     disk?: number;
-    script?: string;
+    /** Who can sign in over SSH, at first boot. */
+    login?: Login;
+    /** What every machine runs once, at first boot: a script, or its lines. */
+    script?: string | string[];
     risk?: { max: string };
     life?: string;
     recovers?: number;
@@ -47,6 +61,9 @@ export type Shape = {
 /** What to create, filled by the core. */
 export type Spec = {
     name: string;
+    /** The kind's distro: the provider boots its newest image. Absent when `image` is given. */
+    distro?: SpecDistro;
+    /** The entry's image, booted as it is. Absent when `distro` is given. */
     image?: string;
     disk?: number;
     script?: string;
@@ -66,6 +83,8 @@ export type ProviderMachine = {
     market: Market;
     type: string;
     zone: string;
+    /** The image it boots, by the provider's id. */
+    image?: string;
     tags: Tags;
     ip?: { public?: string; private?: string };
     created: number;
@@ -80,6 +99,9 @@ export type Rule = {
     from: string;
 };
 
+/** §10: the rules `port.close` closes: those with every key it gives. */
+export type Match = { port?: number; to?: number; proto?: Proto; from?: string };
+
 export type Can = {
     spot?: boolean;
     stop?: boolean;
@@ -93,6 +115,8 @@ export type Provider = {
     name: string;
     rig: number;
     can?: Can;
+    /** §8: the distro versions it offers: every distro at its default version, at least. */
+    distros: Partial<Record<Distro, string[]>>;
     /** Optional: throws when the provider cannot work, checked at open. */
     check?(): Promise<void>;
     /** Optional: a type's shape, from the provider's own data; `null` when unknown. */
@@ -135,6 +159,8 @@ export type Machine = ProviderMachine & {
     provider: string;
     kind: string;
     name: string;
+    /** The login user, when its kind has a `login`. */
+    user?: string;
 };
 
 /** The core's own count for one place. */

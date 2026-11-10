@@ -2,6 +2,9 @@ import { randomBytes } from "node:crypto";
 
 import { Busy, Event, Market, Status } from "./enums.js";
 import type { Context } from "./context.js";
+import { distroOf } from "./distro.js";
+import { buildBoot, userOf } from "./boot.js";
+import { expandRule } from "./rules.js";
 import { countCreated, countTry, within } from "./risk.js";
 import type { Known } from "./store.js";
 import type { Answer, Entry, Kind, Place, Spec } from "./types.js";
@@ -39,15 +42,14 @@ export async function entrySteps(context: Context, kind: Kind, entry: Entry): Pr
 function specOf(context: Context, kind: Kind, entry: Entry): Spec {
     const { app } = context.config;
     const name = `${app}-${kind.name}-${randomBytes(4).toString("hex")}`;
-    const image = entry.image ?? kind.image;
 
     return {
         name,
         tags: { ...kind.tags, rig: "1", "rig-app": app, "rig-kind": kind.name, "rig-name": name },
-        ports: kind.ports ?? [],
-        ...(image !== undefined && { image }),
+        ports: (kind.ports ?? []).flatMap(expandRule),
+        ...(entry.image !== undefined ? { image: entry.image } : { distro: distroOf(kind.distro) }),
         ...(kind.disk !== undefined && { disk: kind.disk }),
-        ...(kind.script !== undefined && { script: kind.script }),
+        ...((kind.login || kind.script !== undefined) && { script: buildBoot(kind)! }),
         ...(entry.extra !== undefined && { extra: entry.extra }),
     };
 }
@@ -106,6 +108,7 @@ export async function failover(context: Context, kind: Kind, chain: number): Pro
                     provider: step.provider,
                     kind: kind.name,
                     name: spec.name,
+                    ...(kind.login && { user: userOf(kind)! }),
                     chain,
                 };
 

@@ -1,3 +1,5 @@
+import { isString, tryit } from "radash";
+
 import { Event, Market, Reason, Status } from "./enums.js";
 import { capable, type Context, kindOf, knownOf, live, providerOf, toMachine } from "./context.js";
 import { entrySteps, failover } from "./failover.js";
@@ -5,8 +7,8 @@ import { dur, isDur, isUint } from "./parse.js";
 import { Refusal } from "./refusal.js";
 import { end } from "./rounds.js";
 import { riskOf } from "./risk.js";
-import { checkRule, sameRule } from "./rules.js";
-import type { Listed, Machine, Rule } from "./types.js";
+import { checkMatch, expandRule, matchesRule, sameRule } from "./rules.js";
+import type { Listed, Machine, Match, Rule } from "./types.js";
 
 type Disk = { gb: number; ready: boolean };
 
@@ -65,6 +67,10 @@ async function fresh(context: Context, last: Machine): Promise<Machine> {
 
     if (now.ip) {
         known.ip = now.ip;
+    }
+
+    if (now.image) {
+        known.image = now.image;
     }
 
     context.store.save();
@@ -229,31 +235,59 @@ export function calls(context: Context) {
         },
 
         port: {
-            /** §20: a rule that is one; an equal rule the machine has is given back as it is. */
-            async open(id: string, rule: Rule): Promise<Rule> {
+            /** §20: a rule that is one, `from: any` as two; an equal rule the machine has is given back as it is. */
+            async open(id: string, rule: Rule): Promise<Rule[]> {
                 const known = knownOf(context, id);
                 const port = capable(context, known, "port").port!;
+                const rules = expandRule(rule);
+                const held = await port.list(known.id);
+                const opened: Rule[] = [];
+                const made: Rule[] = [];
 
-                checkRule(rule);
+                try {
+                    for (const one of rules) {
+                        const equal = held.find((other) => {
+                            return sameRule(other, one);
+                        });
 
-                const equal = (await port.list(known.id)).find((one) => {
-                    return sameRule(one, rule);
-                });
+                        const rule = equal ?? (await port.open(known.id, one));
 
-                return equal ?? port.open(known.id, rule);
+                        if (!equal) {
+                            made.push(rule);
+                        }
+
+                        opened.push(rule);
+                    }
+                } catch (error) {
+                    /* §20: all or none: what this call opened is closed again. */
+                    for (const one of made) {
+                        await tryit(port.close)(known.id, one.id!);
+                    }
+
+                    throw error;
+                }
+
+                return opened;
             },
 
-            /** §20: a rule the machine does not have is done. */
-            async close(id: string, rule: string): Promise<void> {
+            /** §20: the rule with that id, or every rule the match matches; the rules closed, none is `[]`. */
+            async close(id: string, rule: string | Match): Promise<Rule[]> {
                 const known = knownOf(context, id);
                 const port = capable(context, known, "port").port!;
-                const held = (await port.list(known.id)).some((one) => {
-                    return one.id === rule;
+
+                if (!isString(rule)) {
+                    checkMatch(rule);
+                }
+
+                const closing = (await port.list(known.id)).filter((one) => {
+                    return isString(rule) ? one.id === rule : matchesRule(one, rule);
                 });
 
-                if (held) {
-                    await port.close(known.id, rule);
+                for (const one of closing) {
+                    await port.close(known.id, one.id!);
                 }
+
+                return closing;
             },
 
             async list(id: string): Promise<Rule[]> {

@@ -3,14 +3,20 @@ import { isArray, isFunction, isObject, isString } from "radash";
 import { Guard, Market, Reason, Slot } from "./enums.js";
 import { isDur, isPct, isUint, NAME } from "./parse.js";
 import { Refusal } from "./refusal.js";
+import { checkBoot } from "./boot.js";
+import { DISTROS, distroOf } from "./distro.js";
 import { checkRule } from "./rules.js";
+
 import type { Provider, RigConfig } from "./types.js";
 
 /** The rig generation this core follows. */
 export const RIG = 1;
 
 const ROOT = ["rig", "app", "providers", "kinds", "guard", "every", "poll", "store", "extra"];
-const KIND = ["name", "try", "image", "disk", "script", "risk", "life", "recovers", "tags", "ports"];
+/* §6: the smallest boot disk, in GB: room for every distro's image on every cloud. */
+const DISK = 30;
+
+const KIND = ["name", "try", "distro", "disk", "login", "script", "risk", "life", "recovers", "tags", "ports"];
 const ENTRY = ["provider", "market", "types", "image", "extra"];
 const RESERVED: Record<string, string[]> = { root: ["hub"], kind: ["node", "save"] };
 
@@ -71,6 +77,13 @@ function calls(provider: Provider): string[] {
     ];
 }
 
+/* §8: the provider offers this distro version. */
+function offers(provider: Provider, distro: string, version: string): boolean {
+    const versions = isObject(provider.distros) ? (provider.distros as Record<string, unknown>)[distro] : undefined;
+
+    return isArray(versions) && versions.includes(version);
+}
+
 function has(provider: Provider, call: string): boolean {
     const [head, tail] = call.split(".") as [string, string?];
     const value = (provider as unknown as Record<string, unknown>)[head];
@@ -110,6 +123,15 @@ export function plugins(config: RigConfig): void {
         for (const call of calls(provider)) {
             if (!has(provider, call)) {
                 throw new Refusal(Reason.PLUGIN, `plugin ${provider.name}: missing call ${call}`);
+            }
+        }
+
+        for (const [distro, { default: version }] of Object.entries(DISTROS)) {
+            if (!offers(provider, distro, version)) {
+                throw new Refusal(
+                    Reason.PLUGIN,
+                    `plugin ${provider.name}: distros does not offer ${distro} ${version}`,
+                );
             }
         }
     }
@@ -188,17 +210,35 @@ export function config(config: RigConfig): void {
         names.add(kind.name);
         keys(path, kind, KIND, RESERVED.kind);
 
-        if (kind.image !== undefined && !isString(kind.image)) {
-            fail(`${path}image`, "not a str");
+        if (kind.distro !== undefined) {
+            if (!isObject(kind.distro)) {
+                fail(`${path}distro`, "not an object");
+            }
+
+            keys(`${path}distro.`, kind.distro, ["name", "version"]);
+
+            const known = Object.hasOwn(DISTROS, kind.distro.name) ? DISTROS[kind.distro.name] : undefined;
+
+            if (!known) {
+                fail(
+                    `${path}distro.name`,
+                    `${String(kind.distro.name)} is not one of ${Object.keys(DISTROS).join(", ")}`,
+                );
+            }
+
+            if (kind.distro.version !== undefined && !known.versions.includes(kind.distro.version)) {
+                fail(
+                    `${path}distro.version`,
+                    `${String(kind.distro.version)} is not one of ${known.versions.join(", ")}`,
+                );
+            }
         }
 
-        if (kind.disk !== undefined && !isUint(kind.disk)) {
-            fail(`${path}disk`, "not a uint");
+        if (kind.disk !== undefined && (!isUint(kind.disk) || kind.disk < DISK)) {
+            fail(`${path}disk`, `a uint from ${DISK}`);
         }
 
-        if (kind.script !== undefined && !isString(kind.script)) {
-            fail(`${path}script`, "not a str");
-        }
+        checkBoot(path, kind);
 
         if (kind.risk !== undefined) {
             if (!isObject(kind.risk)) {
@@ -298,6 +338,16 @@ export function config(config: RigConfig): void {
 
             if (entry.image !== undefined && !isString(entry.image)) {
                 fail(`${at}image`, "not a str");
+            }
+
+            if (entry.image !== undefined && kind.login && kind.login.user === undefined) {
+                fail(`${path}login.user`, `required with an entry's own image: ${at}image`);
+            }
+
+            const distro = distroOf(kind.distro);
+
+            if (entry.image === undefined && !offers(provider, distro.name, distro.version)) {
+                fail(`${at}provider`, `${provider.name} does not offer ${distro.name} ${distro.version}`);
             }
 
             if (entry.extra !== undefined && !isObject(entry.extra)) {
