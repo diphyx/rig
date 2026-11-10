@@ -22,7 +22,10 @@ const rig = createRig({
     rig: 1,
     app: "my-app",
     providers: [aws],
-    kinds: [aws.presets.small({ name: "dev" }), aws.presets.compute({ name: "worker", cpu: 8 })],
+    kinds: [
+        aws.presets.small({ name: "dev" }), // a light box, on demand
+        aws.presets.compute({ name: "worker", cpu: 8 }), // 8 vCPU, spot first, then demand
+    ],
 });
 ```
 

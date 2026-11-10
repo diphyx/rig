@@ -16,13 +16,17 @@ pnpm add @diphyx/rig @diphyx/rig-azure
 import { createRig } from "@diphyx/rig";
 import { createAzure } from "@diphyx/rig-azure";
 
-const azure = createAzure(); // its region: AZURE_LOCATION, else eastus; its subscription: AZURE_SUBSCRIPTION_ID
+// its region: AZURE_LOCATION, else eastus; its subscription: AZURE_SUBSCRIPTION_ID
+const azure = createAzure();
 
 const rig = createRig({
     rig: 1,
     app: "my-app",
     providers: [azure],
-    kinds: [azure.presets.small({ name: "dev" }), azure.presets.compute({ name: "worker", cpu: 8 })],
+    kinds: [
+        azure.presets.small({ name: "dev" }), // a light box, on demand
+        azure.presets.compute({ name: "worker", cpu: 8 }), // 8 vCPU, spot first, then demand
+    ],
 });
 ```
 

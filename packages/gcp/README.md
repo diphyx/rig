@@ -16,13 +16,17 @@ pnpm add @diphyx/rig @diphyx/rig-gcp
 import { createRig } from "@diphyx/rig";
 import { createGcp } from "@diphyx/rig-gcp";
 
-const gcp = createGcp(); // its region: CLOUDSDK_COMPUTE_REGION, else us-central1; its project: the key's
+// its region: CLOUDSDK_COMPUTE_REGION, else us-central1; its project: the key's
+const gcp = createGcp();
 
 const rig = createRig({
     rig: 1,
     app: "my-app",
     providers: [gcp],
-    kinds: [gcp.presets.small({ name: "dev" }), gcp.presets.compute({ name: "worker", cpu: 8 })],
+    kinds: [
+        gcp.presets.small({ name: "dev" }), // a light box, on demand
+        gcp.presets.compute({ name: "worker", cpu: 8 }), // 8 vCPU, spot first, then demand
+    ],
 });
 ```
 
