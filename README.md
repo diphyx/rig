@@ -99,7 +99,7 @@ At least one provider: official, or your own.
 | `spec/kit/`      | the conformance suite, as data |
 | `packages/core`  | `@diphyx/rig`, passes the kit  |
 | `packages/aws`   | `@diphyx/rig-aws`, draft       |
-| `packages/gcp`   | `@diphyx/rig-gcp`, planned     |
+| `packages/gcp`   | `@diphyx/rig-gcp`, draft       |
 | `packages/azure` | `@diphyx/rig-azure`, planned   |
 
 ```bash
