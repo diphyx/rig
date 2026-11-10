@@ -1,8 +1,11 @@
 # rig
 
-Create machines on any cloud, with failover.
+Create Linux machines on any cloud, with failover.
 
 **Status: draft.** The spec is being written.
+
+> [!IMPORTANT]
+> **Linux only.** Every machine rig creates runs Linux: Ubuntu or Debian, or a Linux image of your own. Its first boot is a bash script, and its login is SSH.
 
 ## 1. What It Does
 
@@ -27,7 +30,7 @@ On `spot`, the provider may take a machine back. Rig estimates how often that ha
 The TypeScript API: the core, and a provider per cloud.
 
 ```ts
-import { createRig, Event, Status } from "@diphyx/rig";
+import { createRig, Distro, Event, Status } from "@diphyx/rig";
 import { createAws } from "@diphyx/rig-aws";
 
 const aws = createAws({ region: "us-east-1" });
@@ -38,20 +41,40 @@ const rig = createRig({
     providers: [aws],
     kinds: [
         aws.presets.small({ name: "dev" }),
-        aws.presets.compute({ name: "worker", cpu: 8 }), // spot first, then demand
+        aws.presets.compute({
+            name: "worker",
+            cpu: 8, // spot first, then demand
+            distro: { name: Distro.DEBIAN },
+            login: { keys: ["ssh-ed25519 AAAA... me@laptop"] },
+            script: ["apt-get update", "apt-get install -y nginx"],
+            ports: [{ port: 22, from: "1.2.3.4/32" }],
+        }),
     ],
 });
+
+rig.on(Event.MACHINE_LOST, ({ machine }) => console.log("lost", machine.id)); // rig recovers it
 
 await rig.open();
 
 const machine = await rig.machine.create("worker"); // null if no room anywhere
-await rig.machine.wait(machine.id, Status.RUNNING); // live status and ip from the provider
-rig.on(Event.MACHINE_LOST, ({ machine }) => { ... });
+
+if (machine) {
+    await rig.machine.wait(machine.id, Status.RUNNING); // then: ssh debian@<machine.ip.public>
+}
 ```
 
-**Presets** (`small`, `general`, `compute`, `memory`, `gpu`) make a kind from a name alone. Every provider has the same ones.
+A **kind** is a named recipe for machines. A **preset** (`small`, `general`, `compute`, `memory`, `gpu`) makes one from a name alone; every provider has the same five. Each kind sets, the same on every cloud:
 
-For full control, write the kind yourself, with `Market` from `@diphyx/rig`. The order is the failover order:
+| Key      | Is                                                                                      |
+| -------- | --------------------------------------------------------------------------------------- |
+| `distro` | Ubuntu or Debian, at a major version; each new machine gets that version's newest image |
+| `disk`   | GB of the boot disk                                                                     |
+| `login`  | SSH keys for the distro's user, with `sudo`                                             |
+| `script` | what every machine runs once, as root, at first boot                                    |
+| `ports`  | the only inbound ports open; all else is closed                                         |
+| `risk`   | the highest take-back rate a place may have                                             |
+
+For full control, write the kind yourself, across providers. The order of `try` is the failover order:
 
 ```ts
 {
@@ -64,6 +87,8 @@ For full control, write the kind yourself, with `Market` from `@diphyx/rig`. The
     risk: { max: "10%" },
 }
 ```
+
+The [core's README](packages/core) has every key, call and event.
 
 ## 3. How It Is Built
 
