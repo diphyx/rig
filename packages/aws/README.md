@@ -56,32 +56,36 @@ The same keys as every rig provider's factory (spec §8.2); aws's own go in `ext
 
 It calls EC2 with the AWS SDK's `@aws-sdk/client-ec2`.
 
-| rig                       | EC2                                                                                                                                                                                       |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `check`                   | `DescribeAvailabilityZones`: the keys and the region work                                                                                                                                 |
-| `places`                  | `DescribeInstanceTypeOfferings`, in the zones that have a subnet                                                                                                                          |
-| `create`                  | one `RunInstances`, tagged, and named with `Name`; IMDSv2 required                                                                                                                        |
-| `spot`                    | a one-time spot request, terminated on a take-back                                                                                                                                        |
-| image                     | the kind's, or Ubuntu 24.04 (arm64 or x86_64, by type) from Canonical's public SSM parameter                                                                                              |
-| `get`, `list`             | `DescribeInstances`, by id, or by tag in the region, every page                                                                                                                           |
-| `start`, `stop`, `reboot` | `StartInstances`, `StopInstances`, `RebootInstances`; stopping a spot machine is `unsupported`                                                                                            |
-| `end`                     | the machine's security group off and deleted, then `TerminateInstances`; a group still held, and those of machines gone earlier, go on a later `end`; the root disk goes with the machine |
-| `disk.grow`, `get`        | `ModifyVolume` on the root volume; ready once the change is past `modifying`                                                                                                              |
-| `port.*`                  | a security group of the machine's own, made on the first `port.open`                                                                                                                      |
+| rig                       | EC2                                                                                                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check`                   | `DescribeAvailabilityZones`: the keys and the region work                                                                                                     |
+| `places`                  | `DescribeInstanceTypeOfferings`, in the zones that have a subnet                                                                                              |
+| `create`                  | one `RunInstances`, tagged, and named with `Name`; IMDSv2 required                                                                                            |
+| `spot`                    | a one-time spot request, terminated on a take-back                                                                                                            |
+| image                     | the kind's, or Ubuntu 24.04 (arm64 or x86_64, by type) from Canonical's public SSM parameter                                                                  |
+| `get`, `list`             | `DescribeInstances`, by id, or by tag in the region, every page                                                                                               |
+| `start`, `stop`, `reboot` | `StartInstances`, `StopInstances`, `RebootInstances`; stopping a spot machine is `unsupported`                                                                |
+| `end`                     | `TerminateInstances`, waited for, then the machine's security group deleted; groups left by machines gone earlier go too; the root disk goes with the machine |
+| `disk.grow`, `get`        | `ModifyVolume` on the root volume; ready once the change is past `modifying`                                                                                  |
+| `port.*`                  | a security group of the machine's own, made before it with the kind's `ports`                                                                                 |
 
 Busy answers come from [`src/aws.json`](src/aws.json): no room in a zone (`InsufficientInstanceCapacity`, `Unsupported`, ...), in the spot market (`SpotMaxPriceTooLow`, ...), or in the account (`VcpuLimitExceeded`, ...). Any other error is thrown.
+
+### Ports at create
+
+A new machine runs in a security group of its own, made before it with only the kind's `ports`: every other inbound port is closed, inside the VPC too. `port.open` adds to them, and a failed try leaves nothing it made.
 
 ## Presets
 
 The same five presets as every rig provider (spec §7), made by the core's preset engine from [`src/aws.json`](src/aws.json), newest generation first.
 
-| Preset    | Size       | Default size | Default market                 | arm                                 | x86                                                           |
-| --------- | ---------- | ------------ | ------------------------------ | ----------------------------------- | ------------------------------------------------------------- |
-| `small`   | —          | —            | `[Market.DEMAND]`              | `t4g`                               | `t3`, `t3a`                                                   |
-| `general` | `cpu`      | `2`          | `[Market.DEMAND]`              | `m8g`, `m7g`, `m6g`                 | `m7i`, `m7a`, `m6i`, `m6a`, `m5`                              |
-| `compute` | `cpu`      | `4`          | `[Market.SPOT, Market.DEMAND]` | `c8g`, `c7g`, `c7gn`, `c6g`, `c6gn` | `c7i`, `c7a`, `c6i`, `c6a`, `c5`                              |
-| `memory`  | `mem` (GB) | `32`         | `[Market.DEMAND]`              | `r8g`, `r7g`, `r6g`                 | `r7i`, `r7a`, `r6i`, `r6a`, `r5`                              |
-| `gpu`     | `gpu`      | `t4`         | `[Market.SPOT, Market.DEMAND]` | `g5g` (T4)                          | `g4dn` (T4), `g5` (A10), `g6` (L4), `g6e` (L40S), `p5` (H100) |
+| Preset    | Size       | Default size | Default market                 | Default disk (GB) | arm                                 | x86                                                           |
+| --------- | ---------- | ------------ | ------------------------------ | ----------------- | ----------------------------------- | ------------------------------------------------------------- |
+| `small`   | —          | —            | `[Market.DEMAND]`              | `30`              | `t4g`                               | `t3`, `t3a`                                                   |
+| `general` | `cpu`      | `2`          | `[Market.DEMAND]`              | `30 + 5 × cpu`    | `m8g`, `m7g`, `m6g`                 | `m7i`, `m7a`, `m6i`, `m6a`, `m5`                              |
+| `compute` | `cpu`      | `4`          | `[Market.SPOT, Market.DEMAND]` | `30 + 5 × cpu`    | `c8g`, `c7g`, `c7gn`, `c6g`, `c6gn` | `c7i`, `c7a`, `c6i`, `c6a`, `c5`                              |
+| `memory`  | `mem` (GB) | `32`         | `[Market.DEMAND]`              | `30 + mem / 2`    | `r8g`, `r7g`, `r6g`                 | `r7i`, `r7a`, `r6i`, `r6a`, `r5`                              |
+| `gpu`     | `gpu`      | `t4`         | `[Market.SPOT, Market.DEMAND]` | `200`             | `g5g` (T4)                          | `g4dn` (T4), `g5` (A10), `g6` (L4), `g6e` (L40S), `p5` (H100) |
 
 Only `name` is required; every other option has a strong default.
 
@@ -90,8 +94,9 @@ Only `name` is required; every other option has a strong default.
 | `cpu`, `mem`, `gpu` | per preset                                 | the size, rounded up to the next one sold                              |
 | `arch`              | `PresetArch.ANY`: Graviton first, then x86 | `PresetArch.ARM`, `X86` or `ANY`; with your own `image`, one arch only |
 | `up`                | `0`                                        | also try the next `up` sizes, after every type of the asked size       |
+| `disk`              | per preset, from the asked size            | GB of the boot disk                                                    |
 | `market`            | per preset                                 | in failover order                                                      |
-| kind keys           | —                                          | `image`, `disk`, `script`, `risk`, `life`, `recovers`, `tags`          |
+| kind keys           | —                                          | `image`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`         |
 
 ```ts
 aws.presets.compute({ name: "worker" });
@@ -115,6 +120,8 @@ await aws.shape("g6.xlarge"); // { cpu: 4, mem: 16, gpu: "l4", arch: Arch.X86 }
 ## Spot
 
 Spot Instances, with a 2-minute warning before a take-back, seen from inside the machine. The core finds a take-back on its next round, ends the machine so nothing it held is left, and recovers it.
+
+A full spot quota is no room in spot, not in the account: the core tries the entry's demand machines next.
 
 ## Spec
 

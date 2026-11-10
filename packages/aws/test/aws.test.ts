@@ -41,10 +41,23 @@ const SUBNETS = {
     DescribeSubnets: () => {
         return {
             Subnets: [
-                { SubnetId: "subnet-a", AvailabilityZone: "us-east-1a" },
-                { SubnetId: "subnet-b", AvailabilityZone: "us-east-1b" },
+                { SubnetId: "subnet-a", AvailabilityZone: "us-east-1a", VpcId: "vpc-1" },
+                { SubnetId: "subnet-b", AvailabilityZone: "us-east-1b", VpcId: "vpc-1" },
             ],
         };
+    },
+};
+
+/* The machine's own security group, made before it. */
+const GROUP = {
+    CreateSecurityGroup: () => {
+        return { GroupId: "sg-rig" };
+    },
+    AuthorizeSecurityGroupIngress: () => {
+        return {};
+    },
+    DeleteSecurityGroup: () => {
+        return {};
     },
 };
 
@@ -67,6 +80,7 @@ const PLACE = { market: Market.DEMAND, type: "c8g.xlarge", zone: "us-east-1a" } 
 const SPEC = {
     name: "app-w-00000000",
     tags: { rig: "1", "rig-app": "app", "rig-kind": "w", "rig-name": "app-w-00000000" },
+    ports: [],
 };
 
 describe("aws: factory", () => {
@@ -137,7 +151,7 @@ describe("aws: auth", () => {
 
     it("names its keys, and runs machines as its identity", async () => {
         const inputs: Record<string, unknown>[] = [];
-        const { client } = fake({ ...SUBNETS, ...ARM, RunInstances: run(inputs) });
+        const { client } = fake({ ...SUBNETS, ...GROUP, ...ARM, RunInstances: run(inputs) });
         const cloud = createAws({ region: "us-east-1", identity: "rig-machines", extra: { client } });
 
         expect(cloud.keys).toEqual(["id", "secret", "token?"]);
@@ -178,7 +192,7 @@ describe("aws: places", () => {
 describe("aws: create", () => {
     it("runs one demand machine in the zone's subnet, with the tags and the default image", async () => {
         const inputs: Record<string, unknown>[] = [];
-        const { client } = fake({ ...SUBNETS, ...ARM, RunInstances: run(inputs) });
+        const { client } = fake({ ...SUBNETS, ...GROUP, ...ARM, RunInstances: run(inputs) });
 
         const answer = await createAws({ region: "us-east-1", extra: { client } }).create(PLACE, SPEC);
 
@@ -199,9 +213,67 @@ describe("aws: create", () => {
         expect(inputs[0]).not.toHaveProperty("InstanceMarketOptions");
     });
 
+    it("makes the machine's own group first, with only the kind's ports, and runs the machine in it", async () => {
+        const inputs: Record<string, unknown>[] = [];
+        const { client, sent } = fake({ ...SUBNETS, ...GROUP, ...ARM, RunInstances: run(inputs) });
+
+        await createAws({ region: "us-east-1", extra: { client } }).create(PLACE, {
+            ...SPEC,
+            ports: [{ port: 22, from: "1.2.3.4/32" }],
+        });
+
+        const commands = sent.map((one) => {
+            return one.command;
+        });
+
+        expect(commands.indexOf("CreateSecurityGroup")).toBeLessThan(commands.indexOf("RunInstances"));
+
+        expect(
+            sent.find((one) => {
+                return one.command === "CreateSecurityGroup";
+            })!.input,
+        ).toMatchObject({
+            GroupName: `rig-${SPEC.name}`,
+            VpcId: "vpc-1",
+        });
+
+        expect(
+            sent.find((one) => {
+                return one.command === "AuthorizeSecurityGroupIngress";
+            })!.input,
+        ).toMatchObject({
+            GroupId: "sg-rig",
+            IpPermissions: [{ IpProtocol: "tcp", FromPort: 22, ToPort: 22, IpRanges: [{ CidrIp: "1.2.3.4/32" }] }],
+        });
+
+        expect(inputs[0]).toMatchObject({ SecurityGroupIds: ["sg-rig"] });
+        expect(commands).not.toContain("DeleteSecurityGroup");
+    });
+
+    it("leaves nothing behind after a failed try: its group is deleted", async () => {
+        const { client, sent } = fake({
+            ...SUBNETS,
+            ...GROUP,
+            ...ARM,
+            RunInstances: () => {
+                return fail("InsufficientInstanceCapacity");
+            },
+        });
+
+        expect(await createAws({ region: "us-east-1", extra: { client } }).create(PLACE, SPEC)).toMatchObject({
+            busy: "zone",
+        });
+
+        expect(
+            sent.find((one) => {
+                return one.command === "DeleteSecurityGroup";
+            })!.input,
+        ).toEqual({ GroupId: "sg-rig" });
+    });
+
     it("asks for a one-time spot machine that ends on a take-back", async () => {
         const inputs: Record<string, unknown>[] = [];
-        const { client } = fake({ ...SUBNETS, ...ARM, RunInstances: run(inputs) });
+        const { client } = fake({ ...SUBNETS, ...GROUP, ...ARM, RunInstances: run(inputs) });
 
         await createAws({ region: "us-east-1", extra: { client } }).create({ ...PLACE, market: Market.SPOT }, SPEC);
 
@@ -215,7 +287,7 @@ describe("aws: create", () => {
 
     it("sizes the root disk, and sends the script as user data", async () => {
         const inputs: Record<string, unknown>[] = [];
-        const { client } = fake({ ...SUBNETS, ...ARM, RunInstances: run(inputs) });
+        const { client } = fake({ ...SUBNETS, ...GROUP, ...ARM, RunInstances: run(inputs) });
 
         await createAws({ region: "us-east-1", extra: { client } }).create(PLACE, {
             ...SPEC,
@@ -231,7 +303,7 @@ describe("aws: create", () => {
 
     it("keeps the tags and the one try, whatever extra says", async () => {
         const inputs: Record<string, unknown>[] = [];
-        const { client } = fake({ ...SUBNETS, ...ARM, RunInstances: run(inputs) });
+        const { client } = fake({ ...SUBNETS, ...GROUP, ...ARM, RunInstances: run(inputs) });
 
         await createAws({ region: "us-east-1", extra: { client } }).create(PLACE, {
             ...SPEC,
@@ -250,6 +322,7 @@ describe("aws: create", () => {
         const answer = async (code: string) => {
             const { client } = fake({
                 ...SUBNETS,
+                ...GROUP,
                 ...ARM,
                 RunInstances: () => {
                     return fail(code);
@@ -347,41 +420,10 @@ describe("aws: machines", () => {
         );
     });
 
-    it("ends a gone machine with no terminate, still deleting its group and other gone machines' groups", async () => {
-        const { client, sent } = fake({
-            DescribeInstances: () => {
-                return fail("InvalidInstanceID.NotFound");
-            },
-            DescribeSecurityGroups: (input) => {
-                return (input.Filters as { Name: string }[])[0]!.Name === "tag-key"
-                    ? { SecurityGroups: [{ GroupId: "sg-old", Tags: [{ Key: "rig-machine", Value: "i-old" }] }] }
-                    : { SecurityGroups: [{ GroupId: "sg-gone" }] };
-            },
-            DeleteSecurityGroup: () => {
-                return {};
-            },
-        });
-
-        await createAws({ region: "us-east-1", extra: { client } }).end("i-gone");
-
-        const commands = sent.map((one) => {
-            return one.command;
-        });
-
-        expect(commands).not.toContain("TerminateInstances");
-
-        expect(
-            sent
-                .filter((one) => {
-                    return one.command === "DeleteSecurityGroup";
-                })
-                .map((one) => {
-                    return one.input.GroupId;
-                }),
-        ).toEqual(["sg-gone", "sg-old"]);
-    });
-
-    it("ends a running machine: its group off and deleted first, then terminate", async () => {
+    it("ends a machine, waits for it, then its own group; a young group of another try is left, an old one swept", async () => {
+        const old = String(Date.now() - 60 * 60_000);
+        const young = String(Date.now());
+        let state = "running";
         const { client, sent } = fake({
             DescribeInstances: () => {
                 return {
@@ -390,26 +432,40 @@ describe("aws: machines", () => {
                             Instances: [
                                 {
                                     InstanceId: "i-1",
-                                    State: { Name: "running" },
-                                    SecurityGroups: [{ GroupId: "sg-own" }, { GroupId: "sg-rig" }],
+                                    State: { Name: state },
+                                    SecurityGroups: [{ GroupId: "sg-own", GroupName: "rig-app-w-1" }],
                                 },
                             ],
                         },
                     ],
                 };
             },
-            DescribeSecurityGroups: (input) => {
-                return (input.Filters as { Name: string }[])[0]!.Name === "tag-key"
-                    ? { SecurityGroups: [] }
-                    : { SecurityGroups: [{ GroupId: "sg-rig" }] };
-            },
-            ModifyInstanceAttribute: () => {
+            TerminateInstances: () => {
+                state = "terminated";
+
                 return {};
+            },
+            DescribeSecurityGroups: () => {
+                return {
+                    SecurityGroups: [
+                        {
+                            GroupId: "sg-old",
+                            Tags: [
+                                { Key: "rig-machine", Value: "gone" },
+                                { Key: "rig-made", Value: old },
+                            ],
+                        },
+                        {
+                            GroupId: "sg-young",
+                            Tags: [
+                                { Key: "rig-machine", Value: "trying" },
+                                { Key: "rig-made", Value: young },
+                            ],
+                        },
+                    ],
+                };
             },
             DeleteSecurityGroup: () => {
-                return {};
-            },
-            TerminateInstances: () => {
                 return {};
             },
         });
@@ -420,13 +476,36 @@ describe("aws: machines", () => {
             return one.command;
         });
 
-        expect(commands.indexOf("DeleteSecurityGroup")).toBeLessThan(commands.indexOf("TerminateInstances"));
+        expect(commands.indexOf("TerminateInstances")).toBeLessThan(commands.indexOf("DeleteSecurityGroup"));
 
         expect(
-            sent.find((one) => {
-                return one.command === "ModifyInstanceAttribute";
-            })!.input.Groups,
-        ).toEqual(["sg-own"]);
+            sent
+                .filter((one) => {
+                    return one.command === "DeleteSecurityGroup";
+                })
+                .map((one) => {
+                    return one.input.GroupId;
+                }),
+        ).toEqual(["sg-own", "sg-old"]);
+    });
+
+    it("ends a gone machine with no terminate", async () => {
+        const { client, sent } = fake({
+            DescribeInstances: () => {
+                return fail("InvalidInstanceID.NotFound");
+            },
+            DescribeSecurityGroups: () => {
+                return { SecurityGroups: [] };
+            },
+        });
+
+        await createAws({ region: "us-east-1", extra: { client } }).end("i-gone");
+
+        expect(
+            sent.map((one) => {
+                return one.command;
+            }),
+        ).not.toContain("TerminateInstances");
     });
 
     it("refuses to stop a spot machine", async () => {
@@ -542,6 +621,67 @@ describe("aws: presets", () => {
     });
 });
 
+describe("aws: ports", () => {
+    it("opens IPv4 and IPv6 rules on the machine's own group, and lists both back", async () => {
+        const opened: Record<string, unknown>[] = [];
+        const { client } = fake({
+            DescribeInstances: () => {
+                return {
+                    Reservations: [
+                        {
+                            Instances: [
+                                {
+                                    InstanceId: "i-1",
+                                    SecurityGroups: [{ GroupId: "sg-rig", GroupName: "rig-app-w-1" }],
+                                },
+                            ],
+                        },
+                    ],
+                };
+            },
+            AuthorizeSecurityGroupIngress: (input) => {
+                opened.push(input);
+
+                return { SecurityGroupRules: [{ SecurityGroupRuleId: `sgr-${opened.length}` }] };
+            },
+            DescribeSecurityGroupRules: () => {
+                return {
+                    SecurityGroupRules: [
+                        {
+                            SecurityGroupRuleId: "sgr-1",
+                            IpProtocol: "tcp",
+                            FromPort: 22,
+                            ToPort: 22,
+                            CidrIpv4: "1.2.3.4/32",
+                        },
+                        {
+                            SecurityGroupRuleId: "sgr-2",
+                            IpProtocol: "tcp",
+                            FromPort: 443,
+                            ToPort: 443,
+                            CidrIpv6: "::/0",
+                        },
+                        { SecurityGroupRuleId: "sgr-out", IsEgress: true, IpProtocol: "-1" },
+                    ],
+                };
+            },
+        });
+
+        const { port } = createAws({ region: "us-east-1", extra: { client } });
+
+        expect(await port!.open("i-1", { port: 22, from: "1.2.3.4/32" })).toMatchObject({ id: "sgr-1" });
+        await port!.open("i-1", { port: 443, from: "::/0" });
+
+        expect((opened[0]!.IpPermissions as object[])[0]).toMatchObject({ IpRanges: [{ CidrIp: "1.2.3.4/32" }] });
+        expect((opened[1]!.IpPermissions as object[])[0]).toMatchObject({ Ipv6Ranges: [{ CidrIpv6: "::/0" }] });
+
+        expect(await port!.list("i-1")).toEqual([
+            { id: "sgr-1", port: 22, proto: "tcp", from: "1.2.3.4/32" },
+            { id: "sgr-2", port: 443, proto: "tcp", from: "::/0" },
+        ]);
+    });
+});
+
 describe("aws: shape", () => {
     const { shape } = createAws({ region: "us-east-1", extra: { client: fake({}).client } });
 
@@ -616,6 +756,7 @@ describe("aws: with the core", () => {
     it("checks at open, and creates a machine from a preset", async () => {
         const { client, sent } = fake({
             ...SUBNETS,
+            ...GROUP,
             ...ARM,
             DescribeAvailabilityZones: () => {
                 return {};

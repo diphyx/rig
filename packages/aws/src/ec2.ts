@@ -12,6 +12,9 @@ import type { AwsExtra } from "./config.js";
 
 export type Arch = "arm64" | "x86_64";
 
+/** A zone's subnet, and the VPC it is in. */
+export type Subnet = { subnet: string; vpc: string };
+
 /** An AWS error's code. */
 export function codeOf(error: unknown): string {
     return (error as { name?: string }).name ?? "";
@@ -31,14 +34,14 @@ export function createEc2(region: string, extra: AwsExtra, keys: Keys | null) {
     const arches = new Map<string, Arch>();
     const roots = new Map<string, string>();
 
-    let subnets: Promise<Map<string, string>> | null = null;
+    let subnets: Promise<Map<string, Subnet>> | null = null;
 
     return {
         send,
 
-        /** zone → subnet: the given subnets, or the default VPC's; found once. */
-        subnets(): Promise<Map<string, string>> {
-            subnets ??= send<{ Subnets?: { SubnetId?: string; AvailabilityZone?: string }[] }>(
+        /** zone → its subnet and VPC: the given subnets, or the default VPC's; found once. */
+        subnets(): Promise<Map<string, Subnet>> {
+            subnets ??= send<{ Subnets?: { SubnetId?: string; AvailabilityZone?: string; VpcId?: string }[] }>(
                 new DescribeSubnetsCommand(
                     extra.subnets
                         ? { SubnetIds: extra.subnets }
@@ -47,7 +50,7 @@ export function createEc2(region: string, extra: AwsExtra, keys: Keys | null) {
             ).then((answer) => {
                 return new Map(
                     (answer.Subnets ?? []).map((subnet) => {
-                        return [subnet.AvailabilityZone!, subnet.SubnetId!];
+                        return [subnet.AvailabilityZone!, { subnet: subnet.SubnetId!, vpc: subnet.VpcId! }];
                     }),
                 );
             });

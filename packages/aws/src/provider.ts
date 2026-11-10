@@ -28,6 +28,8 @@ import {
     type Tags,
 } from "@diphyx/rig";
 
+import { sleep, tryit } from "radash";
+
 import { KEYS, resolveAuth } from "./auth.js";
 import { type AwsConfig, checkConfig } from "./config.js";
 import { busyOf, PRESETS, RIG, toAws } from "./data.js";
@@ -38,6 +40,9 @@ import { createPorts } from "./ports.js";
 import { shapeOf } from "./shape.js";
 
 export type Aws = Provider & { keys: string[]; presets: Presets };
+
+/* How long `end` waits for a machine to terminate, so its group can go: up to 5 minutes. */
+const TERMINATING = { every: 5000, tries: 60 };
 
 /* Ubuntu 24.04, by Canonical's public SSM parameter. */
 const UBUNTU = {
@@ -60,8 +65,23 @@ export function createAws(config: AwsConfig): Aws {
     const ec2 = createEc2(config.region, extra, resolveAuth(name, config.auth));
     const ports = createPorts(ec2);
 
+    /* Terminated, and waited for: its group is held until then; one held longer is left for a sweep. */
+    async function terminate(id: string): Promise<void> {
+        await ec2.send(new TerminateInstancesCommand({ InstanceIds: [id] }));
+
+        for (let tries = 0; tries < TERMINATING.tries; tries += 1) {
+            const instance = await ec2.instance(id);
+
+            if (!instance || instance.State?.Name === "terminated") {
+                return;
+            }
+
+            await sleep(TERMINATING.every);
+        }
+    }
+
     /* §11: one try. `spec.extra` goes first, so the one try and the tags always win. */
-    async function input(place: Place, spec: Spec): Promise<RunInstancesCommandInput> {
+    async function input(place: Place, spec: Spec, subnet: string, group: string): Promise<RunInstancesCommandInput> {
         const image = spec.image ?? UBUNTU[await ec2.arch(place.type)];
         const tags = awsTags({ Name: spec.name, ...spec.tags });
 
@@ -71,7 +91,8 @@ export function createAws(config: AwsConfig): Aws {
             InstanceType: place.type as never,
             MinCount: 1,
             MaxCount: 1,
-            SubnetId: (await ec2.subnets()).get(place.zone),
+            SubnetId: subnet,
+            SecurityGroupIds: [group],
             MetadataOptions: { HttpTokens: "required", HttpEndpoint: "enabled" },
             TagSpecifications: [
                 { ResourceType: "instance", Tags: tags },
@@ -137,15 +158,21 @@ export function createAws(config: AwsConfig): Aws {
                 });
         },
 
-        /** §11: exactly one try; no room is `busy`, by the data file; anything else throws. */
+        /** §11: exactly one try, behind a security group of its own made first; no room is `busy`, by the data file; anything else throws. */
         async create(place: Place, spec: Spec): Promise<Answer> {
+            const { subnet, vpc } = (await ec2.subnets()).get(place.zone)!;
+            const group = await ports.make(spec.name, vpc, spec.ports);
+
             try {
                 const answer = await ec2.send<{ Instances?: Instance[] }>(
-                    new RunInstancesCommand(await input(place, spec)),
+                    new RunInstancesCommand(await input(place, spec, subnet, group)),
                 );
 
                 return { ok: { id: answer.Instances![0]!.InstanceId! } };
             } catch (error) {
+                /* §11: a failed try leaves nothing it made; a group that will not go is left for a sweep. */
+                await tryit(ports.remove)(group);
+
                 const busy = busyOf(codeOf(error));
 
                 if (busy) {
@@ -193,14 +220,17 @@ export function createAws(config: AwsConfig): Aws {
             return machines;
         },
 
-        /** §11: its port rules go first, then the machine; an ended one still loses what it left. The root disk goes with it. */
+        /** §11: the machine, waited for, then its group; groups of machines gone earlier go too. The root disk goes with it. */
         async end(id: string): Promise<void> {
             const instance = await ec2.instance(id);
-
-            await ports.release(id);
+            const group = await ports.groupOf(id);
 
             if (instance && instance.State?.Name !== "terminated") {
-                await ec2.send(new TerminateInstancesCommand({ InstanceIds: [id] }));
+                await terminate(id);
+            }
+
+            if (group) {
+                await ports.remove(group);
             }
 
             await ports.sweep();
