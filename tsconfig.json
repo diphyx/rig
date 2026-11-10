@@ -6,6 +6,9 @@
         },
         {
             "path": "packages/aws"
+        },
+        {
+            "path": "packages/gcp"
         }
     ]
 }

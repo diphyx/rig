@@ -1,0 +1,51 @@
+{
+    "name": "@diphyx/rig-gcp",
+    "version": "1.0.0",
+    "description": "The gcp provider for rig: Compute Engine, spot and demand",
+    "keywords": [
+        "rig",
+        "rig-provider",
+        "gcp",
+        "google-cloud",
+        "compute-engine",
+        "spot"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/diphyx/rig.git",
+        "directory": "packages/gcp"
+    },
+    "homepage": "https://github.com/diphyx/rig#readme",
+    "bugs": {
+        "url": "https://github.com/diphyx/rig/issues"
+    },
+    "license": "MIT",
+    "author": "Amir Reza Dalir",
+    "type": "module",
+    "sideEffects": false,
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc -b"
+    },
+    "engines": {
+        "node": ">=22"
+    },
+    "dependencies": {
+        "google-auth-library": "^11.3.4",
+        "radash": "^12.1.1"
+    },
+    "devDependencies": {
+        "@diphyx/rig": "workspace:^"
+    },
+    "peerDependencies": {
+        "@diphyx/rig": "workspace:^"
+    }
+}

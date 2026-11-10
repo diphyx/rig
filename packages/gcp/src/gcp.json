@@ -1,0 +1,122 @@
+{
+    "rig": 1,
+    "name": "gcp",
+    "busy": {
+        "ZONE_RESOURCE_POOL_EXHAUSTED": "zone",
+        "ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS": "zone",
+        "QUOTA_EXCEEDED": "account",
+        "quotaExceeded": "account"
+    },
+    "tags": {},
+    "presets": {
+        "small": {
+            "arm": ["t2a-standard-1", "c4a-standard-1"],
+            "x86": ["e2-small", "e2-medium"]
+        },
+        "general": {
+            "arm": {
+                "2": ["c4a-standard-2", "t2a-standard-2"],
+                "4": ["c4a-standard-4", "t2a-standard-4"],
+                "8": ["c4a-standard-8", "t2a-standard-8"],
+                "16": ["c4a-standard-16", "t2a-standard-16"],
+                "32": ["c4a-standard-32", "t2a-standard-32"],
+                "48": ["c4a-standard-48", "t2a-standard-48"],
+                "64": ["c4a-standard-64", "t2a-standard-64"]
+            },
+            "x86": {
+                "2": ["n4-standard-2", "n2-standard-2", "e2-standard-2"],
+                "4": ["n4-standard-4", "n2-standard-4", "e2-standard-4"],
+                "8": ["n4-standard-8", "n2-standard-8", "e2-standard-8"],
+                "16": ["n4-standard-16", "n2-standard-16", "e2-standard-16"],
+                "32": ["n4-standard-32", "n2-standard-32", "e2-standard-32"],
+                "48": ["n4-standard-48", "n2-standard-48", "e2-standard-48"],
+                "64": ["n4-standard-64", "n2-standard-64", "e2-standard-64"]
+            }
+        },
+        "compute": {
+            "arm": {
+                "2": ["c4a-highcpu-2"],
+                "4": ["c4a-highcpu-4"],
+                "8": ["c4a-highcpu-8"],
+                "16": ["c4a-highcpu-16"],
+                "32": ["c4a-highcpu-32"],
+                "48": ["c4a-highcpu-48"],
+                "64": ["c4a-highcpu-64"]
+            },
+            "x86": {
+                "2": ["c3-highcpu-2", "n2-highcpu-2", "e2-highcpu-2"],
+                "4": ["c3-highcpu-4", "n2-highcpu-4", "e2-highcpu-4"],
+                "8": ["c3-highcpu-8", "n2-highcpu-8", "e2-highcpu-8"],
+                "16": ["c3-highcpu-16", "n2-highcpu-16", "e2-highcpu-16"],
+                "32": ["c3-highcpu-32", "n2-highcpu-32", "e2-highcpu-32"],
+                "48": ["c3-highcpu-48", "n2-highcpu-48", "e2-highcpu-48"],
+                "64": ["c3-highcpu-64", "n2-highcpu-64", "e2-highcpu-64"]
+            }
+        },
+        "memory": {
+            "arm": {
+                "16": ["c4a-highmem-2"],
+                "32": ["c4a-highmem-4"],
+                "64": ["c4a-highmem-8"],
+                "128": ["c4a-highmem-16"],
+                "256": ["c4a-highmem-32"],
+                "512": ["c4a-highmem-64"]
+            },
+            "x86": {
+                "16": ["n4-highmem-2", "n2-highmem-2", "e2-highmem-2"],
+                "32": ["n4-highmem-4", "n2-highmem-4", "e2-highmem-4"],
+                "64": ["n4-highmem-8", "n2-highmem-8", "e2-highmem-8"],
+                "128": ["n4-highmem-16", "n2-highmem-16", "e2-highmem-16"],
+                "256": ["n4-highmem-32", "n2-highmem-32", "e2-highmem-32"],
+                "512": ["n4-highmem-64", "n2-highmem-64", "e2-highmem-64"]
+            }
+        },
+        "gpu": {
+            "x86": {
+                "l4": ["g2-standard-4", "g2-standard-8"],
+                "a100": ["a2-highgpu-1g"],
+                "h100": ["a3-highgpu-1g", "a3-highgpu-8g"]
+            }
+        }
+    },
+    "shapes": {
+        "memory": {
+            "standard": 4,
+            "highcpu": 2,
+            "highmem": 8
+        },
+        "arm": ["t2a", "c4a"],
+        "gpu": {
+            "g2": "l4"
+        },
+        "fixed": {
+            "e2-micro": {
+                "cpu": 2,
+                "mem": 1
+            },
+            "e2-small": {
+                "cpu": 2,
+                "mem": 2
+            },
+            "e2-medium": {
+                "cpu": 2,
+                "mem": 4
+            },
+            "a2-highgpu-1g": {
+                "cpu": 12,
+                "mem": 85,
+                "gpu": "a100"
+            },
+            "a3-highgpu-1g": {
+                "cpu": 26,
+                "mem": 234,
+                "gpu": "h100"
+            },
+            "a3-highgpu-8g": {
+                "cpu": 208,
+                "mem": 1872,
+                "gpu": "h100"
+            }
+        }
+    }
+}
