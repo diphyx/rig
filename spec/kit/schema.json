@@ -6,11 +6,26 @@
     "required": ["rig", "area", "description", "cases"],
     "additionalProperties": false,
     "properties": {
-        "$schema": { "type": "string" },
-        "rig": { "const": 1 },
-        "area": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
-        "description": { "type": "string" },
-        "cases": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/case" } }
+        "$schema": {
+            "type": "string"
+        },
+        "rig": {
+            "const": 1
+        },
+        "area": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "description": {
+            "type": "string"
+        },
+        "cases": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "$ref": "#/$defs/case"
+            }
+        }
     },
     "$defs": {
         "case": {
@@ -18,10 +33,23 @@
             "required": ["id", "description", "given", "steps"],
             "additionalProperties": false,
             "properties": {
-                "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*/[a-z][a-z0-9-]*$" },
-                "description": { "type": "string" },
-                "given": { "$ref": "#/$defs/given" },
-                "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/step" } }
+                "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]*/[a-z][a-z0-9-]*$"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "given": {
+                    "$ref": "#/$defs/given"
+                },
+                "steps": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/$defs/step"
+                    }
+                }
             }
         },
         "given": {
@@ -31,16 +59,22 @@
             "properties": {
                 "config": {
                     "type": "object",
-                    "description": "the core's config; each provider written as a fake, README §3"
+                    "description": "the core's config; each provider written as a fake, README \u00a73"
                 },
                 "fake": {
                     "type": "object",
-                    "additionalProperties": { "$ref": "#/$defs/fake" }
+                    "additionalProperties": {
+                        "$ref": "#/$defs/fake"
+                    }
                 },
                 "store": {
                     "type": "object",
                     "additionalProperties": false,
-                    "properties": { "risk": { "type": "object" } }
+                    "properties": {
+                        "risk": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
@@ -49,18 +83,51 @@
             "required": ["places", "answers"],
             "additionalProperties": false,
             "properties": {
-                "places": { "type": "array", "items": { "type": "object" } },
+                "places": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                },
                 "answers": {
                     "type": "object",
-                    "propertyNames": { "pattern": "^(spot|demand)/[^/]+/[^/]+$" },
+                    "propertyNames": {
+                        "pattern": "^(spot|demand)/[^/]+/[^/]+$"
+                    },
                     "additionalProperties": {
                         "oneOf": [
-                            { "$ref": "#/$defs/answer" },
-                            { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/answer" } }
+                            {
+                                "$ref": "#/$defs/answer"
+                            },
+                            {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                    "$ref": "#/$defs/answer"
+                                }
+                            }
                         ]
                     }
                 },
-                "machines": { "type": "array", "items": { "type": "object" } }
+                "machines": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                },
+                "boot": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "throws": {
+                    "type": "array",
+                    "items": {
+                        "enum": ["places", "create", "get", "list", "end"]
+                    }
+                },
+                "filter": {
+                    "type": "boolean"
+                }
             }
         },
         "answer": {
@@ -71,47 +138,91 @@
             "type": "object",
             "required": ["do"],
             "properties": {
-                "do": { "enum": ["open", "close", "round", "call", "take-back", "clock"] },
-                "expect": { "$ref": "#/$defs/expect" }
+                "do": {
+                    "enum": ["open", "close", "round", "call", "take-back", "clock"]
+                },
+                "expect": {
+                    "$ref": "#/$defs/expect"
+                }
             },
             "allOf": [
                 {
-                    "if": { "properties": { "do": { "const": "call" } } },
+                    "if": {
+                        "properties": {
+                            "do": {
+                                "const": "call"
+                            }
+                        }
+                    },
                     "then": {
                         "required": ["call", "args"],
                         "properties": {
                             "do": true,
                             "expect": true,
-                            "call": { "type": "string" },
-                            "args": { "type": "array" }
+                            "call": {
+                                "type": "string"
+                            },
+                            "args": {
+                                "type": "array"
+                            }
                         },
                         "additionalProperties": false
                     }
                 },
                 {
-                    "if": { "properties": { "do": { "const": "take-back" } } },
+                    "if": {
+                        "properties": {
+                            "do": {
+                                "const": "take-back"
+                            }
+                        }
+                    },
                     "then": {
                         "required": ["id"],
-                        "properties": { "do": true, "expect": true, "id": { "type": "string" } },
+                        "properties": {
+                            "do": true,
+                            "expect": true,
+                            "id": {
+                                "type": "string"
+                            }
+                        },
                         "additionalProperties": false
                     }
                 },
                 {
-                    "if": { "properties": { "do": { "const": "clock" } } },
+                    "if": {
+                        "properties": {
+                            "do": {
+                                "const": "clock"
+                            }
+                        }
+                    },
                     "then": {
                         "required": ["by"],
                         "properties": {
                             "do": true,
                             "expect": true,
-                            "by": { "type": "string", "pattern": "^[0-9]+(s|m|h|d)$" }
+                            "by": {
+                                "type": "string",
+                                "pattern": "^[0-9]+(s|m|h|d)$"
+                            }
                         },
                         "additionalProperties": false
                     }
                 },
                 {
-                    "if": { "properties": { "do": { "enum": ["open", "close", "round"] } } },
+                    "if": {
+                        "properties": {
+                            "do": {
+                                "enum": ["open", "close", "round"]
+                            }
+                        }
+                    },
                     "then": {
-                        "properties": { "do": true, "expect": true },
+                        "properties": {
+                            "do": true,
+                            "expect": true
+                        },
                         "additionalProperties": false
                     }
                 }
@@ -123,21 +234,33 @@
             "properties": {
                 "result": {},
                 "refusal": {
-                    "enum": ["generation", "plugin", "config", "guard", "unsupported", "unknown", "closed"]
+                    "enum": ["generation", "plugin", "config", "guard", "unsupported", "unknown", "closed", "timeout"]
                 },
-                "throws": { "const": true },
+                "throws": {
+                    "const": true
+                },
                 "events": {
                     "type": "array",
                     "items": {
                         "type": "object",
                         "required": ["event"],
-                        "properties": { "event": { "type": "string" } }
+                        "properties": {
+                            "event": {
+                                "type": "string"
+                            }
+                        }
                     }
                 },
-                "store": { "type": "object" },
-                "fake": { "type": "object" }
+                "store": {
+                    "type": "object"
+                },
+                "fake": {
+                    "type": "object"
+                }
             },
-            "not": { "required": ["refusal", "throws"] }
+            "not": {
+                "required": ["refusal", "throws"]
+            }
         }
     }
 }

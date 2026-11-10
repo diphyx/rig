@@ -54,15 +54,16 @@ In `config.providers`, each provider is written as data:
 { "name": "a", "can": { "spot": true, "stop": true } }
 ```
 
-`rig` is `1` unless given. The runner MUST turn it into a fake provider that follows the spec's provider rules, with every call that `can` enables and no other.
+`rig` is `1` unless given. The runner MUST turn it into a fake provider that follows the spec's provider rules, with every call that `can` enables and no other. With `"check": "fail"`, the fake has a `check` that throws; with `"check": "ok"`, one that passes; absent, no `check`.
 
 `fake.<name>`:
 
-| Key        | Is                                                                                      |
-| ---------- | --------------------------------------------------------------------------------------- |
-| `places`   | every place it sells; `places(entry)` returns those of the entry's markets and types    |
-| `answers`  | `"<market>/<type>/<zone>"` → an answer, or a list of answers given in turn, one per try |
-| `machines` | optional: machines it runs before the first step                                        |
+| Key        | Is                                                                                       |
+| ---------- | ---------------------------------------------------------------------------------------- |
+| `places`   | every place it sells; `places(entry)` returns those of the entry's markets and types     |
+| `answers`  | `"<market>/<type>/<zone>"` → an answer, or a list of answers given in turn, one per try  |
+| `machines` | optional: machines it runs before the first step                                         |
+| `boot`     | optional: how many `get` calls a new machine stays `pending` before it is `running`; `0` |
 
 | Answer          | The fake                                                                     |
 | --------------- | ---------------------------------------------------------------------------- |
@@ -71,8 +72,10 @@ In `config.providers`, each provider is written as data:
 | `"throw"`       | throws                                                                       |
 
 - A try at a place with no answer left MUST fail the case: the core tried what it should not.
-- After `ok`, the fake runs the machine: `status: "running"`, the place's market, type and zone, `spec.tags`, `created` at the clock.
+- After `ok`, the fake runs the machine: `status: "running"` (or `"pending"`, with `boot`), the place's market, type and zone, `spec.tags`, `ip: { private: "10.0.0.<n>" }` for id `m<n>`, `created` at the clock.
+- With `can.disk`, every machine has a disk of `30` GB: `disk.grow` sets its size, `disk.get` gives `{ gb, ready: true }`.
 - `end` makes a machine `ended`. `list` never returns an `ended` machine.
+- `get` and `list` MUST return copies, as a real provider does: a later change in the fake MUST NOT show through what the core already holds.
 
 ## 4. Steps
 
@@ -117,6 +120,6 @@ An event is matched as `{ "event": "<name>", ...data }`. A `try` event is writte
 
 ## 7. Running
 
-A runner reads every file, builds the fakes, plays the steps and matches. A lib SHOULD run the whole kit in its own tests, on every change. The core MUST let the runner set its clock; how is the lib's choice.
+A runner reads every file, builds the fakes, plays the steps and matches. A lib SHOULD run the whole kit in its own tests, on every change. The core MUST let the runner set its clock, and its sleep between polls: a sleep moves the clock forward by its length, at once. How is the lib's choice.
 
 A runner reports one line per case: its `id`, and `pass` or `fail` with the first mismatch.

@@ -493,7 +493,7 @@
         },
         {
             "id": "rounds/life",
-            "description": "a machine older than its kind's life is ended",
+            "description": "a machine older than its kind's life is ended, and stays ended",
             "given": {
                 "config": {
                     "rig": 1,
@@ -611,6 +611,20 @@
                                 ]
                             }
                         }
+                    }
+                },
+                {
+                    "do": "round",
+                    "expect": {
+                        "events": []
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "machine.list",
+                    "args": [],
+                    "expect": {
+                        "result": []
                     }
                 }
             ]
@@ -1152,6 +1166,252 @@
                                 "machines": [
                                     {
                                         "id": "m1",
+                                        "status": "running"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "rounds/copy",
+            "description": "a round copies status and ip into the store",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "round"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.list",
+                    "args": [],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "m1",
+                                "status": "running",
+                                "ip": {
+                                    "private": "10.0.0.1"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "rounds/foreign",
+            "description": "a machine list gives without this app's tags is never touched, even if the provider does not filter",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {},
+                        "filter": false,
+                        "machines": [
+                            {
+                                "id": "x1",
+                                "status": "running",
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za",
+                                "created": 0,
+                                "tags": {
+                                    "rig": "1",
+                                    "rig-app": "other",
+                                    "rig-kind": "d",
+                                    "rig-name": "other-d-00000001"
+                                }
+                            },
+                            {
+                                "id": "x2",
+                                "status": "running",
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za",
+                                "created": 0,
+                                "tags": {
+                                    "rig": "2",
+                                    "rig-app": "app",
+                                    "rig-kind": "d",
+                                    "rig-name": "app-d-00000002"
+                                }
+                            }
+                        ]
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open",
+                    "expect": {
+                        "events": []
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "machine.list",
+                    "args": [],
+                    "expect": {
+                        "result": []
+                    }
+                },
+                {
+                    "do": "round",
+                    "expect": {
+                        "events": [],
+                        "fake": {
+                            "a": {
+                                "machines": [
+                                    {
+                                        "id": "x1",
+                                        "status": "running"
+                                    },
+                                    {
+                                        "id": "x2",
                                         "status": "running"
                                     }
                                 ]
