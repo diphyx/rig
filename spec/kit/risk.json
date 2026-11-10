@@ -2,11 +2,171 @@
     "$schema": "./schema.json",
     "rig": 1,
     "area": "risk",
-    "description": "risk.max, and the core's own count of lost machines.",
+    "description": "The core's own risk: prior from shape, counts, pressure, risk.max.",
     "cases": [
         {
-            "id": "risk/rate-above-max",
-            "description": "a published rate above risk.max removes the place",
+            "id": "risk/prior",
+            "description": "with no counts, risk is the prior from each type's shape; demand is 0; no shape is 8",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {},
+                        "shapes": {
+                            "t1": {
+                                "cpu": 8,
+                                "mem": 16,
+                                "arch": "x86"
+                            },
+                            "t2": {
+                                "cpu": 2,
+                                "mem": 4,
+                                "arch": "arm"
+                            }
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "place.list",
+                    "args": ["w"],
+                    "expect": {
+                        "result": [
+                            {
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za",
+                                "risk": {
+                                    "prior": 10,
+                                    "takeback": 10,
+                                    "pressure": 0
+                                }
+                            },
+                            {
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb",
+                                "risk": {
+                                    "prior": 10,
+                                    "takeback": 10,
+                                    "pressure": 0
+                                }
+                            },
+                            {
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za",
+                                "risk": {
+                                    "prior": 4,
+                                    "takeback": 4,
+                                    "pressure": 0
+                                }
+                            },
+                            {
+                                "provider": "a",
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za",
+                                "risk": {
+                                    "prior": 0,
+                                    "takeback": 0,
+                                    "pressure": 0
+                                }
+                            },
+                            {
+                                "provider": "b",
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za",
+                                "risk": {
+                                    "prior": 8,
+                                    "takeback": 8,
+                                    "pressure": 0
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "risk/max-prior",
+            "description": "risk.max removes a place whose prior is above it, before any try",
             "given": {
                 "config": {
                     "rig": 1,
@@ -42,7 +202,7 @@
                                 }
                             ],
                             "risk": {
-                                "max": "10%"
+                                "max": "9%"
                             }
                         }
                     ]
@@ -53,8 +213,7 @@
                             {
                                 "market": "spot",
                                 "type": "t1",
-                                "zone": "za",
-                                "rate": ">20%"
+                                "zone": "za"
                             },
                             {
                                 "market": "spot",
@@ -73,7 +232,19 @@
                             }
                         ],
                         "answers": {
-                            "spot/t1/zb": "ok"
+                            "spot/t2/za": "ok"
+                        },
+                        "shapes": {
+                            "t1": {
+                                "cpu": 8,
+                                "mem": 16,
+                                "arch": "x86"
+                            },
+                            "t2": {
+                                "cpu": 2,
+                                "mem": 4,
+                                "arch": "arm"
+                            }
                         }
                     },
                     "b": {
@@ -101,7 +272,7 @@
                             {
                                 "event": "try",
                                 "kind": "w",
-                                "place": "a/spot/t1/zb",
+                                "place": "a/spot/t2/za",
                                 "answer": "ok"
                             },
                             {
@@ -113,8 +284,8 @@
             ]
         },
         {
-            "id": "risk/rate-at-max",
-            "description": "a rate whose upper bound equals risk.max is kept",
+            "id": "risk/max-equal",
+            "description": "a place exactly at risk.max is kept",
             "given": {
                 "config": {
                     "rig": 1,
@@ -161,8 +332,7 @@
                             {
                                 "market": "spot",
                                 "type": "t1",
-                                "zone": "za",
-                                "rate": "5-10%"
+                                "zone": "za"
                             },
                             {
                                 "market": "spot",
@@ -182,6 +352,18 @@
                         ],
                         "answers": {
                             "spot/t1/za": "ok"
+                        },
+                        "shapes": {
+                            "t1": {
+                                "cpu": 8,
+                                "mem": 16,
+                                "arch": "x86"
+                            },
+                            "t2": {
+                                "cpu": 2,
+                                "mem": 4,
+                                "arch": "arm"
+                            }
                         }
                     },
                     "b": {
@@ -221,8 +403,8 @@
             ]
         },
         {
-            "id": "risk/seen-above-max",
-            "description": "the core's own count above risk.max removes the place",
+            "id": "risk/counts",
+            "description": "every try and every busy answer is counted at its place",
             "given": {
                 "config": {
                     "rig": 1,
@@ -256,10 +438,7 @@
                                     "market": ["spot"],
                                     "types": ["t3"]
                                 }
-                            ],
-                            "risk": {
-                                "max": "10%"
-                            }
+                            ]
                         }
                     ]
                 },
@@ -288,7 +467,141 @@
                             }
                         ],
                         "answers": {
+                            "spot/t1/za": "busy zone",
                             "spot/t1/zb": "ok"
+                        },
+                        "shapes": {
+                            "t1": {
+                                "cpu": 8,
+                                "mem": 16,
+                                "arch": "x86"
+                            },
+                            "t2": {
+                                "cpu": 2,
+                                "mem": 4,
+                                "arch": "arm"
+                            }
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["w"],
+                    "expect": {
+                        "store": {
+                            "risk": {
+                                "a/spot/t1/za": {
+                                    "tries": 1,
+                                    "busy": 1,
+                                    "created": 0,
+                                    "lost": 0,
+                                    "hours": 0
+                                },
+                                "a/spot/t1/zb": {
+                                    "tries": 1,
+                                    "busy": 0,
+                                    "created": 1,
+                                    "lost": 0,
+                                    "hours": 0
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "risk/pressure",
+            "description": "a place often busy is riskier: prior \u00d7 (1 + busy \u00f7 (tries + 5))",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {},
+                        "shapes": {
+                            "t1": {
+                                "cpu": 8,
+                                "mem": 16,
+                                "arch": "x86"
+                            },
+                            "t2": {
+                                "cpu": 2,
+                                "mem": 4,
+                                "arch": "arm"
+                            }
                         }
                     },
                     "b": {
@@ -305,9 +618,174 @@
                 "store": {
                     "risk": {
                         "a/spot/t1/za": {
+                            "tries": 15,
+                            "busy": 10,
+                            "created": 0,
+                            "lost": 0,
+                            "hours": 0
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "place.list",
+                    "args": ["w"],
+                    "expect": {
+                        "result": [
+                            {
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za",
+                                "risk": {
+                                    "prior": 10,
+                                    "pressure": 50,
+                                    "takeback": 15
+                                }
+                            },
+                            {
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb",
+                                "risk": {
+                                    "takeback": 10
+                                }
+                            },
+                            {
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za",
+                                "risk": {
+                                    "takeback": 4
+                                }
+                            },
+                            {
+                                "provider": "a",
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za",
+                                "risk": {
+                                    "takeback": 0
+                                }
+                            },
+                            {
+                                "provider": "b",
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za",
+                                "risk": {
+                                    "takeback": 8
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "risk/counts-lead",
+            "description": "machine-months with no loss bring the prior down",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {},
+                        "shapes": {
+                            "t1": {
+                                "cpu": 8,
+                                "mem": 16,
+                                "arch": "x86"
+                            },
+                            "t2": {
+                                "cpu": 2,
+                                "mem": 4,
+                                "arch": "arm"
+                            }
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                },
+                "store": {
+                    "risk": {
+                        "a/spot/t1/za": {
+                            "tries": 10,
+                            "busy": 0,
                             "created": 10,
-                            "lost": 2,
-                            "hours": 5
+                            "lost": 0,
+                            "hours": 7300
                         }
                     }
                 }
@@ -318,18 +796,55 @@
                 },
                 {
                     "do": "call",
-                    "call": "machine.create",
+                    "call": "place.list",
                     "args": ["w"],
                     "expect": {
-                        "events": [
+                        "result": [
                             {
-                                "event": "try",
-                                "kind": "w",
-                                "place": "a/spot/t1/zb",
-                                "answer": "ok"
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za",
+                                "risk": {
+                                    "prior": 10,
+                                    "takeback": 1.7
+                                }
                             },
                             {
-                                "event": "machine:created"
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb",
+                                "risk": {
+                                    "takeback": 10
+                                }
+                            },
+                            {
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za",
+                                "risk": {
+                                    "takeback": 4
+                                }
+                            },
+                            {
+                                "provider": "a",
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za",
+                                "risk": {
+                                    "takeback": 0
+                                }
+                            },
+                            {
+                                "provider": "b",
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za",
+                                "risk": {
+                                    "takeback": 8
+                                }
                             }
                         ]
                     }
@@ -337,8 +852,8 @@
             ]
         },
         {
-            "id": "risk/seen-too-few",
-            "description": "fewer than 10 created does not count",
+            "id": "risk/lost-raises",
+            "description": "losses raise the estimate past the prior",
             "given": {
                 "config": {
                     "rig": 1,
@@ -372,10 +887,169 @@
                                     "market": ["spot"],
                                     "types": ["t3"]
                                 }
-                            ],
-                            "risk": {
-                                "max": "10%"
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
                             }
+                        ],
+                        "answers": {},
+                        "shapes": {
+                            "t1": {
+                                "cpu": 8,
+                                "mem": 16,
+                                "arch": "x86"
+                            },
+                            "t2": {
+                                "cpu": 2,
+                                "mem": 4,
+                                "arch": "arm"
+                            }
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                },
+                "store": {
+                    "risk": {
+                        "a/spot/t1/za": {
+                            "tries": 2,
+                            "busy": 0,
+                            "created": 2,
+                            "lost": 2,
+                            "hours": 1460
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "place.list",
+                    "args": ["w"],
+                    "expect": {
+                        "result": [
+                            {
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za",
+                                "risk": {
+                                    "prior": 10,
+                                    "takeback": 55
+                                }
+                            },
+                            {
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb",
+                                "risk": {
+                                    "takeback": 10
+                                }
+                            },
+                            {
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za",
+                                "risk": {
+                                    "takeback": 4
+                                }
+                            },
+                            {
+                                "provider": "a",
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za",
+                                "risk": {
+                                    "takeback": 0
+                                }
+                            },
+                            {
+                                "provider": "b",
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za",
+                                "risk": {
+                                    "takeback": 8
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "risk/running-hours",
+            "description": "the hours of running machines count, before they leave",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ]
                         }
                     ]
                 },
@@ -405,6 +1079,18 @@
                         ],
                         "answers": {
                             "spot/t1/za": "ok"
+                        },
+                        "shapes": {
+                            "t1": {
+                                "cpu": 8,
+                                "mem": 16,
+                                "arch": "x86"
+                            },
+                            "t2": {
+                                "cpu": 2,
+                                "mem": 4,
+                                "arch": "arm"
+                            }
                         }
                     },
                     "b": {
@@ -417,15 +1103,6 @@
                         ],
                         "answers": {}
                     }
-                },
-                "store": {
-                    "risk": {
-                        "a/spot/t1/za": {
-                            "created": 9,
-                            "lost": 9,
-                            "hours": 1
-                        }
-                    }
                 }
             },
             "steps": [
@@ -435,17 +1112,62 @@
                 {
                     "do": "call",
                     "call": "machine.create",
+                    "args": ["w"]
+                },
+                {
+                    "do": "clock",
+                    "by": "730h"
+                },
+                {
+                    "do": "call",
+                    "call": "place.list",
                     "args": ["w"],
                     "expect": {
-                        "events": [
+                        "result": [
                             {
-                                "event": "try",
-                                "kind": "w",
-                                "place": "a/spot/t1/za",
-                                "answer": "ok"
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za",
+                                "risk": {
+                                    "takeback": 6.7
+                                }
                             },
                             {
-                                "event": "machine:created"
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb",
+                                "risk": {
+                                    "takeback": 10
+                                }
+                            },
+                            {
+                                "provider": "a",
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za",
+                                "risk": {
+                                    "takeback": 4
+                                }
+                            },
+                            {
+                                "provider": "a",
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za",
+                                "risk": {
+                                    "takeback": 0
+                                }
+                            },
+                            {
+                                "provider": "b",
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za",
+                                "risk": {
+                                    "takeback": 8
+                                }
                             }
                         ]
                     }
@@ -518,6 +1240,18 @@
                         ],
                         "answers": {
                             "spot/t1/za": ["ok", "ok"]
+                        },
+                        "shapes": {
+                            "t1": {
+                                "cpu": 8,
+                                "mem": 16,
+                                "arch": "x86"
+                            },
+                            "t2": {
+                                "cpu": 2,
+                                "mem": 4,
+                                "arch": "arm"
+                            }
                         }
                     },
                     "b": {
@@ -555,6 +1289,8 @@
                         "store": {
                             "risk": {
                                 "a/spot/t1/za": {
+                                    "tries": 2,
+                                    "busy": 0,
                                     "created": 2,
                                     "lost": 1,
                                     "hours": 3
@@ -566,8 +1302,8 @@
             ]
         },
         {
-            "id": "risk/ended-not-lost",
-            "description": "a machine the core ends does not count as lost",
+            "id": "risk/ended-hours",
+            "description": "a machine the core ends counts its hours, never as lost",
             "given": {
                 "config": {
                     "rig": 1,
@@ -631,6 +1367,18 @@
                         ],
                         "answers": {
                             "spot/t1/za": "ok"
+                        },
+                        "shapes": {
+                            "t1": {
+                                "cpu": 8,
+                                "mem": 16,
+                                "arch": "x86"
+                            },
+                            "t2": {
+                                "cpu": 2,
+                                "mem": 4,
+                                "arch": "arm"
+                            }
                         }
                     },
                     "b": {
@@ -655,6 +1403,10 @@
                     "args": ["w"]
                 },
                 {
+                    "do": "clock",
+                    "by": "2h"
+                },
+                {
                     "do": "call",
                     "call": "machine.end",
                     "args": ["m1"]
@@ -665,9 +1417,11 @@
                         "store": {
                             "risk": {
                                 "a/spot/t1/za": {
+                                    "tries": 1,
+                                    "busy": 0,
                                     "created": 1,
                                     "lost": 0,
-                                    "hours": 0
+                                    "hours": 2
                                 }
                             }
                         }
@@ -676,8 +1430,8 @@
             ]
         },
         {
-            "id": "risk/place-list",
-            "description": "place.list gives the failover's places, in order, with risk",
+            "id": "risk/max-seen",
+            "description": "risk.max removes a place the counts make risky",
             "given": {
                 "config": {
                     "rig": 1,
@@ -724,19 +1478,17 @@
                             {
                                 "market": "spot",
                                 "type": "t1",
-                                "zone": "zb"
+                                "zone": "za"
                             },
                             {
                                 "market": "spot",
                                 "type": "t1",
-                                "zone": "za",
-                                "rate": ">20%"
+                                "zone": "zb"
                             },
                             {
                                 "market": "spot",
                                 "type": "t2",
-                                "zone": "za",
-                                "rate": "<5%"
+                                "zone": "za"
                             },
                             {
                                 "market": "demand",
@@ -744,7 +1496,21 @@
                                 "zone": "za"
                             }
                         ],
-                        "answers": {}
+                        "answers": {
+                            "spot/t1/zb": "ok"
+                        },
+                        "shapes": {
+                            "t1": {
+                                "cpu": 8,
+                                "mem": 16,
+                                "arch": "x86"
+                            },
+                            "t2": {
+                                "cpu": 2,
+                                "mem": 4,
+                                "arch": "arm"
+                            }
+                        }
                     },
                     "b": {
                         "places": [
@@ -756,6 +1522,17 @@
                         ],
                         "answers": {}
                     }
+                },
+                "store": {
+                    "risk": {
+                        "a/spot/t1/za": {
+                            "tries": 2,
+                            "busy": 0,
+                            "created": 2,
+                            "lost": 2,
+                            "hours": 1460
+                        }
+                    }
                 }
             },
             "steps": [
@@ -764,37 +1541,18 @@
                 },
                 {
                     "do": "call",
-                    "call": "place.list",
+                    "call": "machine.create",
                     "args": ["w"],
                     "expect": {
-                        "result": [
+                        "events": [
                             {
-                                "provider": "a",
-                                "market": "spot",
-                                "type": "t1",
-                                "zone": "zb"
+                                "event": "try",
+                                "kind": "w",
+                                "place": "a/spot/t1/zb",
+                                "answer": "ok"
                             },
                             {
-                                "provider": "a",
-                                "market": "spot",
-                                "type": "t2",
-                                "zone": "za",
-                                "risk": {
-                                    "rate": "<5%",
-                                    "source": "a"
-                                }
-                            },
-                            {
-                                "provider": "a",
-                                "market": "demand",
-                                "type": "t1",
-                                "zone": "za"
-                            },
-                            {
-                                "provider": "b",
-                                "market": "spot",
-                                "type": "t3",
-                                "zone": "za"
+                                "event": "machine:created"
                             }
                         ]
                     }

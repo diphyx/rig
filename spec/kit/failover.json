@@ -1317,7 +1317,7 @@
         },
         {
             "id": "failover/lazy-places",
-            "description": "a later entry's places is not called while an earlier one gives a machine (a life keeps the guard from reading places at open)",
+            "description": "a later entry's places is not called while an earlier one gives a machine",
             "given": {
                 "config": {
                     "rig": 1,
@@ -1348,11 +1348,10 @@
                                 },
                                 {
                                     "provider": "b",
-                                    "market": ["spot"],
+                                    "market": ["demand"],
                                     "types": ["t3"]
                                 }
-                            ],
-                            "life": "6h"
+                            ]
                         }
                     ]
                 },

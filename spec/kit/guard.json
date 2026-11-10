@@ -181,7 +181,7 @@
         },
         {
             "id": "guard/spot-long",
-            "description": "spot, no life, a published rate above 10%",
+            "description": "spot, no life, a spot place whose takeback is above 10",
             "given": {
                 "config": {
                     "rig": 1,
@@ -225,8 +225,7 @@
                             {
                                 "market": "spot",
                                 "type": "t1",
-                                "zone": "za",
-                                "rate": "15-20%"
+                                "zone": "za"
                             },
                             {
                                 "market": "spot",
@@ -244,7 +243,15 @@
                                 "zone": "za"
                             }
                         ],
-                        "answers": {}
+                        "answers": {},
+                        "shapes": {
+                            "t1": {
+                                "cpu": 4,
+                                "mem": 16,
+                                "gpu": "t4",
+                                "arch": "x86"
+                            }
+                        }
                     },
                     "b": {
                         "places": [
@@ -325,8 +332,7 @@
                             {
                                 "market": "spot",
                                 "type": "t1",
-                                "zone": "za",
-                                "rate": "15-20%"
+                                "zone": "za"
                             },
                             {
                                 "market": "spot",
@@ -344,7 +350,15 @@
                                 "zone": "za"
                             }
                         ],
-                        "answers": {}
+                        "answers": {},
+                        "shapes": {
+                            "t1": {
+                                "cpu": 4,
+                                "mem": 16,
+                                "gpu": "t4",
+                                "arch": "x86"
+                            }
+                        }
                     },
                     "b": {
                         "places": [
@@ -457,6 +471,99 @@
                     "do": "open",
                     "expect": {
                         "refusal": "guard"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "guard/spot-narrow",
+            "description": "spot with fewer than 3 spot places in all is narrow",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot"],
+                                    "types": ["t2"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open",
+                    "expect": {
+                        "events": [
+                            {
+                                "event": "guard",
+                                "kind": "w",
+                                "code": "spot-warn"
+                            },
+                            {
+                                "event": "guard",
+                                "kind": "w",
+                                "code": "spot-narrow"
+                            }
+                        ]
                     }
                 }
             ]

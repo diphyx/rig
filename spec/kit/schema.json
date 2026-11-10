@@ -127,6 +127,13 @@
                 },
                 "filter": {
                     "type": "boolean"
+                },
+                "shapes": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "required": ["cpu", "mem", "arch"]
+                    }
                 }
             }
         },
