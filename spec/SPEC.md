@@ -614,7 +614,7 @@ takeback = 100 × (lost + p × 2) ÷ (months + 2)                 2 machine-mont
 | not in the store, its kind in the config, with a `worker`    | **found**, a job machine | end it, emit `machine:ended` with `reason: "found"`: its worker cannot take it (§22.2)         |
 | not in the store, its kind not in the config                 | **orphan**               | emit `machine:orphan`; MUST NOT end it                                                         |
 
-**Recover**: a failover (§14) for the lost machine's kind, from its first entry.
+**Recover**: a failover (§14) for the lost machine's kind, from its first entry, with the lost machine's create `options` (§20).
 
 | Result           | The core MUST                          |
 | ---------------- | -------------------------------------- |
@@ -683,10 +683,11 @@ What the app calls on the core. A lib MAY name them in its own style (`machine.c
 | `round`          | —                                    | —               | runs a round now, §16                                                                                                      |
 | `on`             | `event: str`, a handler              | —               | calls the handler on every such event, §18                                                                                 |
 | `place.list`     | `kind: name`                         | `[place]`       | the places a failover would try, in its order, each with `provider` and `risk`; its length is the kind's breadth           |
-| `machine.create` | `kind: name`                         | `?machine`      | a failover, §14; `null` when there is no room                                                                              |
+| `machine.create` | `kind: name`, `?options`             | `?machine`      | a failover, §14, with `options` over the kind for this machine; `null` when there is no room                               |
 | `machine.get`    | `id: str`                            | `?machine`      | the provider's `get`, copied into the store; `null` for an id the store does not hold                                      |
 | `machine.wait`   | `id: str`, `status`, `?timeout: dur` | `machine`       | `machine.get` every `poll`, until the machine has `status`, or is `ended`                                                  |
-| `machine.list`   | `?{ kind?: name }`                   | `[machine]`     | from the store                                                                                                             |
+| `machine.list`   | `?filter`                            | `[machine]`     | from the store: those with every key the `filter` gives                                                                    |
+| `machine.lost`   | `?{ kind?: name }`                   | `[machine]`     | the lost machines still waiting for their replacement (§16), `status: "ended"`                                             |
 | `machine.end`    | `id: str`                            | —               | the provider's `end`; emits `machine:ended`                                                                                |
 | `machine.start`  | `id: str`                            | —               | the provider's `start`                                                                                                     |
 | `machine.stop`   | `id: str`                            | —               | the provider's `stop`                                                                                                      |
@@ -702,6 +703,9 @@ What the app calls on the core. A lib MAY name them in its own style (`machine.c
 - `on` MAY be called before `open`, so the app hears `guard` while the core opens.
 - A call with a machine id the store does not hold MUST be a refusal: `unknown`; `machine.get` gives `null` instead.
 - A kind name not in the config MUST be a refusal: `config`; so is a `status` that is not a `status`, and a `timeout` that is not a `dur`.
+- A `filter` is `{ kind?: name, status?: status, tag?: name }`: of that kind, with that status, with that tag in its `worker`'s `tags`. A key that is not one of these, a kind not in the config, a `status` that is not one, or a `tag` that is not a `name`, MUST be a refusal: `config`.
+- `machine.create`'s `options` is `{ worker?: {str: any} }`: the kind's `worker` for this one machine, its keys over the kind's own (`{ ...kind.worker, ...options.worker }`), its `tags` and the worker's own keys, never its `name`. It MUST be checked as the kind's `worker` is when the core opens (§5, §22.2), before any try: a key that is not `worker`, a `worker` on a kind without one, a `name`, or what that check refuses, MUST be a refusal: `config`.
+- The core MUST keep a machine's `options` with it in the store: a recover of it (§16) uses them too, so its replacement is made for the same work.
 - A wait whose machine leaves the store (a round found it lost) MUST end with that machine, `status: "ended"`.
 - A wait MUST check once before its first `poll`, and MUST be a refusal, `timeout`, when `timeout` (default `"10m"`) has passed since it began.
 - `disk.grow` MUST be a refusal, `config`, for a `gb` not above the disk's size now, as `disk.get` gives it.
@@ -727,7 +731,7 @@ A core that passes every case MAY say it follows rig generation 1.
 
 A **worker** is a plugin that runs jobs on machines, as a provider is one that makes them: `workers: [grid]`, as `providers: [aws]`. A kind with a `worker` makes **job machines** for it: short-lived, often `spot`, made to run jobs and replaced at will. How a worker runs its jobs is its own: this spec defines what the core and a worker give each other, and a worker's own README the rest.
 
-The core reaches a job machine twice: its first-boot script, once, then the worker, which runs only what the machine was made for. So a job machine's `worker`, like its type and its distro, is fixed at its create: a kind's new `worker` is for the machines made after; a machine with the old one runs until it ends, by its kind's `life`, `machine.end`, or a take-back. A kind without a `worker` makes machines that live as long as the app wants them.
+The core reaches a job machine twice: its first-boot script, once, then the worker, which runs only what the machine was made for. So a job machine's `worker`, like its type and its distro, is fixed at its create: the kind's, or the create's own (`machine.create`'s `options`, §20), so one kind makes machines for different work; a kind's new `worker` is for the machines made after; a machine with the old one runs until it ends, by its kind's `life`, `machine.end`, or a take-back. A kind without a `worker` makes machines that live as long as the app wants them.
 
 ### 22.1 Plugin
 
@@ -763,6 +767,7 @@ A worker is a plugin in the config's `workers`: one object with these keys.
 
 For each machine of a kind with a `worker`, the core MUST:
 
+- read its `worker` as the kind's, with its create's `options` over it (§20);
 - call `setup` at its create, and put its `script` lines in the machine's first-boot script (§6.2), and its `ports` in `spec.ports`;
 - give the machine to its worker, `add({ name, ip, key, tags })`, once the machine has an IP, and again when its IPs change; the `tags` are those the machine was made with;
 - `drop` it once it is ended or lost, after the store has forgotten it;

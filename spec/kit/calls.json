@@ -5751,6 +5751,971 @@
                     }
                 }
             ]
+        },
+        {
+            "id": "calls/create-worker",
+            "description": "a create's worker keys go over its kind's for that machine: its worker takes it with the create's tags",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "port": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            }
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": [
+                        "d",
+                        {
+                            "worker": {
+                                "tags": ["req"]
+                            }
+                        }
+                    ],
+                    "expect": {
+                        "result": {
+                            "worker": {
+                                "name": "g",
+                                "key": "key-1",
+                                "tags": ["req"]
+                            }
+                        }
+                    }
+                },
+                {
+                    "do": "round",
+                    "expect": {
+                        "workers": {
+                            "g": {
+                                "adds": [
+                                    {
+                                        "key": "key-1",
+                                        "tags": ["req"]
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/create-worker-recover",
+            "description": "a lost machine's replacement is made with its create's options too",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "port": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            }
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": [
+                        "d",
+                        {
+                            "worker": {
+                                "tags": ["req"]
+                            }
+                        }
+                    ],
+                    "expect": {}
+                },
+                {
+                    "do": "round"
+                },
+                {
+                    "do": "take-back",
+                    "id": "m1"
+                },
+                {
+                    "do": "round"
+                },
+                {
+                    "do": "round",
+                    "expect": {
+                        "workers": {
+                            "g": {
+                                "adds": [
+                                    {
+                                        "key": "key-1",
+                                        "tags": ["req"]
+                                    },
+                                    {
+                                        "key": "key-2",
+                                        "tags": ["req"]
+                                    }
+                                ],
+                                "drops": [{}]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/create-worker-no-worker",
+            "description": "a create's worker on a kind without one is a refusal, before any try",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "port": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": []
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": [
+                        "d",
+                        {
+                            "worker": {
+                                "tags": ["req"]
+                            }
+                        }
+                    ],
+                    "expect": {
+                        "refusal": "config",
+                        "events": []
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/create-worker-name",
+            "description": "a create's worker with a name is a refusal: the worker is the kind's",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "port": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            }
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": []
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": [
+                        "d",
+                        {
+                            "worker": {
+                                "name": "g",
+                                "tags": ["req"]
+                            }
+                        }
+                    ],
+                    "expect": {
+                        "refusal": "config",
+                        "events": []
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/create-worker-check",
+            "description": "a create's worker its worker's check refuses is a refusal, before any try",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "port": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            }
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": []
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": [
+                        "d",
+                        {
+                            "worker": {
+                                "refuse": true
+                            }
+                        }
+                    ],
+                    "expect": {
+                        "refusal": "config",
+                        "events": []
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/create-worker-tags",
+            "description": "a create's worker whose tags are not names is a refusal",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "port": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            }
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": []
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": [
+                        "d",
+                        {
+                            "worker": {
+                                "tags": []
+                            }
+                        }
+                    ],
+                    "expect": {
+                        "refusal": "config",
+                        "events": []
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/create-options-key",
+            "description": "a create's option that is not worker is a refusal",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "port": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            }
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": []
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": [
+                        "d",
+                        {
+                            "life": "1h"
+                        }
+                    ],
+                    "expect": {
+                        "refusal": "config",
+                        "events": []
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/list-filter",
+            "description": "machine.list gives the machines with every key the filter gives: kind, status, a worker's tag",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "port": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            },
+                            "recovers": 1
+                        },
+                        {
+                            "name": "e",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok", "ok"]
+                        },
+                        "boot": 1
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": [
+                        "d",
+                        {
+                            "worker": {
+                                "tags": ["req"]
+                            }
+                        }
+                    ],
+                    "expect": {}
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"],
+                    "expect": {}
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["e"],
+                    "expect": {}
+                },
+                {
+                    "do": "call",
+                    "call": "machine.list",
+                    "args": [
+                        {
+                            "tag": "req"
+                        }
+                    ],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "m1"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "machine.list",
+                    "args": [
+                        {
+                            "kind": "d",
+                            "tag": "build"
+                        }
+                    ],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "m2"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "machine.list",
+                    "args": [
+                        {
+                            "status": "pending"
+                        }
+                    ],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "m1"
+                            },
+                            {
+                                "id": "m2"
+                            },
+                            {
+                                "id": "m3"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "machine.get",
+                    "args": ["m3"],
+                    "expect": {}
+                },
+                {
+                    "do": "call",
+                    "call": "machine.get",
+                    "args": ["m3"],
+                    "expect": {}
+                },
+                {
+                    "do": "call",
+                    "call": "machine.list",
+                    "args": [
+                        {
+                            "status": "running"
+                        }
+                    ],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "m3"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/list-filter-refused",
+            "description": "a filter with a key, a status or a tag that is not one is a refusal",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "port": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            },
+                            "recovers": 1
+                        },
+                        {
+                            "name": "e",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok", "ok"]
+                        },
+                        "boot": 1
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.list",
+                    "args": [
+                        {
+                            "zone": "za"
+                        }
+                    ],
+                    "expect": {
+                        "refusal": "config"
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "machine.list",
+                    "args": [
+                        {
+                            "status": "up"
+                        }
+                    ],
+                    "expect": {
+                        "refusal": "config"
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "machine.list",
+                    "args": [
+                        {
+                            "tag": "Not A Name"
+                        }
+                    ],
+                    "expect": {
+                        "refusal": "config"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/lost",
+            "description": "machine.lost gives the lost machines still waiting for their replacement",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "port": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            },
+                            "recovers": 1
+                        },
+                        {
+                            "name": "e",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "busy zone", "ok"]
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["e"],
+                    "expect": {}
+                },
+                {
+                    "do": "call",
+                    "call": "machine.lost",
+                    "args": [],
+                    "expect": {
+                        "result": []
+                    }
+                },
+                {
+                    "do": "take-back",
+                    "id": "m1"
+                },
+                {
+                    "do": "round"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.lost",
+                    "args": [
+                        {
+                            "kind": "e"
+                        }
+                    ],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "m1",
+                                "status": "ended"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "machine.lost",
+                    "args": [
+                        {
+                            "kind": "d"
+                        }
+                    ],
+                    "expect": {
+                        "result": []
+                    }
+                },
+                {
+                    "do": "round"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.lost",
+                    "args": [],
+                    "expect": {
+                        "result": []
+                    }
+                }
+            ]
         }
     ]
 }

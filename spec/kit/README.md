@@ -6,15 +6,15 @@ A core that passes every case MAY say it follows rig generation 1.
 
 ## 1. Files
 
-| File            | Area                                                                                         |
-| --------------- | -------------------------------------------------------------------------------------------- |
-| `schema.json`   | the JSON Schema of every kit file                                                            |
-| `open.json`     | generation, plugins, config, distros, login, script, disk, workers, closed calls             |
-| `failover.json` | the order of tries, every busy answer, a throw, no room, a place tried once                  |
-| `risk.json`     | `risk.max`, the core's own count, `place.list`                                               |
-| `rounds.json`   | lost, recover, `recovers`, `life`, found, orphan, close                                      |
-| `guard.json`    | `spot-warn`, `spot-long`, `spot-narrow`, `guard: "refuse"`                                   |
-| `calls.json`    | the app's calls: machines, disks, ports, first boot, workers; unknown ids, unsupported calls |
+| File            | Area                                                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `schema.json`   | the JSON Schema of every kit file                                                                                                    |
+| `open.json`     | generation, plugins, config, distros, login, script, disk, workers, closed calls                                                     |
+| `failover.json` | the order of tries, every busy answer, a throw, no room, a place tried once                                                          |
+| `risk.json`     | `risk.max`, the core's own count, `place.list`                                                                                       |
+| `rounds.json`   | lost, recover, `recovers`, `life`, found, orphan, close                                                                              |
+| `guard.json`    | `spot-warn`, `spot-long`, `spot-narrow`, `guard: "refuse"`                                                                           |
+| `calls.json`    | the app's calls: machines, filters, lost machines, create options, disks, ports, first boot, workers; unknown ids, unsupported calls |
 
 ```json
 {
