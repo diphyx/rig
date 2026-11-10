@@ -1,16 +1,9 @@
-import { randomBytes } from "node:crypto";
+import { generateKeyPairSync } from "node:crypto";
 
-import { Arch, Market, type Place, type Spec } from "@diphyx/rig";
+import { Market, type Place, type Spec } from "@diphyx/rig";
 
 import { toAzure } from "./data.js";
 import { azureZone } from "./machine.js";
-import { shapeOf } from "./shape.js";
-
-/* Ubuntu 24.04, by Canonical's image on the Azure Marketplace. */
-const UBUNTU = {
-    [Arch.ARM]: { publisher: "Canonical", offer: "ubuntu-24_04-lts", sku: "server-arm64", version: "latest" },
-    [Arch.X86]: { publisher: "Canonical", offer: "ubuntu-24_04-lts", sku: "server", version: "latest" },
-};
 
 /** Azure names: 64 characters at most; the rig name's random end is kept. */
 const LONGEST = 64;
@@ -20,10 +13,17 @@ export function azureName(name: string): string {
 }
 
 /** Where and as what a machine runs. */
-export type Placement = { region: string; subnet: string; nsg: string; key?: string; identity?: string };
+export type Placement = {
+    region: string;
+    subnet: string;
+    nsg: string;
+    /** The image to boot, as an image reference. */
+    image: Record<string, string>;
+    identity?: string;
+};
 
-/* The kind's image: a resource id, or a `publisher:offer:sku:version` URN. */
-function imageOf(image: string): Record<string, string> {
+/** An entry's image, as an image reference: a resource id, or a `publisher:offer:sku:version` URN. */
+export function referenceOf(image: string): Record<string, string> {
     const [publisher, offer, sku, version] = image.split(":");
 
     return image.startsWith("/") || !version
@@ -31,23 +31,24 @@ function imageOf(image: string): Record<string, string> {
         : { publisher: publisher!, offer: offer!, sku: sku!, version };
 }
 
-/* The `rig` user: the given SSH key, or a random password kept nowhere. */
-function loginOf(key: string | undefined): Record<string, unknown> {
-    if (key) {
-        return {
-            linuxConfiguration: {
-                disablePasswordAuthentication: true,
-                ssh: { publicKeys: [{ path: "/home/rig/.ssh/authorized_keys", keyData: key }] },
-            },
-        };
-    }
+/* Azure's own admin user, `rig`: SSH by a key whose private half is thrown away, and no password, so no one signs in as it; the kind's `login` signs in (spec §6.2). */
+function adminKey(): string {
+    const { publicKey } = generateKeyPairSync("ed25519");
+    const raw = Buffer.from(publicKey.export({ format: "jwk" }).x!, "base64url");
 
-    return { adminPassword: `${randomBytes(24).toString("base64url")}aA1!` };
+    const part = (bytes: Buffer): Buffer => {
+        const size = Buffer.alloc(4);
+
+        size.writeUInt32BE(bytes.length);
+
+        return Buffer.concat([size, bytes]);
+    };
+
+    return `ssh-ed25519 ${Buffer.concat([part(Buffer.from("ssh-ed25519")), part(raw)]).toString("base64")}`;
 }
 
 /** §11: one try. `spec.extra` goes first, its `properties` merged, so the one try and the tags always win. */
 export function vmBody(place: Place, spec: Spec, vm: string, placement: Placement): Record<string, unknown> {
-    const arch = shapeOf(place.type)?.arch ?? Arch.X86;
     const zone = azureZone(placement.region, place.zone);
     const extra = (spec.extra ?? {}) as { properties?: Record<string, unknown> };
 
@@ -63,7 +64,7 @@ export function vmBody(place: Place, spec: Spec, vm: string, placement: Placemen
             ...extra.properties,
             hardwareProfile: { vmSize: place.type },
             storageProfile: {
-                imageReference: spec.image ? imageOf(spec.image) : UBUNTU[arch],
+                imageReference: placement.image,
                 osDisk: {
                     createOption: "FromImage",
                     deleteOption: "Delete",
@@ -73,7 +74,10 @@ export function vmBody(place: Place, spec: Spec, vm: string, placement: Placemen
             osProfile: {
                 computerName: vm,
                 adminUsername: "rig",
-                ...loginOf(placement.key),
+                linuxConfiguration: {
+                    disablePasswordAuthentication: true,
+                    ssh: { publicKeys: [{ path: "/home/rig/.ssh/authorized_keys", keyData: adminKey() }] },
+                },
                 ...(spec.script !== undefined && { customData: Buffer.from(spec.script).toString("base64") }),
             },
             networkProfile: {

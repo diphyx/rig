@@ -1,5 +1,7 @@
 import {
     type Answer,
+    Arch,
+    Busy,
     createPresets,
     type Place,
     type Presets,
@@ -18,9 +20,9 @@ import { tryit } from "radash";
 import { codeOf, createArm, gone } from "./arm.js";
 import { KEYS, resolveAuth } from "./auth.js";
 import { type AzureConfig, checkConfig, subscriptionOf } from "./config.js";
-import { busyOf, PRESETS, RIG } from "./data.js";
+import { busyOf, DISTROS, PRESETS, RIG } from "./data.js";
 import { createDisk } from "./disk.js";
-import { azureName, vmBody } from "./instance.js";
+import { azureName, referenceOf, vmBody } from "./instance.js";
 import { toMachine, type Vm } from "./machine.js";
 import { createNetwork } from "./network.js";
 import { API, paths, versioned } from "./paths.js";
@@ -29,6 +31,23 @@ import { shapeOf } from "./shape.js";
 import { createSizes } from "./sizes.js";
 
 export type Azure = Provider & { keys: string[]; presets: Presets };
+
+/* Image versions, newest first: `1.10.0` above `1.9.0`. */
+function newerFirst(a: string, b: string): number {
+    const [x, y] = [a, b].map((one) => {
+        return one.split(".").map(Number);
+    }) as [number[], number[]];
+
+    for (let i = 0; i < Math.max(x.length, y.length); i += 1) {
+        const step = (y[i] ?? 0) - (x[i] ?? 0);
+
+        if (step !== 0) {
+            return step;
+        }
+    }
+
+    return 0;
+}
 
 /** The azure provider: Virtual Machines, `spot` and `demand`, in one region. */
 export function createAzure(config: AzureConfig): Azure {
@@ -98,11 +117,44 @@ export function createAzure(config: AzureConfig): Azure {
         await arm.done("POST", versioned(`${path.vm(vm)}/${verb}`, API.compute));
     }
 
+    /* §11: the image to boot: the entry's as it is, or the newest Marketplace version of the kind's distro, for the size's arch; `null` when the region has none. */
+    async function imageOf(place: Place, spec: Spec): Promise<Record<string, string> | null> {
+        if (spec.image !== undefined) {
+            return referenceOf(spec.image);
+        }
+
+        const urn = DISTROS.pointerOf(spec.distro!, shapeOf(place.type)?.arch ?? Arch.X86);
+        const [publisher = "", offer = "", sku = ""] = urn.split(":");
+
+        let versions: { name?: string }[];
+
+        try {
+            versions = (await arm.send("GET", versioned(path.versions(region, urn), API.compute))).body as {
+                name?: string;
+            }[];
+        } catch (error) {
+            if (gone(error)) {
+                return null;
+            }
+
+            throw error;
+        }
+
+        const [newest] = versions
+            .map((one) => {
+                return one.name ?? "";
+            })
+            .sort(newerFirst);
+
+        return newest === undefined ? null : { publisher, offer, sku, version: newest };
+    }
+
     return {
         slot: Slot.PROVIDER,
         name,
         rig: RIG,
         can: { spot: true, stop: true, disk: true, port: true },
+        distros: DISTROS.offers,
         keys: KEYS,
         presets: createPresets(name, PRESETS),
 
@@ -121,6 +173,16 @@ export function createAzure(config: AzureConfig): Azure {
         /** §11: exactly one try, waited for, behind a security group of its own made first; no room is `busy`, by the data file; anything else throws. */
         async create(place: Place, spec: Spec): Promise<Answer> {
             const vm = azureName(spec.name);
+            const image = await imageOf(place, spec);
+
+            /* §11: a region without the distro's image for this size's arch has no room for the type. */
+            if (!image) {
+                return {
+                    busy: Busy.TYPE,
+                    message: `azure: no ${spec.distro!.name} ${spec.distro!.version} image in ${region}`,
+                };
+            }
+
             const subnet = await network.subnet();
             const nsg = await ports.make(vm, spec.ports);
 
@@ -129,10 +191,10 @@ export function createAzure(config: AzureConfig): Azure {
                     "PUT",
                     versioned(path.vm(vm), API.compute),
                     vmBody(place, spec, vm, {
+                        image,
                         region,
                         subnet,
                         nsg,
-                        ...(extra.key && { key: extra.key }),
                         ...(config.identity && { identity: config.identity }),
                     }),
                 );

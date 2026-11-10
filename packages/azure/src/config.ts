@@ -24,13 +24,11 @@ export type AzureExtra = {
     group?: string;
     /** A subnet's resource id; absent, a network of rig's own in the group, made on first use. */
     subnet?: string;
-    /** An SSH public key for the machines' `rig` user; absent, a random password, kept nowhere. */
-    key?: string;
     /** For tests: the Azure Resource Manager REST calls, answered. */
     request?: Request;
 };
 
-const EXTRA = ["subscription", "group", "subnet", "key", "request"];
+const EXTRA = ["subscription", "group", "subnet", "request"];
 
 /** §8.2: the standard keys and azure's own `extra` keys; `region` is required. */
 export function checkConfig(config: AzureConfig): void {

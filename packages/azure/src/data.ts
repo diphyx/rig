@@ -1,4 +1,4 @@
-import { type Busy, createTagMap, type PresetTable } from "@diphyx/rig";
+import { type Busy, createDistroTable, createTagMap, type DistroTable, type PresetTable } from "@diphyx/rig";
 
 import data from "./azure.json" with { type: "json" };
 
@@ -12,6 +12,9 @@ export const SHAPES = data.shapes as {
     low: number;
     fixed: Record<string, { cpu: number; mem: number; gpu?: string; arm?: boolean }>;
 };
+
+/** §12: the distro table: each version's Marketplace image, as `publisher:offer:sku`; its newest version is taken. */
+export const DISTROS = createDistroTable("azure", data.distros as DistroTable<string>);
 
 const BUSY = data.busy as Record<string, Busy>;
 const TAGS = createTagMap(data.tags as Record<string, string>);

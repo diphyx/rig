@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createRig, Market, Reason, type Refusal } from "@diphyx/rig";
+import { createRig, Market, Distro, Reason, type Refusal } from "@diphyx/rig";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { resolveAuth } from "../src/auth.js";
@@ -47,6 +47,7 @@ function fake(routes: Record<string, Handler>) {
 const RG = "/subscriptions/s/resourceGroups/rig";
 const VM = `${RG}/providers/Microsoft.Compute/virtualMachines`;
 const NSG = `${RG}/providers/Microsoft.Network/networkSecurityGroups`;
+const IMAGES = "/subscriptions/s/providers/Microsoft.Compute/locations/eastus/publishers";
 
 const NETWORK = {
     "PUT /subscriptions/s/resourcegroups/rig": () => {
@@ -60,6 +61,10 @@ const NETWORK = {
     },
     [`PUT ${RG}/providers/Microsoft.Network/virtualNetworks/rig-eastus`]: () => {
         return ok();
+    },
+    /* Every Marketplace image has two versions. */
+    [`GET ${IMAGES}/.*/versions`]: () => {
+        return ok([{ name: "1.9.0" }, { name: "1.10.0" }]);
     },
 };
 
@@ -75,6 +80,7 @@ const SPEC = {
     name: "app-w-0a1b2c3d",
     tags: { rig: "1", "rig-app": "app", "rig-kind": "w", "rig-name": "app-w-0a1b2c3d" },
     ports: [],
+    distro: { name: Distro.UBUNTU, version: "24.04" },
 };
 
 beforeEach(() => {
@@ -150,8 +156,10 @@ describe("azure: places", () => {
 describe("azure: create", () => {
     const created = (routes: Record<string, Handler> = {}, extra: Record<string, unknown> = {}) => {
         const bodies: Record<string, unknown>[] = [];
+        /* The given routes first, so they win over the defaults that would match too. */
         const { provider, calls } = azure(
             {
+                ...routes,
                 ...NETWORK,
                 [`PUT ${VM}/app-w-0a1b2c3d`]: (body) => {
                     bodies.push(body!);
@@ -185,7 +193,21 @@ describe("azure: create", () => {
             properties: {
                 hardwareProfile: { vmSize: "Standard_D4ps_v6" },
                 storageProfile: { imageReference: { sku: "server-arm64" }, osDisk: { deleteOption: "Delete" } },
-                osProfile: { adminUsername: "rig", adminPassword: expect.any(String) },
+                osProfile: {
+                    adminUsername: "rig",
+                    linuxConfiguration: {
+                        disablePasswordAuthentication: true,
+                        ssh: {
+                            publicKeys: [
+                                {
+                                    keyData: expect.stringMatching(
+                                        /^ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI[A-Za-z0-9+/]+=*$/,
+                                    ),
+                                },
+                            ],
+                        },
+                    },
+                },
             },
         });
 
@@ -249,10 +271,63 @@ describe("azure: create", () => {
         expect(deletes).toEqual(["app-w-0a1b2c3d", "app-w-0a1b2c3d-nsg"]);
     });
 
-    it("asks for a spot machine that is deleted on a take-back; takes a given subnet and SSH key as they are", async () => {
-        const { provider, calls, bodies } = created({}, { subnet: "/subnets/mine", key: "ssh-ed25519 AAAA" });
+    it("boots a distro's newest Marketplace version for the size's arch", async () => {
+        const { provider, bodies } = created({});
 
-        await provider.create({ ...PLACE, market: Market.SPOT }, SPEC);
+        await provider.create(PLACE, SPEC);
+
+        await provider.create(
+            { ...PLACE, type: "Standard_D4s_v6" },
+            { ...SPEC, distro: { name: Distro.DEBIAN, version: "12" } },
+        );
+
+        expect(bodies[0]).toMatchObject({
+            properties: {
+                storageProfile: {
+                    imageReference: {
+                        publisher: "Canonical",
+                        offer: "ubuntu-24_04-lts",
+                        sku: "server-arm64",
+                        version: "1.10.0",
+                    },
+                },
+            },
+        });
+
+        expect(bodies[1]).toMatchObject({
+            properties: {
+                storageProfile: {
+                    imageReference: { publisher: "Debian", offer: "debian-12", sku: "12-gen2", version: "1.10.0" },
+                },
+            },
+        });
+    });
+
+    it("answers busy type, making nothing, when the region has no image of the distro", async () => {
+        const { provider, calls } = created({
+            [`GET ${IMAGES}/Debian/.*/versions`]: () => {
+                return ok([]);
+            },
+        });
+
+        expect(
+            await provider.create(
+                { ...PLACE, type: "Standard_D4s_v6" },
+                { ...SPEC, distro: { name: Distro.DEBIAN, version: "13" } },
+            ),
+        ).toMatchObject({ busy: "type" });
+
+        expect(
+            calls.some((one) => {
+                return one.method === "PUT";
+            }),
+        ).toBe(false);
+    });
+
+    it("asks for a spot machine that is deleted on a take-back; takes a given subnet as it is; runs its first boot", async () => {
+        const { provider, calls, bodies } = created({}, { subnet: "/subnets/mine" });
+
+        await provider.create({ ...PLACE, market: Market.SPOT }, { ...SPEC, script: "#!/bin/bash\necho hi\n" });
 
         expect(
             calls.some((one) => {
@@ -264,12 +339,15 @@ describe("azure: create", () => {
             properties: {
                 priority: "Spot",
                 evictionPolicy: "Delete",
-                osProfile: { linuxConfiguration: { disablePasswordAuthentication: true } },
+                osProfile: {
+                    adminUsername: "rig",
+                    customData: Buffer.from("#!/bin/bash\necho hi\n").toString("base64"),
+                },
             },
         });
 
         expect(JSON.stringify(bodies[0])).toContain("/subnets/mine");
-        expect((bodies[0]!.properties as { osProfile: object }).osProfile).not.toHaveProperty("adminPassword");
+        expect(JSON.stringify(bodies[0])).not.toContain("adminPassword");
     });
 
     it("merges extra's properties under its own, so the one try and the tags win", async () => {

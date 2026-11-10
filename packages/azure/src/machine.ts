@@ -13,7 +13,10 @@ export type Vm = {
         timeCreated?: string;
         provisioningState?: string;
         hardwareProfile?: { vmSize?: string };
-        storageProfile?: { osDisk?: { managedDisk?: { id?: string } } };
+        storageProfile?: {
+            imageReference?: { id?: string; publisher?: string; offer?: string; sku?: string; exactVersion?: string };
+            osDisk?: { managedDisk?: { id?: string } };
+        };
         networkProfile?: { networkInterfaces?: { id?: string }[] };
         instanceView?: { statuses?: { code?: string }[] };
     };
@@ -55,9 +58,23 @@ function statusOf(vm: Vm): Status {
     return POWER[power?.slice("PowerState/".length) ?? ""] ?? Status.PENDING;
 }
 
+/* The image it boots: its resource id, or its URN with the exact version. */
+function imageIdOf(vm: Vm): string | undefined {
+    const reference = vm.properties?.storageProfile?.imageReference;
+
+    if (reference?.id) {
+        return reference.id;
+    }
+
+    return reference?.publisher && reference.exactVersion
+        ? `${reference.publisher}:${reference.offer}:${reference.sku}:${reference.exactVersion}`
+        : undefined;
+}
+
 /** A virtual machine as rig sees it; its id is its name, unique in its resource group. */
 export function toMachine(vm: Vm, ip?: { public?: string; private?: string }): ProviderMachine {
     const region = vm.location ?? "";
+    const image = imageIdOf(vm);
 
     return {
         id: vm.name ?? "",
@@ -65,6 +82,7 @@ export function toMachine(vm: Vm, ip?: { public?: string; private?: string }): P
         market: vm.properties?.priority === "Spot" ? Market.SPOT : Market.DEMAND,
         type: vm.properties?.hardwareProfile?.vmSize ?? "",
         zone: zoneOf(region, vm.zones?.[0]),
+        ...(image && { image }),
         tags: fromAzure(vm.tags ?? {}),
         ...(ip && Object.keys(ip).length > 0 && { ip }),
         created: Date.parse(vm.properties?.timeCreated ?? "") || 0,

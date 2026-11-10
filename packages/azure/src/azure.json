@@ -82,6 +82,28 @@
             }
         }
     },
+    "distros": {
+        "ubuntu": {
+            "24.04": {
+                "arm": "Canonical:ubuntu-24_04-lts:server-arm64",
+                "x86": "Canonical:ubuntu-24_04-lts:server"
+            },
+            "22.04": {
+                "arm": "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-arm64",
+                "x86": "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2"
+            }
+        },
+        "debian": {
+            "13": {
+                "arm": "Debian:debian-13:13-arm64",
+                "x86": "Debian:debian-13:13-gen2"
+            },
+            "12": {
+                "arm": "Debian:debian-12:12-arm64",
+                "x86": "Debian:debian-12:12-gen2"
+            }
+        }
+    },
     "shapes": {
         "memory": {
             "B": 4,

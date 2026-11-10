@@ -24,6 +24,12 @@ export function paths(subscription: string, group: string) {
         vm: (name: string) => {
             return `${rg}/providers/Microsoft.Compute/virtualMachines/${name}`;
         },
+        /** The versions of a Marketplace image, `publisher:offer:sku`, in a region. */
+        versions: (region: string, urn: string) => {
+            const [publisher, offer, sku] = urn.split(":");
+
+            return `${sub}/providers/Microsoft.Compute/locations/${region}/publishers/${publisher}/artifacttypes/vmimage/offers/${offer}/skus/${sku}/versions`;
+        },
         vms: `${rg}/providers/Microsoft.Compute/virtualMachines?api-version=${API.compute}&statusOnly=true`,
         nsgs: `${rg}/providers/Microsoft.Network/networkSecurityGroups?api-version=${API.network}`,
         nsg: (name: string) => {

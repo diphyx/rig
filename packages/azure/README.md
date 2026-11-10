@@ -1,6 +1,6 @@
 # @diphyx/rig-azure
 
-The **azure** provider for [rig](../core): Azure Virtual Machines, `spot` and `demand`, in one region.
+The **azure** provider for [rig](../core): Linux machines on Azure Virtual Machines, `spot` and `demand`, in one region.
 
 **Status: draft.** Tested against a fake Azure Resource Manager.
 
@@ -51,31 +51,44 @@ The same keys as every rig provider's factory (spec §8.2); azure's own go in `e
 | `extra.subscription` | `AZURE_SUBSCRIPTION_ID`                   | the subscription; one of the two is required                          |
 | `extra.group`        | `"rig"`, made on first use                | the resource group its machines go in                                 |
 | `extra.subnet`       | a network of rig's own, made on first use | a subnet's resource id                                                |
-| `extra.key`          | a random password, kept nowhere           | an SSH public key for the machines' `rig` user                        |
 | `extra.request`      | Azure Resource Manager's REST API         | for tests: answers in place of Azure                                  |
 
 ## What It Does on Azure
 
 It calls Azure Resource Manager's REST API, signed in with Azure's own `@azure/identity`.
 
-| rig                       | Azure                                                                                                                                                                     |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `check`                   | reads the subscription: the keys and the subscription work                                                                                                                |
-| `places`                  | the region's resource SKUs: each size's zones, less those closed to the subscription; `eastus-1` is zone 1 of `eastus`, and a region with no zones is one place, `eastus` |
-| `create`                  | the group and network once, then one virtual machine, waited for, with its OS disk, network card and public IP                                                            |
-| `spot`                    | `priority: Spot`, deleted on a take-back                                                                                                                                  |
-| image                     | the kind's (a resource id, or `publisher:offer:sku:version`), or Ubuntu 24.04 (arm64 or x64, by size)                                                                     |
-| `get`, `list`             | the machine, its addresses from its card and IP; the group's machines in the region, every page                                                                           |
-| `start`, `stop`, `reboot` | `start`, `deallocate`, `restart`; stopping a spot machine is `unsupported`                                                                                                |
-| `end`                     | the machine deleted with its disk, card and IP, then its security group; groups left by machines gone earlier go too                                                      |
-| `disk.grow`, `get`        | resizes the OS disk; ready once its change has succeeded                                                                                                                  |
-| `port.*`                  | a network security group of the machine's own, made before it with the kind's `ports` and a deny-all                                                                      |
+| rig                       | Azure                                                                                                                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check`                   | reads the subscription: the keys and the subscription work                                                                                                                                  |
+| `places`                  | the region's resource SKUs: each size's zones, less those closed to the subscription; `eastus-1` is zone 1 of `eastus`, and a region with no zones is one place, `eastus`                   |
+| `create`                  | the group and network once, then one virtual machine, waited for, with its OS disk, network card and public IP                                                                              |
+| `spot`                    | `priority: Spot`, deleted on a take-back                                                                                                                                                    |
+| `distro`, `image`         | the kind's `distro`: its Marketplace image's newest version for the size's arch; or the entry's `image` (a resource id, or `publisher:offer:sku:version`) as it is                          |
+| `script`, `login`         | the first-boot script (spec §6.2) as `customData`, run by cloud-init at first boot; Azure's own admin user, `rig`, signs in by a key whose private half is thrown away, and has no password |
+| `get`, `list`             | the machine, its addresses from its card and IP; the group's machines in the region, every page                                                                                             |
+| `start`, `stop`, `reboot` | `start`, `deallocate`, `restart`; stopping a spot machine is `unsupported`                                                                                                                  |
+| `end`                     | the machine deleted with its disk, card and IP, then its security group; groups left by machines gone earlier go too                                                                        |
+| `disk.grow`, `get`        | resizes the OS disk; ready once its change has succeeded                                                                                                                                    |
+| `port.*`                  | a network security group of the machine's own, made before it with the kind's `ports` and a deny-all                                                                                        |
 
-Busy answers come from [`src/azure.json`](src/azure.json): no room in a zone (`ZonalAllocationFailed`, `AllocationFailed`, `SkuNotAvailable`, ...), or in the subscription (`QuotaExceeded`, `OperationNotAllowed`); Azure's inner error, in `details`, is read first. Any other error is thrown.
+Busy answers come from [`src/azure.json`](src/azure.json): no room in a zone (`ZonalAllocationFailed`, `AllocationFailed`, `SkuNotAvailable`, ...), or in the subscription (`QuotaExceeded`, `OperationNotAllowed`); Azure's inner error, in `details`, is read first. A region without the distro's image for a size's arch is no room for that type, so failover moves on. Any other error is thrown.
 
-### Ports at create
+### Ports
 
 A new machine is behind a network security group of its own, made before it and set on its card: the kind's `ports`, and a deny-all inbound below them (`4096`, above the network's own allow). Every other inbound port is closed, inside the network too. `port.open` adds to them, and a failed try leaves nothing it made: a machine Azure kept as failed is deleted, then its group.
+
+### Distro
+
+Each version is a Marketplace image, `publisher:offer:sku`; its newest version is taken:
+
+| Distro | Version | arm                                                      | x86                                                     |
+| ------ | ------- | -------------------------------------------------------- | ------------------------------------------------------- |
+| Ubuntu | `24.04` | `Canonical:ubuntu-24_04-lts:server-arm64`                | `Canonical:ubuntu-24_04-lts:server`                     |
+| Ubuntu | `22.04` | `Canonical:0001-com-ubuntu-server-jammy:22_04-lts-arm64` | `Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2` |
+| Debian | `13`    | `Debian:debian-13:13-arm64`                              | `Debian:debian-13:13-gen2`                              |
+| Debian | `12`    | `Debian:debian-12:12-arm64`                              | `Debian:debian-12:12-gen2`                              |
+
+The machine's `image` is the image it boots, by its URN with its exact version.
 
 ## Presets
 
@@ -91,14 +104,15 @@ The same five presets as every rig provider (spec §7), made by the core's prese
 
 Only `name` is required; every other option has a strong default.
 
-| Option              | Default                                             | Is                                                                     |
-| ------------------- | --------------------------------------------------- | ---------------------------------------------------------------------- |
-| `cpu`, `mem`, `gpu` | per preset                                          | the size, rounded up to the next one sold                              |
-| `arch`              | `PresetArch.ANY`: Cobalt and Ampere first, then x86 | `PresetArch.ARM`, `X86` or `ANY`; with your own `image`, one arch only |
-| `up`                | `0`                                                 | also try the next `up` sizes, after every type of the asked size       |
-| `disk`              | per preset, from the asked size                     | GB of the boot disk                                                    |
-| `market`            | per preset                                          | in failover order                                                      |
-| kind keys           | —                                                   | `image`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`         |
+| Option              | Default                                                    | Is                                                                                           |
+| ------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `cpu`, `mem`, `gpu` | per preset                                                 | the size, rounded up to the next one sold                                                    |
+| `arch`              | `PresetArch.ANY`: Cobalt and Ampere first, then x86        | `PresetArch.ARM`, `X86` or `ANY`; with your own `image`, one arch only; a `distro` fits both |
+| `up`                | `0`                                                        | also try the next `up` sizes, after every type of the asked size                             |
+| `image`             | —                                                          | this provider's image id: the entry's `image`, booted in place of `distro`                   |
+| `disk`              | per preset, from the asked size; with `image`, the image's | GB of the boot disk                                                                          |
+| `market`            | per preset                                                 | in failover order                                                                            |
+| kind keys           | —                                                          | `distro`, `login`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`                     |
 
 ```ts
 azure.presets.compute({ name: "worker" });
