@@ -18,6 +18,8 @@ export type Context = {
     orphans: Set<string>;
     /** Shapes asked of providers, by `<provider>/<type>`. */
     shapes: Map<string, Shape | null>;
+    /** The round running now, if one is. */
+    running: Promise<void> | null;
     emit<E extends keyof Events>(event: E, data: Events[E]): void;
 };
 

@@ -86,13 +86,23 @@ async function listAll(context: Context): Promise<Listed> {
     return listed;
 }
 
-/** §16: list every provider, compare with the store, act. */
-export async function round(context: Context): Promise<void> {
+/** §16: list every provider, compare with the store, act; one round at a time. */
+export function round(context: Context): Promise<void> {
+    /* One round at a time: a round asked for while one runs is that round. */
+    context.running ??= pass(context).finally(() => {
+        context.running = null;
+    });
+
+    return context.running;
+}
+
+async function pass(context: Context): Promise<void> {
     const { store, kinds, emit } = context;
+
+    /* Only what the store held before the list was taken: a machine made meanwhile, by a create or a recover, is not judged. */
+    const before = [...store.machines];
     const listed = await listAll(context);
 
-    /* Only what the store held when the list was taken: a machine a recover makes now is not in it. */
-    const before = [...store.machines];
     const held = new Set(
         before.map((known) => {
             return `${known.provider}/${known.id}`;
@@ -126,7 +136,14 @@ export async function round(context: Context): Promise<void> {
     }
 
     for (const [at, { provider, machine }] of listed) {
-        if (held.has(at) || machine.status === Status.ENDED) {
+        /* Held when the round began (it may have just ended it), or made since: not found. */
+        const known =
+            held.has(at) ||
+            store.machines.some((one) => {
+                return `${one.provider}/${one.id}` === at;
+            });
+
+        if (known || machine.status === Status.ENDED) {
             continue;
         }
 

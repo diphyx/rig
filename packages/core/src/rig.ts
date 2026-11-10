@@ -28,6 +28,7 @@ export function createRig(config: RigConfig) {
         state: State.NEW,
         orphans: new Set(),
         shapes: new Map(),
+        running: null,
         emit: emitter.emit,
     };
 
