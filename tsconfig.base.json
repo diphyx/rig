@@ -13,6 +13,8 @@
         "declarationMap": true,
         "sourceMap": true,
         "composite": true,
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true
     }
 }
