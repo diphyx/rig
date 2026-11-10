@@ -6,15 +6,15 @@ A core that passes every case MAY say it follows rig generation 1.
 
 ## 1. Files
 
-| File            | Area                                                    |
-| --------------- | ------------------------------------------------------- |
-| `schema.json`   | the JSON Schema of every kit file                       |
-| `open.json`     | generation, plugins, config, closed calls               |
-| `failover.json` | the order of tries, every busy answer, a throw, no room |
-| `risk.json`     | `risk.max`, the core's own count, `place.list`          |
-| `rounds.json`   | lost, recover, `recovers`, `life`, found, orphan, close |
-| `guard.json`    | `spot-warn`, `spot-long`, `guard: "refuse"`             |
-| `calls.json`    | the app's calls: unknown ids, unsupported calls         |
+| File            | Area                                                     |
+| --------------- | -------------------------------------------------------- |
+| `schema.json`   | the JSON Schema of every kit file                        |
+| `open.json`     | generation, plugins, config, distros, closed calls       |
+| `failover.json` | the order of tries, every busy answer, a throw, no room  |
+| `risk.json`     | `risk.max`, the core's own count, `place.list`           |
+| `rounds.json`   | lost, recover, `recovers`, `life`, found, orphan, close  |
+| `guard.json`    | `spot-warn`, `spot-long`, `guard: "refuse"`              |
+| `calls.json`    | the app's calls: unknown ids, unsupported calls, distros |
 
 ```json
 {
@@ -54,7 +54,7 @@ In `config.providers`, each provider is written as data:
 { "name": "a", "can": { "spot": true, "stop": true } }
 ```
 
-`rig` is `1` unless given. The runner MUST turn it into a fake provider that follows the spec's provider rules, with every call that `can` enables and no other. With `"check": "fail"`, the fake has a `check` that throws; with `"check": "ok"`, one that passes; absent, no `check`.
+`rig` is `1` unless given. `distros` is every distro version of the spec's §6.1 unless given: `"distros": { "ubuntu": ["24.04"] }`. The runner MUST turn it into a fake provider that follows the spec's provider rules, with every call that `can` enables and no other. With `"check": "fail"`, the fake has a `check` that throws; with `"check": "ok"`, one that passes; absent, no `check`.
 
 `fake.<name>`:
 
@@ -72,9 +72,10 @@ In `config.providers`, each provider is written as data:
 | `"throw"`       | throws                                                                       |
 
 - A try at a place with no answer left MUST fail the case: the core tried what it should not.
-- After `ok`, the fake runs the machine: `status: "running"` (or `"pending"`, with `boot`), the place's market, type and zone, `spec.tags`, `ip: { private: "10.0.0.<n>" }` for id `m<n>`, `created` at the clock.
+- After `ok`, the fake runs the machine: `status: "running"` (or `"pending"`, with `boot`), the place's market, type and zone, `image`: `spec.image`, or `"<name>-<version>"` from `spec.distro`, `spec.tags`, `ip: { private: "10.0.0.<n>" }` for id `m<n>`, `created` at the clock.
 - With `can.disk`, every machine has a disk of `30` GB: `disk.grow` sets its size, `disk.get` gives `{ gb, ready: true }`.
 - With `can.port`, a new machine starts with `spec.ports` as its rules, each with the next id, and every machine keeps its rules: `port.open` adds one with the next id across all fakes, `r1`, `r2`, ...; `port.close` removes it; `port.list` gives them, in order.
+- Every `ok` try keeps its `spec.script` in the fake's `scripts`, in order; `null` without one.
 - `end` makes a machine `ended`, and is kept in the fake's `ends`, in order. `list` never returns an `ended` machine.
 - `get` and `list` MUST return copies, as a real provider does: a later change in the fake MUST NOT show through what the core already holds.
 

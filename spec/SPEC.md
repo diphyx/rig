@@ -6,7 +6,7 @@
 
 ## Abstract
 
-Rig creates machines on cloud providers with **failover**: when a try finds no room, the core tries the next place, across zones, types, markets and providers.
+Rig creates Linux machines on cloud providers with **failover**: when a try finds no room, the core tries the next place, across zones, types, markets and providers.
 
 On `spot`, a provider may take a machine back. The core estimates how often that happens per place, from each type's shape and its own counts, replaces lost machines, and warns about risky kinds when it opens.
 
@@ -40,7 +40,7 @@ Each term of §2 has one meaning in this document, and each thing has one term.
 | **core**      | the implementation of this spec inside the app                               |
 | **store**     | the folder where the core keeps what it knows                                |
 | **provider**  | a plugin for one cloud                                                       |
-| **machine**   | one server a provider runs for the core                                      |
+| **machine**   | one Linux server a provider runs for the core                                |
 | **kind**      | a named recipe for machines                                                  |
 | **entry**     | one item of a kind's `try` list: a provider, markets, types                  |
 | **preset**    | a provider's ready recipe that makes a kind from a name                      |
@@ -53,6 +53,8 @@ Each term of §2 has one meaning in this document, and each thing has one term.
 | **lost**      | a machine that ended without the core ending it                              |
 | **recover**   | a failover that replaces a lost machine                                      |
 | **risk**      | the core's own estimate of how often a place's machines are taken back, §15  |
+| **distro**    | a Linux distribution at one major version, which a machine boots: §6.1       |
+| **image**     | the disk a machine boots from, as its provider names it                      |
 | **shape**     | a type's vCPUs, memory, GPU and CPU arch, from the provider's data           |
 | **round**     | one pass of the core over its machines                                       |
 | **guard**     | the risk checks the core runs on kinds when it opens                         |
@@ -75,6 +77,7 @@ Core verbs: **open** (begin rounds) · **close** (end rounds). Neither touches a
 | `name`   | `str` matching `[a-z][a-z0-9-]{0,31}`                                              |
 | `market` | `"spot"` or `"demand"`                                                             |
 | `busy`   | `"zone"`, `"type"`, `"market"` or `"account"`                                      |
+| `distro` | `{ name: str, version?: str }`: a distro of §6.1                                   |
 | `status` | `"pending"`, `"running"`, `"stopping"`, `"stopped"`, `"ending"` or `"ended"`       |
 | `[T]`    | a list of `T`, in order                                                            |
 | `{K: T}` | a map from `K` to `T`, no order                                                    |
@@ -93,7 +96,7 @@ A generation is a fixed contract. This is generation `1`.
 | store    | the core MUST keep everything under `<store>/rig/1/`, and MUST NOT read outside it |
 | machines | the core MUST NOT touch a machine whose `rig` tag is missing or not `1`            |
 
-Within a generation, a change MUST only add: an optional key, a field, a busy code, a preset, a guard check, an event. Any other change is a new generation.
+Within a generation, a change MUST only add: an optional key, a field, a busy code, a preset, a distro or distro version, a guard check, an event. Any other change is a new generation.
 
 ---
 
@@ -120,35 +123,106 @@ When the core opens, each of these MUST be a refusal, `config`, naming the key b
 - an entry whose `provider` is not in `providers`;
 - `spot` in an entry's `market`, its provider without `can.spot`;
 - a kind tag whose key starts with `rig`;
+- a `distro` whose `name` is not in §6.1, or whose `version` is not one of that distro's;
+- an entry without its own `image` whose provider does not offer the kind's `distro` at its version (its `distros`, §8);
 - a rule in a kind's `ports` that is not one (§20), or `ports` on a kind with an entry whose provider has no `can.port`;
+- a `disk` below `30`;
+- a `login` that is not one (§6.2), or a `login` without `user` on a kind with an entry with its own `image`;
+- a `script` that is not a `str` or a `[str]`, or a first-boot script above 16 KB (§6.2);
 - a reserved key, §22.
 
 ## 6. Kind
 
-| Key        | Type            | Default | Definition                                                                  |
-| ---------- | --------------- | ------- | --------------------------------------------------------------------------- |
-| `name`     | `name`          | —       | unique among kinds                                                          |
-| `try`      | `[entry]`       | —       | where to try, in order; at least one                                        |
-| `image`    | `?str`          | —       | for every entry without its own                                             |
-| `disk`     | `?uint`         | —       | GB of the boot disk; a preset sets it (§7.1)                                |
-| `script`   | `?str`          | —       | a startup script                                                            |
-| `risk`     | `?{ max: pct }` | —       | §15                                                                         |
-| `life`     | `?dur`          | never   | the core ends the machine after this                                        |
-| `recovers` | `?uint`         | `3`     | how many recovers a lost machine may have; `0` = none                       |
-| `tags`     | `?{str: str}`   | —       | the app's own tags; no key may start with `rig`                             |
-| `ports`    | `?[rule]`       | none    | the inbound rules every machine of the kind starts with; all else is closed |
+| Key        | Type                            | Default              | Definition                                                                                            |
+| ---------- | ------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------- |
+| `name`     | `name`                          | —                    | unique among kinds                                                                                    |
+| `try`      | `[entry]`                       | —                    | where to try, in order; at least one                                                                  |
+| `distro`   | `?distro`                       | `{ name: "ubuntu" }` | the distro every machine of the kind boots, but on an entry with its own `image`, §6.1                |
+| `disk`     | `?uint`                         | —                    | GB of the boot disk, from `30`: room for every distro's image on every cloud; a preset sets it (§7.1) |
+| `login`    | `?{ user?: name, keys: [str] }` | —                    | who can sign in over SSH: `keys`, SSH public keys, for `user`, by default the distro's (§6.1), §6.2   |
+| `script`   | `?str` or `?[str]`              | —                    | what every machine of the kind runs once, at first boot, §6.2                                         |
+| `risk`     | `?{ max: pct }`                 | —                    | §15                                                                                                   |
+| `life`     | `?dur`                          | never                | the core ends the machine after this                                                                  |
+| `recovers` | `?uint`                         | `3`                  | how many recovers a lost machine may have; `0` = none                                                 |
+| `tags`     | `?{str: str}`                   | —                    | the app's own tags; no key may start with `rig`                                                       |
+| `ports`    | `?[rule]`                       | none                 | the inbound rules every machine of the kind starts with; all else is closed                           |
 
 **entry**
 
-| Key        | Type          | Definition                                |
-| ---------- | ------------- | ----------------------------------------- |
-| `provider` | `name`        | the `name` of a provider in `providers`   |
-| `market`   | `[market]`    | in order; at least one; no repeats        |
-| `types`    | `[str]`       | best first; at least one                  |
-| `image`    | `?str`        | the provider's image id                   |
-| `extra`    | `?{str: any}` | provider-specific, passed as `spec.extra` |
+| Key        | Type          | Definition                                                                           |
+| ---------- | ------------- | ------------------------------------------------------------------------------------ |
+| `provider` | `name`        | the `name` of a provider in `providers`                                              |
+| `market`   | `[market]`    | in order; at least one; no repeats                                                   |
+| `types`    | `[str]`       | best first; at least one                                                             |
+| `image`    | `?str`        | this provider's id of a Linux image, booted as it is in place of the kind's `distro` |
+| `extra`    | `?{str: any}` | provider-specific, passed as `spec.extra`                                            |
 
 `market` is always a list, even with one market: `["demand"]`.
+
+### 6.1 Distro
+
+| `name`   | Versions             | Default version | Login user |
+| -------- | -------------------- | --------------- | ---------- |
+| `ubuntu` | `"24.04"`, `"22.04"` | `"24.04"`       | `ubuntu`   |
+| `debian` | `"13"`, `"12"`       | `"12"`          | `debian`   |
+
+- `version` is the major version, as the distro names it; without it, the distro's default version.
+- A distro names a line of images, not one image: the provider finds the newest image of that version, for the type's arch, each time it creates a machine (§11). New builds of a version come in on their own, recovered machines too; a new major version is a new row.
+- Every provider MUST offer each distro at its default version, on every arch it sells; it MAY offer the other versions.
+
+```
+{ name: "worker", try: [...], distro: { name: "debian" } }
+  → each machine boots the newest debian 12 image, on arm or x86 as its type is
+```
+
+### 6.2 First boot
+
+At first boot, every machine signs in its kind's `login`, then runs its kind's `script`; the core builds both into one bash script, `spec.script`.
+
+- `login.keys` is at least one SSH public key, one line each: `ssh-ed25519 AAAA... me@laptop`. `login.user` is a `name` that is not `root`; without it, the distro's login user (§6.1), the same on every cloud. The user gets the keys and `sudo` without a password; one the image already has keeps its own keys too, and a system user (uid below 1000) fails the first boot. Only root reads the log and its exit code.
+- `script` is a script of its own: a `str`, or a `[str]` of its lines, joined by `\n`, with one more at the end. It runs under its own `#!` if it has one, else by `bash`.
+- The core MUST build the first-boot script exactly as below, each part only when the kind has it; a kind with neither has none. It runs once, as root, on every provider and distro; its output goes to `/var/log/rig/boot.log`, and its exit code to `/var/lib/rig/boot.exit`. A failed first boot is not run again.
+- `<user>` is the login user; `<keys>` is `login.keys`, joined as `script` is, then base64 on one line; `<script>` is the `script`, joined, then base64 on one line. The lines are joined by `\n`, and the first-boot script ends with one.
+
+```bash
+#!/bin/bash
+# rig: the kind's first boot, once, as root
+[ -e /var/lib/rig/boot.ran ] && exit 0
+mkdir -p /var/lib/rig /var/log/rig
+chmod 700 /var/lib/rig /var/log/rig
+touch /var/lib/rig/boot.ran
+exec >>/var/log/rig/boot.log 2>&1
+trap 'echo $? > /var/lib/rig/boot.exit' EXIT
+set -eo pipefail
+```
+
+The `login` part:
+
+```bash
+id -u <user> >/dev/null 2>&1 || useradd -m -s /bin/bash <user>
+[ "$(id -u <user>)" -ge 1000 ] || { echo "rig: <user> is a system user" >&2; exit 1; }
+home=$(getent passwd <user> | cut -d: -f6)
+mkdir -p "$home/.ssh"
+echo '<keys>' | base64 -d >> "$home/.ssh/authorized_keys"
+chmod 700 "$home/.ssh"
+chmod 600 "$home/.ssh/authorized_keys"
+chown -R <user>: "$home/.ssh"
+echo '<user> ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rig-login
+chmod 440 /etc/sudoers.d/rig-login
+```
+
+The `script` part:
+
+```bash
+echo '<script>' | base64 -d > /var/lib/rig/script
+chmod 700 /var/lib/rig/script
+if head -n 1 /var/lib/rig/script | grep -q '^#!'; then /var/lib/rig/script; else bash /var/lib/rig/script; fi
+```
+
+```
+{ name: "web", try: [...], distro: { name: "debian" }, login: { keys: ["ssh-ed25519 AAAA..."] } }
+  → ssh debian@<ip>, on every cloud
+```
 
 ## 7. Preset
 
@@ -168,17 +242,18 @@ A preset makes a kind from a `name` and a few options, so the app needs to know 
 
 Only `name` is required.
 
-| Option    | Type                           | Default                                              | Definition                                                                                   |
-| --------- | ------------------------------ | ---------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `name`    | `name`                         | —                                                    | the kind's name                                                                              |
-| `cpu`     | `?uint`                        | per preset                                           | vCPUs; `general`, `compute`                                                                  |
-| `mem`     | `?uint`                        | per preset                                           | GB of memory; `memory`                                                                       |
-| `gpu`     | `?str`                         | per preset                                           | the GPU model: `"l4"`, `"a10"`, `"h100"`; `gpu`                                              |
-| `market`  | `?[market]`                    | per preset                                           |                                                                                              |
-| `arch`    | `?"arm"`, `?"x86"` or `?"any"` | `"any"`; with `image`, `"arm"` if sold, else `"x86"` | the CPU architecture; `"any"` is `arm`'s types, then `x86`'s                                 |
-| `up`      | `?uint`                        | `0`                                                  | also try the next `up` sizes, after every type of the asked size; not `small`, not `gpu`     |
-| `disk`    | `?uint`                        | per preset; with `image`, the image's                | GB of the boot disk                                                                          |
-| kind keys | —                              | —                                                    | `image`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`: passed to the kind unchanged |
+| Option    | Type                           | Default                                              | Definition                                                                                             |
+| --------- | ------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `name`    | `name`                         | —                                                    | the kind's name                                                                                        |
+| `cpu`     | `?uint`                        | per preset                                           | vCPUs; `general`, `compute`                                                                            |
+| `mem`     | `?uint`                        | per preset                                           | GB of memory; `memory`                                                                                 |
+| `gpu`     | `?str`                         | per preset                                           | the GPU model: `"l4"`, `"a10"`, `"h100"`; `gpu`                                                        |
+| `market`  | `?[market]`                    | per preset                                           |                                                                                                        |
+| `arch`    | `?"arm"`, `?"x86"` or `?"any"` | `"any"`; with `image`, `"arm"` if sold, else `"x86"` | the CPU architecture; `"any"` is `arm`'s types, then `x86`'s; a `distro` fits every arch               |
+| `up`      | `?uint`                        | `0`                                                  | also try the next `up` sizes, after every type of the asked size; not `small`, not `gpu`               |
+| `image`   | `?str`                         | —                                                    | this provider's id of a Linux image: the entry's `image`, booted in place of `distro`                  |
+| `disk`    | `?uint`                        | per preset; with `image`, the image's                | GB of the boot disk                                                                                    |
+| kind keys | —                              | —                                                    | `distro`, `login`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`: passed to the kind unchanged |
 
 ### 7.3 Rules
 
@@ -186,6 +261,7 @@ Only `name` is required.
 - A size not sold MUST round up to the next size that is.
 - Without `disk`, a preset MUST set it to its default disk (§7.1), worked out from the asked size, or the default size, and rounded up to a multiple of `10`: room for the provider's own image, and more as the machine grows. With `image` and without `disk`, it MUST leave `disk` out: the image's own size.
 - `arch: "any"` with `image` MUST be a refusal, `config`: an image fits one arch.
+- `image` MUST go on the entry; `image` with `distro` MUST be a refusal, `config`: the image is booted in place of it.
 - Each type MUST appear once, the first time it is reached.
 - An option the preset does not take (`mem` on `compute`) MUST be a refusal: `config`.
 - A preset without `name` MUST be a refusal: `config`.
@@ -208,15 +284,16 @@ compute { name: "worker", cpu: 8 }
 
 A provider is a plugin: one object with these keys.
 
-| Key       | Type           | Definition                                      |
-| --------- | -------------- | ----------------------------------------------- |
-| `slot`    | `"provider"`   | the slot it fills; `"hub"` is reserved, §22     |
-| `name`    | `name`         | how entries refer to it; unique among providers |
-| `rig`     | `uint`         | the generation it follows                       |
-| `can`     | `?{str: bool}` | what it supports, below                         |
-| `keys`    | `[str]`        | the key names its `auth` takes, §8.1            |
-| `presets` | functions      | §7                                              |
-| calls     | functions      | §9                                              |
+| Key       | Type           | Definition                                                              |
+| --------- | -------------- | ----------------------------------------------------------------------- |
+| `slot`    | `"provider"`   | the slot it fills; `"hub"` is reserved, §22                             |
+| `name`    | `name`         | how entries refer to it; unique among providers                         |
+| `rig`     | `uint`         | the generation it follows                                               |
+| `can`     | `?{str: bool}` | what it supports, below                                                 |
+| `keys`    | `[str]`        | the key names its `auth` takes, §8.1                                    |
+| `distros` | `{str: [str]}` | the distro versions it offers, §6.1: `{ "ubuntu": ["24.04", "22.04"] }` |
+| `presets` | functions      | §7                                                                      |
+| calls     | functions      | §9                                                                      |
 
 | `can`  | When `true`                                           | When `false` or absent                         |
 | ------ | ----------------------------------------------------- | ---------------------------------------------- |
@@ -231,7 +308,8 @@ When the core opens, it MUST check every plugin in this order, and the first fai
 2. `slot` is `"provider"`; `"hub"` is a refusal, `config`, §22.
 3. `name` is a `name`, not taken.
 4. Every call that is always present is there, and every call that `can` enables.
-5. If the provider has `check`, the core calls it: a throw is a refusal, `plugin`.
+5. `distros` offers every distro of §6.1 at its default version.
+6. If the provider has `check`, the core calls it: a throw is a refusal, `plugin`.
 
 The core MUST NOT list, create or end a machine before every plugin passes.
 
@@ -302,15 +380,16 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 
 **spec**: filled by the core.
 
-| Key      | Type          | Definition                                            |
-| -------- | ------------- | ----------------------------------------------------- |
-| `name`   | `str`         | `<app>-<kind>-<8 lowercase hex>`                      |
-| `image`  | `?str`        | the image id; absent → the provider's default         |
-| `disk`   | `?uint`       | GB of the boot disk; absent → the provider's default  |
-| `script` | `?str`        | a startup script, plain text; the provider encodes it |
-| `tags`   | `{str: str}`  | the rig tags and the kind's own, §13                  |
-| `extra`  | `?{str: any}` | the entry's `extra`, unchanged                        |
-| `ports`  | `[rule]`      | the kind's `ports`; none is `[]`                      |
+| Key      | Type                           | Definition                                                                                                     |
+| -------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `name`   | `str`                          | `<app>-<kind>-<8 lowercase hex>`                                                                               |
+| `distro` | `?{ name: str, version: str }` | the kind's `distro`, its version filled in; absent with `image`                                                |
+| `image`  | `?str`                         | the entry's image id; absent with `distro`                                                                     |
+| `disk`   | `?uint`                        | GB of the boot disk; absent → the provider's default                                                           |
+| `script` | `?str`                         | the first-boot script the core built from the kind's `login` and `script`, §6.2; the provider runs it as it is |
+| `tags`   | `{str: str}`                   | the rig tags and the kind's own, §13                                                                           |
+| `extra`  | `?{str: any}`                  | the entry's `extra`, unchanged                                                                                 |
+| `ports`  | `[rule]`                       | the kind's `ports`, each `from: "any"` as two rules (§20); none is `[]`                                        |
 
 **answer**: exactly one of:
 
@@ -321,16 +400,17 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 
 **machine**
 
-| Key       | Type                               | Definition                     |
-| --------- | ---------------------------------- | ------------------------------ |
-| `id`      | `str`                              | unique within the provider     |
-| `status`  | `status`                           | mapped from the provider's own |
-| `market`  | `market`                           |                                |
-| `type`    | `str`                              |                                |
-| `zone`    | `str`                              |                                |
-| `tags`    | `{str: str}`                       | every tag on the machine       |
-| `ip`      | `?{ public?: str, private?: str }` |                                |
-| `created` | `ms`                               |                                |
+| Key       | Type                               | Definition                               |
+| --------- | ---------------------------------- | ---------------------------------------- |
+| `id`      | `str`                              | unique within the provider               |
+| `status`  | `status`                           | mapped from the provider's own           |
+| `market`  | `market`                           |                                          |
+| `type`    | `str`                              |                                          |
+| `zone`    | `str`                              |                                          |
+| `image`   | `?str`                             | the image it boots, by the provider's id |
+| `tags`    | `{str: str}`                       | every tag on the machine                 |
+| `ip`      | `?{ public?: str, private?: str }` |                                          |
+| `created` | `ms`                               |                                          |
 
 **shape**: a type, as §15 sees it.
 
@@ -343,32 +423,46 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 
 **rule**
 
-| Key     | Type    | Definition                           |
-| ------- | ------- | ------------------------------------ |
-| `id`    | `?str`  | the provider's id; set on output     |
-| `port`  | `uint`  | the port, or the first of a range    |
-| `to`    | `?uint` | the last port of a range             |
-| `proto` | `?str`  | `"tcp"` or `"udp"`; absent → `"tcp"` |
-| `from`  | `str`   | a CIDR: `"1.2.3.4/32"`               |
+| Key     | Type    | Definition                                                                                                                      |
+| ------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `id`    | `?str`  | the provider's id; set on output                                                                                                |
+| `port`  | `uint`  | the port, or the first of a range                                                                                               |
+| `to`    | `?uint` | the last port of a range                                                                                                        |
+| `proto` | `?str`  | `"tcp"` or `"udp"`; absent → `"tcp"`                                                                                            |
+| `from`  | `str`   | an IPv4 or IPv6 CIDR: `"1.2.3.4/32"`, `"::/0"`; or `"any"`, which the core makes two rules (§20), so a provider only gets CIDRs |
+
+**match**: the rules `port.close` closes, §20.
+
+| Key     | Type    | Definition                                                    |
+| ------- | ------- | ------------------------------------------------------------- |
+| `port`  | `?uint` | the rule's `port`                                             |
+| `to`    | `?uint` | the rule's `to`; a rule without one has its `port`            |
+| `proto` | `?str`  | the rule's `proto`; a rule without one has `"tcp"`            |
+| `from`  | `?str`  | the rule's `from`; `"any"` is both `"0.0.0.0/0"` and `"::/0"` |
 
 ## 11. Rules
 
-| Call     | Rule                                                                                                                                    |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `places` | MUST return only places sold now for the entry's markets and types, in any order                                                        |
-| `create` | MUST make exactly one try: no second try, no other place                                                                                |
-| `create` | with `can.port`: MUST start the machine with every inbound port closed, inside its network too, but `spec.ports`, from its first moment |
-| `create` | MUST remove what it made for a try that is `busy` or throws; a failed removal MUST NOT change the try's answer                          |
-| `create` | MUST put every tag of `spec.tags` on the machine as it is created, or throw; `spec.extra` MUST NOT change that, nor the one try         |
-| `create` | MUST answer `busy` only when there is no room, with the code below; else MUST throw                                                     |
-| `check`  | MUST throw when the provider cannot work: wrong keys, no access, an unknown region                                                      |
-| `shape`  | MUST come from the provider's own data, never from a call to the cloud; a type it does not know is `null`                               |
-| `get`    | an unknown id MUST give `null`, not throw                                                                                               |
-| `list`   | MUST return every machine with all the given tags, in every status but `ended`, all pages                                               |
-| `end`    | an unknown or ended id MUST succeed, and still remove what that machine left                                                            |
-| `end`    | MUST also remove what the machine leaves: its port rules, its unattached disks                                                          |
-| `stop`   | on a `spot` machine MUST be a refusal: `unsupported`                                                                                    |
-| status   | MUST map the provider's own statuses onto `status`; after a take-back, `ended`                                                          |
+| Call     | Rule                                                                                                                                                                                                            |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `places` | MUST return only places sold now for the entry's markets and types, in any order                                                                                                                                |
+| `create` | MUST make exactly one try: no second try, no other place                                                                                                                                                        |
+| `create` | with `spec.distro`: MUST boot the newest image of that distro version for the type's arch, found as it creates the machine, through that version's pointer (§12); a provider MUST NOT keep image ids of its own |
+| `create` | with `spec.distro`: a region without its image for the type's arch MUST answer `busy: "type"`, so failover moves on                                                                                             |
+| `create` | with `spec.script`: MUST run it as it is, as root, at the machine's first boot; the script guards itself, so a cloud that runs it at every boot runs it once                                                    |
+| `create` | with `spec.image`: MUST boot that image as it is                                                                                                                                                                |
+| `create` | with `can.port`: MUST start the machine with every inbound port closed, inside its network too, but `spec.ports`, from its first moment                                                                         |
+| `create` | MUST remove what it made for a try that is `busy` or throws; a failed removal MUST NOT change the try's answer                                                                                                  |
+| `create` | MUST put every tag of `spec.tags` on the machine as it is created, or throw; `spec.extra` MUST NOT change that, nor the one try                                                                                 |
+| `create` | MUST answer `busy` only when there is no room, with the code below; else MUST throw                                                                                                                             |
+| `check`  | MUST throw when the provider cannot work: wrong keys, no access, an unknown region                                                                                                                              |
+| `shape`  | MUST come from the provider's own data, never from a call to the cloud; a type it does not know is `null`                                                                                                       |
+| `get`    | SHOULD give the machine's `image`, as `list` does                                                                                                                                                               |
+| `get`    | an unknown id MUST give `null`, not throw                                                                                                                                                                       |
+| `list`   | MUST return every machine with all the given tags, in every status but `ended`, all pages                                                                                                                       |
+| `end`    | an unknown or ended id MUST succeed, and still remove what that machine left                                                                                                                                    |
+| `end`    | MUST also remove what the machine leaves: its port rules, its unattached disks                                                                                                                                  |
+| `stop`   | on a `spot` machine MUST be a refusal: `unsupported`                                                                                                                                                            |
+| status   | MUST map the provider's own statuses onto `status`; after a take-back, `ended`                                                                                                                                  |
 
 | `busy`    | No room                                  |
 | --------- | ---------------------------------------- |
@@ -381,17 +475,19 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 
 A provider MUST keep what is not code in a data file (Appendix A), so that providers for the same cloud in different languages agree.
 
-| Key       | Definition                                                                                                                                               |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rig`     | the generation                                                                                                                                           |
-| `name`    | the provider's name                                                                                                                                      |
-| `busy`    | the provider's error code → `busy`; a code not listed MUST throw                                                                                         |
-| `tags`    | tag names the provider cannot hold → names it can: `{ "rig-app": "rig_app" }`; the provider MUST map them both ways, so the core only sees its own names |
-| `presets` | preset → arch → size → types; `small` has no size: arch → types                                                                                          |
-| `shapes`  | what `shape` reads; its form is the provider's own                                                                                                       |
+| Key       | Definition                                                                                                                                                                                                                  |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rig`     | the generation                                                                                                                                                                                                              |
+| `name`    | the provider's name                                                                                                                                                                                                         |
+| `busy`    | the provider's error code → `busy`; a code not listed MUST throw                                                                                                                                                            |
+| `tags`    | tag names the provider cannot hold → names it can: `{ "rig-app": "rig_app" }`; the provider MUST map them both ways, so the core only sees its own names                                                                    |
+| `presets` | preset → arch → size → types; `small` has no size: arch → types                                                                                                                                                             |
+| `distros` | distro → version → arch → the pointer to its newest image, in the provider's own form: a name the cloud keeps for the newest image (an SSM parameter, an image family), or what finds it (an image URN without its version) |
+| `shapes`  | what `shape` reads; its form is the provider's own                                                                                                                                                                          |
 
 - Types MUST be listed best first: newest generation first, older ones as fallback.
 - The first size listed is the default, unless §7.1 sets one. For `gpu`, the first model listed is the cheapest.
+- Each distro version in `distros` MUST have both arches, `arm` and `x86`; the plugin's `distros` (§8) is read from it.
 
 ---
 
@@ -574,27 +670,27 @@ A refusal carries `reason` and `message`. Code MUST read only `reason`; `message
 
 What the app calls on the core. A lib MAY name them in its own style (`machine.create`, `machine_create`), but MUST keep their meaning.
 
-| Call             | Input                                | Output          | Does                                                                                                             |
-| ---------------- | ------------------------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `open`           | —                                    | —               | §16                                                                                                              |
-| `close`          | —                                    | —               | §16                                                                                                              |
-| `round`          | —                                    | —               | runs a round now, §16                                                                                            |
-| `on`             | `event: str`, a handler              | —               | calls the handler on every such event, §18                                                                       |
-| `place.list`     | `kind: name`                         | `[place]`       | the places a failover would try, in its order, each with `provider` and `risk`; its length is the kind's breadth |
-| `machine.create` | `kind: name`                         | `?machine`      | a failover, §14; `null` when there is no room                                                                    |
-| `machine.get`    | `id: str`                            | `?machine`      | the provider's `get`, copied into the store; `null` for an id the store does not hold                            |
-| `machine.wait`   | `id: str`, `status`, `?timeout: dur` | `machine`       | `machine.get` every `poll`, until the machine has `status`, or is `ended`                                        |
-| `machine.list`   | `?{ kind?: name }`                   | `[machine]`     | from the store                                                                                                   |
-| `machine.end`    | `id: str`                            | —               | the provider's `end`; emits `machine:ended`                                                                      |
-| `machine.start`  | `id: str`                            | —               | the provider's `start`                                                                                           |
-| `machine.stop`   | `id: str`                            | —               | the provider's `stop`                                                                                            |
-| `machine.reboot` | `id: str`                            | —               | the provider's `reboot`                                                                                          |
-| `disk.grow`      | `id: str`, `gb: uint`                | —               | the provider's, once the size is checked: a disk only grows                                                      |
-| `disk.get`       | `id: str`                            | `{ gb, ready }` | the provider's                                                                                                   |
-| `disk.wait`      | `id: str`, `?timeout: dur`           | `{ gb, ready }` | `disk.get` every `poll`, until `ready`                                                                           |
-| `port.open`      | `id: str`, `rule`                    | `rule`          | the provider's, once the rule is checked; an equal rule the machine has is given back as it is                   |
-| `port.close`     | `id: str`, `rule: str`               | —               | the provider's; a rule the machine does not have is done                                                         |
-| `port.list`      | `id: str`                            | `[rule]`        | the provider's                                                                                                   |
+| Call             | Input                                | Output          | Does                                                                                                                       |
+| ---------------- | ------------------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `open`           | —                                    | —               | §16                                                                                                                        |
+| `close`          | —                                    | —               | §16                                                                                                                        |
+| `round`          | —                                    | —               | runs a round now, §16                                                                                                      |
+| `on`             | `event: str`, a handler              | —               | calls the handler on every such event, §18                                                                                 |
+| `place.list`     | `kind: name`                         | `[place]`       | the places a failover would try, in its order, each with `provider` and `risk`; its length is the kind's breadth           |
+| `machine.create` | `kind: name`                         | `?machine`      | a failover, §14; `null` when there is no room                                                                              |
+| `machine.get`    | `id: str`                            | `?machine`      | the provider's `get`, copied into the store; `null` for an id the store does not hold                                      |
+| `machine.wait`   | `id: str`, `status`, `?timeout: dur` | `machine`       | `machine.get` every `poll`, until the machine has `status`, or is `ended`                                                  |
+| `machine.list`   | `?{ kind?: name }`                   | `[machine]`     | from the store                                                                                                             |
+| `machine.end`    | `id: str`                            | —               | the provider's `end`; emits `machine:ended`                                                                                |
+| `machine.start`  | `id: str`                            | —               | the provider's `start`                                                                                                     |
+| `machine.stop`   | `id: str`                            | —               | the provider's `stop`                                                                                                      |
+| `machine.reboot` | `id: str`                            | —               | the provider's `reboot`                                                                                                    |
+| `disk.grow`      | `id: str`, `gb: uint`                | —               | the provider's, once the size is checked: a disk only grows                                                                |
+| `disk.get`       | `id: str`                            | `{ gb, ready }` | the provider's                                                                                                             |
+| `disk.wait`      | `id: str`, `?timeout: dur`           | `{ gb, ready }` | `disk.get` every `poll`, until `ready`                                                                                     |
+| `port.open`      | `id: str`, `rule`                    | `[rule]`        | the provider's, once the rule is checked; `from: "any"` is two rules; an equal rule the machine has is given back as it is |
+| `port.close`     | `id: str`, `rule: str` or `match`    | `[rule]`        | the provider's, for the rule with that id, or every rule the `match` matches; the rules closed                             |
+| `port.list`      | `id: str`                            | `[rule]`        | the provider's                                                                                                             |
 
 - Every call but `open` and `on` MUST be a refusal before `open`, and after `close`: `closed`.
 - `on` MAY be called before `open`, so the app hears `guard` while the core opens.
@@ -603,11 +699,13 @@ What the app calls on the core. A lib MAY name them in its own style (`machine.c
 - A wait whose machine leaves the store (a round found it lost) MUST end with that machine, `status: "ended"`.
 - A wait MUST check once before its first `poll`, and MUST be a refusal, `timeout`, when `timeout` (default `"10m"`) has passed since it began.
 - `disk.grow` MUST be a refusal, `config`, for a `gb` not above the disk's size now, as `disk.get` gives it.
-- `port.open` MUST be a refusal, `config`, for a rule that is not one: `port` and `to` from `1` to `65535`, `to` not below `port`, `proto` a `Proto`, `from` an IPv4 or IPv6 CIDR.
-- `port.open` MUST give back, without the provider's `port.open`, a rule of `port.list` with the same `port`, `to`, `proto` and `from`; an absent `to` is `port`, an absent `proto` is `tcp`.
-- `port.close` of a rule id `port.list` does not give MUST succeed, without the provider's `port.close`.
+- `port.open` MUST be a refusal, `config`, for a rule that is not one: `port` and `to` from `1` to `65535`, `to` not below `port`, `proto` `"tcp"` or `"udp"`, `from` an IPv4 or IPv6 CIDR, or `"any"`.
+- `from: "any"` MUST be two rules, `"0.0.0.0/0"` then `"::/0"`, the same in a kind's `ports`; the provider only sees CIDRs. `port.open` gives back its rules, in that order, and is all or none: when the provider fails one, the core closes what the call opened, then throws.
+- `port.open` MUST give back, for each rule, without the provider's `port.open`, a rule of `port.list` with the same `port`, `to`, `proto` and `from`; an absent `to` is `port`, an absent `proto` is `tcp`.
+- `port.close` with a `match` MUST close every rule of `port.list` that has every key the `match` gives, as §10 reads them; a `match` without a key, or with one that is not a rule's (a `port` out of range), MUST be a refusal: `config`.
+- `port.close` MUST give back the rules it closed, in `port.list` order; a rule id `port.list` does not give, or a `match` none of its rules has, is `[]`, without the provider's `port.close`.
 - A machine the provider no longer has comes back from `machine.get` with `status: "ended"`. The round that follows finds it lost, §16.
-- The machine the app sees is the provider's `machine` (§10) with three more keys: `provider`, `kind` and `name`.
+- The machine the app sees is the provider's `machine` (§10) with `provider`, `kind` and `name`, and, when its kind has a `login`, `user`: its login user.
 
 ## 21. Kit
 
@@ -650,6 +748,20 @@ A part of `packages/aws/src/aws.json`, the official aws provider's data file.
         "VcpuLimitExceeded": "account"
     },
     "tags": {},
+    "distros": {
+        "ubuntu": {
+            "24.04": {
+                "arm": {
+                    "ssm": "/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id",
+                    "root": "/dev/sda1"
+                },
+                "x86": {
+                    "ssm": "/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id",
+                    "root": "/dev/sda1"
+                }
+            }
+        }
+    },
     "presets": {
         "small": {
             "arm": ["t4g.small", "t4g.medium"],

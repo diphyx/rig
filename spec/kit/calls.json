@@ -1769,11 +1769,13 @@
                         }
                     ],
                     "expect": {
-                        "result": {
-                            "id": "r1",
-                            "port": 22,
-                            "from": "1.2.3.4/32"
-                        }
+                        "result": [
+                            {
+                                "id": "r1",
+                                "port": 22,
+                                "from": "1.2.3.4/32"
+                            }
+                        ]
                     }
                 },
                 {
@@ -1902,9 +1904,11 @@
                         }
                     ],
                     "expect": {
-                        "result": {
-                            "id": "r1"
-                        }
+                        "result": [
+                            {
+                                "id": "r1"
+                            }
+                        ]
                     }
                 },
                 {
@@ -2021,7 +2025,15 @@
                 {
                     "do": "call",
                     "call": "port.close",
-                    "args": ["m1", "r1"]
+                    "args": ["m1", "r1"],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r1",
+                                "port": 22
+                            }
+                        ]
+                    }
                 },
                 {
                     "do": "call",
@@ -2122,7 +2134,10 @@
                 {
                     "do": "call",
                     "call": "port.close",
-                    "args": ["m1", "zz"]
+                    "args": ["m1", "zz"],
+                    "expect": {
+                        "result": []
+                    }
                 },
                 {
                     "do": "call",
@@ -2130,6 +2145,729 @@
                     "args": ["m1"],
                     "expect": {
                         "result": []
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/port-open-any",
+            "description": "from any opens two rules, IPv4 then IPv6, and gives back both",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 443,
+                            "from": "any"
+                        }
+                    ],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r1",
+                                "port": 443,
+                                "from": "0.0.0.0/0"
+                            },
+                            {
+                                "id": "r2",
+                                "port": 443,
+                                "from": "::/0"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/port-close-port",
+            "description": "a match by port closes every rule of that port, and gives them back",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 22,
+                            "from": "1.2.3.4/32"
+                        }
+                    ]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 53,
+                            "proto": "udp",
+                            "from": "1.2.3.4/32"
+                        }
+                    ]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 443,
+                            "from": "any"
+                        }
+                    ]
+                },
+                {
+                    "do": "call",
+                    "call": "port.close",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 443
+                        }
+                    ],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r3",
+                                "from": "0.0.0.0/0"
+                            },
+                            {
+                                "id": "r4",
+                                "from": "::/0"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.list",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r1"
+                            },
+                            {
+                                "id": "r2"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/port-close-proto",
+            "description": "a match by port and proto closes only rules of that proto; an absent proto is tcp",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 22,
+                            "from": "1.2.3.4/32"
+                        }
+                    ]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 53,
+                            "proto": "udp",
+                            "from": "1.2.3.4/32"
+                        }
+                    ]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 443,
+                            "from": "any"
+                        }
+                    ]
+                },
+                {
+                    "do": "call",
+                    "call": "port.close",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 22,
+                            "proto": "udp"
+                        }
+                    ],
+                    "expect": {
+                        "result": []
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.close",
+                    "args": [
+                        "m1",
+                        {
+                            "proto": "udp"
+                        }
+                    ],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r2",
+                                "port": 53
+                            }
+                        ]
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.list",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r1"
+                            },
+                            {
+                                "id": "r3"
+                            },
+                            {
+                                "id": "r4"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/port-close-any",
+            "description": "a match from any closes the rules open to anywhere, IPv4 and IPv6",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 22,
+                            "from": "1.2.3.4/32"
+                        }
+                    ]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 53,
+                            "proto": "udp",
+                            "from": "1.2.3.4/32"
+                        }
+                    ]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 443,
+                            "from": "any"
+                        }
+                    ]
+                },
+                {
+                    "do": "call",
+                    "call": "port.close",
+                    "args": [
+                        "m1",
+                        {
+                            "from": "any"
+                        }
+                    ],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r3"
+                            },
+                            {
+                                "id": "r4"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.list",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r1"
+                            },
+                            {
+                                "id": "r2"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/port-close-bad-match",
+            "description": "a match without a key, or with one that is not a rule's, is a refusal",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.close",
+                    "args": ["m1", {}],
+                    "expect": {
+                        "refusal": "config"
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.close",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 0
+                        }
+                    ],
+                    "expect": {
+                        "refusal": "config"
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.close",
+                    "args": [
+                        "m1",
+                        {
+                            "host": "x"
+                        }
+                    ],
+                    "expect": {
+                        "refusal": "config"
                     }
                 }
             ]
@@ -2289,9 +3027,11 @@
                         }
                     ],
                     "expect": {
-                        "result": {
-                            "id": "r1"
-                        }
+                        "result": [
+                            {
+                                "id": "r1"
+                            }
+                        ]
                     }
                 }
             ]
@@ -2649,6 +3389,119 @@
             ]
         },
         {
+            "id": "calls/kind-ports-any",
+            "description": "from any in a kind's ports starts the machine with two rules",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "ports": [
+                                {
+                                    "port": 80,
+                                    "from": "any"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.list",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r1",
+                                "port": 80,
+                                "from": "0.0.0.0/0"
+                            },
+                            {
+                                "id": "r2",
+                                "port": 80,
+                                "from": "::/0"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
             "id": "calls/kind-ports-bad",
             "description": "a rule in a kind's ports that is not one is a refusal",
             "given": {
@@ -2838,6 +3691,1067 @@
                     "do": "open",
                     "expect": {
                         "refusal": "config"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/distro-default",
+            "description": "a kind without a distro boots ubuntu at its default version",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "machine.get",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": {
+                            "image": "ubuntu-24.04"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/distro-version-default",
+            "description": "a distro without a version boots its default version",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "distro": {
+                                "name": "debian"
+                            }
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "machine.get",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": {
+                            "image": "debian-12"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/distro-version",
+            "description": "a distro with a version boots that version",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "distro": {
+                                "name": "debian",
+                                "version": "13"
+                            }
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "machine.get",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": {
+                            "image": "debian-13"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/distro-entry-image",
+            "description": "an entry's image is used in place of the kind's distro",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"],
+                                    "image": "img-2"
+                                }
+                            ],
+                            "distro": {
+                                "name": "debian"
+                            }
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "machine.get",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": {
+                            "image": "img-2"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/script-none",
+            "description": "a kind without a script gives none",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"],
+                    "expect": {
+                        "fake": {
+                            "a": {
+                                "scripts": [null]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/script-str",
+            "description": "a script is kept as it is, in the first-boot script, run once",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "script": "echo hi\n"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"],
+                    "expect": {
+                        "fake": {
+                            "a": {
+                                "scripts": [
+                                    "#!/bin/bash\n# rig: the kind's first boot, once, as root\n[ -e /var/lib/rig/boot.ran ] && exit 0\nmkdir -p /var/lib/rig /var/log/rig\nchmod 700 /var/lib/rig /var/log/rig\ntouch /var/lib/rig/boot.ran\nexec >>/var/log/rig/boot.log 2>&1\ntrap 'echo $? > /var/lib/rig/boot.exit' EXIT\nset -eo pipefail\necho 'ZWNobyBoaQo=' | base64 -d > /var/lib/rig/script\nchmod 700 /var/lib/rig/script\nif head -n 1 /var/lib/rig/script | grep -q '^#!'; then /var/lib/rig/script; else bash /var/lib/rig/script; fi\n"
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/script-lines",
+            "description": "a script as lines is joined by newlines, with one at the end, then built as a str is",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "script": ["apt-get install -y nginx", "systemctl enable --now nginx"]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"],
+                    "expect": {
+                        "fake": {
+                            "a": {
+                                "scripts": [
+                                    "#!/bin/bash\n# rig: the kind's first boot, once, as root\n[ -e /var/lib/rig/boot.ran ] && exit 0\nmkdir -p /var/lib/rig /var/log/rig\nchmod 700 /var/lib/rig /var/log/rig\ntouch /var/lib/rig/boot.ran\nexec >>/var/log/rig/boot.log 2>&1\ntrap 'echo $? > /var/lib/rig/boot.exit' EXIT\nset -eo pipefail\necho 'YXB0LWdldCBpbnN0YWxsIC15IG5naW54CnN5c3RlbWN0bCBlbmFibGUgLS1ub3cgbmdpbngK' | base64 -d > /var/lib/rig/script\nchmod 700 /var/lib/rig/script\nif head -n 1 /var/lib/rig/script | grep -q '^#!'; then /var/lib/rig/script; else bash /var/lib/rig/script; fi\n"
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/login-distro-user",
+            "description": "a login goes to the distro's login user, and the machine shows it",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "distro": {
+                                "name": "debian"
+                            },
+                            "login": {
+                                "keys": [
+                                    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAbc me@laptop",
+                                    "ssh-rsa AAAAB3NzaC1yc2EAAAADAQAB"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"],
+                    "expect": {
+                        "fake": {
+                            "a": {
+                                "scripts": [
+                                    "#!/bin/bash\n# rig: the kind's first boot, once, as root\n[ -e /var/lib/rig/boot.ran ] && exit 0\nmkdir -p /var/lib/rig /var/log/rig\nchmod 700 /var/lib/rig /var/log/rig\ntouch /var/lib/rig/boot.ran\nexec >>/var/log/rig/boot.log 2>&1\ntrap 'echo $? > /var/lib/rig/boot.exit' EXIT\nset -eo pipefail\nid -u debian >/dev/null 2>&1 || useradd -m -s /bin/bash debian\n[ \"$(id -u debian)\" -ge 1000 ] || { echo \"rig: debian is a system user\" >&2; exit 1; }\nhome=$(getent passwd debian | cut -d: -f6)\nmkdir -p \"$home/.ssh\"\necho 'c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSUFiYyBtZUBsYXB0b3AKc3NoLXJzYSBBQUFBQjNOemFDMXljMkVBQUFBREFRQUIK' | base64 -d >> \"$home/.ssh/authorized_keys\"\nchmod 700 \"$home/.ssh\"\nchmod 600 \"$home/.ssh/authorized_keys\"\nchown -R debian: \"$home/.ssh\"\necho 'debian ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rig-login\nchmod 440 /etc/sudoers.d/rig-login\n"
+                                ]
+                            }
+                        },
+                        "result": {
+                            "user": "debian"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/login-default-user",
+            "description": "a login on a kind without a distro goes to ubuntu's login user",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "login": {
+                                "keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAbc me@laptop"]
+                            }
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"],
+                    "expect": {
+                        "fake": {
+                            "a": {
+                                "scripts": [
+                                    "#!/bin/bash\n# rig: the kind's first boot, once, as root\n[ -e /var/lib/rig/boot.ran ] && exit 0\nmkdir -p /var/lib/rig /var/log/rig\nchmod 700 /var/lib/rig /var/log/rig\ntouch /var/lib/rig/boot.ran\nexec >>/var/log/rig/boot.log 2>&1\ntrap 'echo $? > /var/lib/rig/boot.exit' EXIT\nset -eo pipefail\nid -u ubuntu >/dev/null 2>&1 || useradd -m -s /bin/bash ubuntu\n[ \"$(id -u ubuntu)\" -ge 1000 ] || { echo \"rig: ubuntu is a system user\" >&2; exit 1; }\nhome=$(getent passwd ubuntu | cut -d: -f6)\nmkdir -p \"$home/.ssh\"\necho 'c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSUFiYyBtZUBsYXB0b3AK' | base64 -d >> \"$home/.ssh/authorized_keys\"\nchmod 700 \"$home/.ssh\"\nchmod 600 \"$home/.ssh/authorized_keys\"\nchown -R ubuntu: \"$home/.ssh\"\necho 'ubuntu ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rig-login\nchmod 440 /etc/sudoers.d/rig-login\n"
+                                ]
+                            }
+                        },
+                        "result": {
+                            "user": "ubuntu"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/login-own-user",
+            "description": "a login with its own user goes to that user, then the script runs",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "login": {
+                                "user": "ops",
+                                "keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAbc me@laptop"]
+                            },
+                            "script": "echo hi\n"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"],
+                    "expect": {
+                        "fake": {
+                            "a": {
+                                "scripts": [
+                                    "#!/bin/bash\n# rig: the kind's first boot, once, as root\n[ -e /var/lib/rig/boot.ran ] && exit 0\nmkdir -p /var/lib/rig /var/log/rig\nchmod 700 /var/lib/rig /var/log/rig\ntouch /var/lib/rig/boot.ran\nexec >>/var/log/rig/boot.log 2>&1\ntrap 'echo $? > /var/lib/rig/boot.exit' EXIT\nset -eo pipefail\nid -u ops >/dev/null 2>&1 || useradd -m -s /bin/bash ops\n[ \"$(id -u ops)\" -ge 1000 ] || { echo \"rig: ops is a system user\" >&2; exit 1; }\nhome=$(getent passwd ops | cut -d: -f6)\nmkdir -p \"$home/.ssh\"\necho 'c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSUFiYyBtZUBsYXB0b3AK' | base64 -d >> \"$home/.ssh/authorized_keys\"\nchmod 700 \"$home/.ssh\"\nchmod 600 \"$home/.ssh/authorized_keys\"\nchown -R ops: \"$home/.ssh\"\necho 'ops ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rig-login\nchmod 440 /etc/sudoers.d/rig-login\necho 'ZWNobyBoaQo=' | base64 -d > /var/lib/rig/script\nchmod 700 /var/lib/rig/script\nif head -n 1 /var/lib/rig/script | grep -q '^#!'; then /var/lib/rig/script; else bash /var/lib/rig/script; fi\n"
+                                ]
+                            }
+                        },
+                        "result": {
+                            "user": "ops"
+                        }
                     }
                 }
             ]
