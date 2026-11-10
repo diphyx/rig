@@ -13,11 +13,13 @@ import {
 
 import {
     type Answer,
+    createPresets,
     Market,
     Reason,
     Slot,
     type Entry,
     type Place,
+    type Presets,
     type Provider,
     type ProviderMachine,
     type Shape,
@@ -33,7 +35,6 @@ import { createDisk } from "./disk.js";
 import { codeOf, createEc2 } from "./ec2.js";
 import { LIVE, toMachine } from "./machine.js";
 import { createPorts } from "./ports.js";
-import { type Presets, presetsOf } from "./presets.js";
 import { shapeOf } from "./shape.js";
 
 export type Aws = Provider & { keys: string[]; presets: Presets };
@@ -102,7 +103,7 @@ export function createAws(config: AwsConfig): Aws {
         rig: RIG,
         can: { spot: true, stop: true, disk: true, port: true },
         keys: KEYS,
-        presets: presetsOf(name, PRESETS),
+        presets: createPresets(name, PRESETS),
 
         /** §11: the keys and the region work. */
         async check(): Promise<void> {
@@ -192,16 +193,17 @@ export function createAws(config: AwsConfig): Aws {
             return machines;
         },
 
-        /** §11: its port rules go first; an unknown or ended id is done. The root disk goes with it. */
+        /** §11: its port rules go first, then the machine; an ended one still loses what it left. The root disk goes with it. */
         async end(id: string): Promise<void> {
             const instance = await ec2.instance(id);
 
-            if (!instance || instance.State?.Name === "terminated") {
-                return;
+            await ports.release(id);
+
+            if (instance && instance.State?.Name !== "terminated") {
+                await ec2.send(new TerminateInstancesCommand({ InstanceIds: [id] }));
             }
 
-            await ports.release(id);
-            await ec2.send(new TerminateInstancesCommand({ InstanceIds: [id] }));
+            await ports.sweep();
         },
 
         async reboot(id: string): Promise<void> {

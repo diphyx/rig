@@ -53,17 +53,17 @@ The same keys as every rig provider's factory (spec §8.2); aws's own go in `ext
 
 ## What It Does on EC2
 
-| rig                       | EC2                                                                                                                               |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `check`                   | `DescribeAvailabilityZones`: the keys and the region work                                                                         |
-| `places`                  | `DescribeInstanceTypeOfferings`, in zones that have a subnet                                                                      |
-| `create`                  | one `RunInstances`, tagged (and named, with `Name`); `spot` is a one-time request that terminates on a take-back; IMDSv2 required |
-| image                     | the kind's, or Ubuntu 24.04 (arm64 or x86_64, by type) from Canonical's public SSM parameter                                      |
-| `get`, `list`             | `DescribeInstances`, by id or by tag, every page                                                                                  |
-| `start`, `stop`, `reboot` | `StartInstances`, `StopInstances`, `RebootInstances`; stopping a spot machine is `unsupported`                                    |
-| `end`                     | takes the machine's own security group off and deletes it, then `TerminateInstances`; the root disk goes with the machine         |
-| `disk.grow`, `get`        | `ModifyVolume` on the root volume; ready once the change is past `modifying`                                                      |
-| `port.*`                  | a security group of the machine's own, made on the first `port.open`                                                              |
+| rig                       | EC2                                                                                                                                                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check`                   | `DescribeAvailabilityZones`: the keys and the region work                                                                                                                                                   |
+| `places`                  | `DescribeInstanceTypeOfferings`, in zones that have a subnet                                                                                                                                                |
+| `create`                  | one `RunInstances`, tagged (and named, with `Name`); `spot` is a one-time request that terminates on a take-back; IMDSv2 required                                                                           |
+| image                     | the kind's, or Ubuntu 24.04 (arm64 or x86_64, by type) from Canonical's public SSM parameter                                                                                                                |
+| `get`, `list`             | `DescribeInstances`, by id or by tag, every page                                                                                                                                                            |
+| `start`, `stop`, `reboot` | `StartInstances`, `StopInstances`, `RebootInstances`; stopping a spot machine is `unsupported`                                                                                                              |
+| `end`                     | takes the machine's own security group off and deletes it, then `TerminateInstances`; a gone machine still loses its group, and groups of machines gone earlier go too; the root disk goes with the machine |
+| `disk.grow`, `get`        | `ModifyVolume` on the root volume; ready once the change is past `modifying`                                                                                                                                |
+| `port.*`                  | a security group of the machine's own, made on the first `port.open`                                                                                                                                        |
 
 Busy answers come from [`src/aws.json`](src/aws.json): no room in a zone (`InsufficientInstanceCapacity`, `Unsupported`, ...), in the spot market (`SpotMaxPriceTooLow`, ...), or in the account (`VcpuLimitExceeded`, ...). Any other error is thrown.
 
@@ -95,7 +95,7 @@ aws.presets.compute({ name: "worker", cpu: 16, up: 1 });
 // every 16 vCPU type first, then every 32 vCPU type
 ```
 
-The type lists are in [`src/aws.json`](src/aws.json), newest generation first. `places` gives only the types each zone sells.
+The preset engine is the core's, the same on every provider; the type lists are in [`src/aws.json`](src/aws.json), newest generation first. `places` gives only the types each zone sells.
 
 ## Spot
 

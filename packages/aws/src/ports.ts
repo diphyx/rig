@@ -6,11 +6,13 @@ import {
     DescribeSecurityGroupsCommand,
     ModifyInstanceAttributeCommand,
     RevokeSecurityGroupIngressCommand,
+    type Tag,
 } from "@aws-sdk/client-ec2";
 
 import { Proto, type Rule } from "@diphyx/rig";
 
-import type { Ec2 } from "./ec2.js";
+import { codeOf, type Ec2 } from "./ec2.js";
+import { tagsOf } from "./machine.js";
 
 /* The tag on the security group rig makes for one machine: its instance id. */
 const GROUP = "rig-machine";
@@ -50,6 +52,15 @@ export function createPorts(ec2: Ec2) {
         await ec2.send(
             new ModifyInstanceAttributeCommand({ InstanceId: id, Groups: on ? [...groups, group] : groups }),
         );
+    }
+
+    /* A group a machine still holds, while it terminates, is left for a later `sweep`. */
+    async function remove(group: string): Promise<void> {
+        await ec2.send(new DeleteSecurityGroupCommand({ GroupId: group })).catch((error: unknown) => {
+            if (codeOf(error) !== "DependencyViolation" && codeOf(error) !== "InvalidGroup.NotFound") {
+                throw error;
+            }
+        });
     }
 
     async function make(id: string): Promise<string> {
@@ -122,7 +133,7 @@ export function createPorts(ec2: Ec2) {
                 });
         },
 
-        /** §11: before `end`: off the machine, then deleted, so no rule outlives it. */
+        /** §11: the machine's group, off it while it runs, then deleted; a group still in use waits for `sweep`. */
         async release(id: string): Promise<void> {
             const group = await find(id);
 
@@ -130,8 +141,28 @@ export function createPorts(ec2: Ec2) {
                 return;
             }
 
-            await attach(id, group, false);
-            await ec2.send(new DeleteSecurityGroupCommand({ GroupId: group }));
+            const instance = await ec2.instance(id);
+
+            if (instance && instance.State?.Name !== "terminated") {
+                await attach(id, group, false);
+            }
+
+            await remove(group);
+        },
+
+        /** §11: the groups of machines that are gone, deleted once nothing holds them. */
+        async sweep(): Promise<void> {
+            const found = await ec2.send<{ SecurityGroups?: { GroupId?: string; Tags?: Tag[] }[] }>(
+                new DescribeSecurityGroupsCommand({ Filters: [{ Name: "tag-key", Values: [GROUP] }] }),
+            );
+
+            for (const group of found.SecurityGroups ?? []) {
+                const instance = await ec2.instance(tagsOf(group.Tags)[GROUP] ?? "");
+
+                if (!instance || instance.State?.Name === "terminated") {
+                    await remove(group.GroupId!);
+                }
+            }
         },
     };
 }

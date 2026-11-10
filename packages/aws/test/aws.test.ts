@@ -2,11 +2,11 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createRig, Market, Refusal } from "@diphyx/rig";
+import { createRig, Market, PresetArch, Refusal } from "@diphyx/rig";
 import { describe, expect, it } from "vitest";
 
 import { resolveAuth } from "../src/auth.js";
-import { AuthFrom, createAws, PresetArch } from "../src/index.js";
+import { AuthFrom, createAws } from "../src/index.js";
 
 type Handler = (input: Record<string, unknown>) => unknown;
 
@@ -347,21 +347,41 @@ describe("aws: machines", () => {
         );
     });
 
-    it("ends an unknown id without a call; a known one loses its port rules first", async () => {
-        const gone = fake({
+    it("ends a gone machine with no terminate, still deleting its group and other gone machines' groups", async () => {
+        const { client, sent } = fake({
             DescribeInstances: () => {
                 return fail("InvalidInstanceID.NotFound");
             },
+            DescribeSecurityGroups: (input) => {
+                return (input.Filters as { Name: string }[])[0]!.Name === "tag-key"
+                    ? { SecurityGroups: [{ GroupId: "sg-old", Tags: [{ Key: "rig-machine", Value: "i-old" }] }] }
+                    : { SecurityGroups: [{ GroupId: "sg-gone" }] };
+            },
+            DeleteSecurityGroup: () => {
+                return {};
+            },
         });
 
-        await createAws({ region: "us-east-1", extra: { client: gone.client } }).end("i-gone");
+        await createAws({ region: "us-east-1", extra: { client } }).end("i-gone");
+
+        const commands = sent.map((one) => {
+            return one.command;
+        });
+
+        expect(commands).not.toContain("TerminateInstances");
 
         expect(
-            gone.sent.map((one) => {
-                return one.command;
-            }),
-        ).toEqual(["DescribeInstances"]);
+            sent
+                .filter((one) => {
+                    return one.command === "DeleteSecurityGroup";
+                })
+                .map((one) => {
+                    return one.input.GroupId;
+                }),
+        ).toEqual(["sg-gone", "sg-old"]);
+    });
 
+    it("ends a running machine: its group off and deleted first, then terminate", async () => {
         const { client, sent } = fake({
             DescribeInstances: () => {
                 return {
@@ -378,8 +398,10 @@ describe("aws: machines", () => {
                     ],
                 };
             },
-            DescribeSecurityGroups: () => {
-                return { SecurityGroups: [{ GroupId: "sg-rig" }] };
+            DescribeSecurityGroups: (input) => {
+                return (input.Filters as { Name: string }[])[0]!.Name === "tag-key"
+                    ? { SecurityGroups: [] }
+                    : { SecurityGroups: [{ GroupId: "sg-rig" }] };
             },
             ModifyInstanceAttribute: () => {
                 return {};

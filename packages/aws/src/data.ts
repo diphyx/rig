@@ -1,11 +1,10 @@
-import type { Busy, Tags } from "@diphyx/rig";
+import type { Busy, PresetTable, Tags } from "@diphyx/rig";
 
 import data from "./aws.json" with { type: "json" };
-import type { Table } from "./presets.js";
 
 /** §12: the data file, read once. */
 export const RIG = data.rig;
-export const PRESETS = data.presets as Table;
+export const PRESETS = data.presets as PresetTable;
 
 /** What `shape` reads: memory per vCPU by class, GPU families, burstable sizes. */
 export const SHAPES = data.shapes as {
