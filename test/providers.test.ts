@@ -1,4 +1,4 @@
-import { Arch, PresetArch, PresetName, type PresetTable, Reason, Refusal, Slot } from "@diphyx/rig";
+import { Arch, DISTROS, Distro, PresetArch, PresetName, type PresetTable, Reason, Refusal, Slot } from "@diphyx/rig";
 import { isArray } from "radash";
 import { describe, expect, it } from "vitest";
 
@@ -19,6 +19,7 @@ const PROVIDERS = [
         name: "aws",
         region: "us-east-1",
         table: aws.presets as PresetTable,
+        distros: aws.distros as Record<string, Record<string, Record<string, unknown>>>,
         keys: ["id", "secret", "token?"],
         make: (config: Record<string, unknown>) => {
             return createAws({
@@ -32,6 +33,7 @@ const PROVIDERS = [
         name: "gcp",
         region: "us-central1",
         table: gcp.presets as PresetTable,
+        distros: gcp.distros as Record<string, Record<string, Record<string, unknown>>>,
         keys: ["key"],
         make: (config: Record<string, unknown>) => {
             return createGcp({
@@ -45,6 +47,7 @@ const PROVIDERS = [
         name: "azure",
         region: "eastus",
         table: azure.presets as PresetTable,
+        distros: azure.distros as Record<string, Record<string, Record<string, unknown>>>,
         keys: ["tenant", "id", "secret"],
         make: (config: Record<string, unknown>) => {
             return createAzure({
@@ -67,7 +70,7 @@ function typesOf(table: PresetTable): { type: string; arch: string }[] {
     });
 }
 
-describe.each(PROVIDERS)("provider $name", ({ name, table, keys, make }) => {
+describe.each(PROVIDERS)("provider $name", ({ name, table, distros, keys, make }) => {
     it("is a rig 1 provider of the same shape: slot, name, keys, can, presets, shape, every call", () => {
         const provider = make({});
 
@@ -114,6 +117,36 @@ describe.each(PROVIDERS)("provider $name", ({ name, table, keys, make }) => {
             expect((error as Refusal).reason).toBe(Reason.PLUGIN);
             expect((error as Refusal).message).toContain(`missing ${keys[0]!}`);
         }
+    });
+
+    it("offers every distro at its default version, and each version it offers on both arches", () => {
+        const provider = make({});
+
+        for (const [name, { default: version, versions }] of Object.entries(DISTROS)) {
+            expect(provider.distros[name as Distro]).toContain(version);
+
+            for (const offered of provider.distros[name as Distro] ?? []) {
+                expect(versions).toContain(offered);
+                expect(Object.keys(distros[name]![offered]!).sort()).toEqual([Arch.ARM, Arch.X86]);
+            }
+        }
+
+        expect(
+            provider.presets.compute({ name: "k", distro: { name: Distro.DEBIAN }, arch: PresetArch.ANY }).distro,
+        ).toEqual({
+            name: Distro.DEBIAN,
+        });
+
+        expect(provider.presets.small({ name: "k", image: "mine", arch: PresetArch.X86 }).try[0]!.image).toBe("mine");
+
+        expect(() => {
+            return provider.presets.small({
+                name: "k",
+                image: "mine",
+                arch: PresetArch.X86,
+                distro: { name: Distro.DEBIAN },
+            });
+        }).toThrow(Refusal);
     });
 
     it("makes the same five presets from a name alone", () => {
