@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { Proto, type Rule } from "@diphyx/rig";
+import { Protocol, type Rule } from "@diphyx/rig";
 
 import { type Arm, codeOf, gone } from "./arm.js";
 import { API, type Paths, versioned } from "./paths.js";
@@ -76,7 +76,7 @@ export function createPorts(arm: Arm, path: Paths, region: string) {
     function allow(name: string, priority: number, rule: Rule): SecurityRule {
         const ports = rule.to !== undefined && rule.to !== rule.port ? `${rule.port}-${rule.to}` : String(rule.port);
 
-        return inbound(name, priority, "Allow", rule.proto === Proto.UDP ? "Udp" : "Tcp", rule.from, ports);
+        return inbound(name, priority, "Allow", rule.protocol === Protocol.UDP ? "Udp" : "Tcp", rule.from, ports);
     }
 
     const deny = inbound(DENY.name, DENY.priority, "Deny", "*", "*", "*");
@@ -148,7 +148,7 @@ export function createPorts(arm: Arm, path: Paths, region: string) {
                     id: one.name ?? "",
                     port: Number(from),
                     ...(to !== undefined && { to: Number(to) }),
-                    proto: one.properties?.protocol === "Udp" ? Proto.UDP : Proto.TCP,
+                    protocol: one.properties?.protocol === "Udp" ? Protocol.UDP : Protocol.TCP,
                     from: one.properties?.sourceAddressPrefix ?? "",
                 };
             });

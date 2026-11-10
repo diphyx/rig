@@ -16,7 +16,7 @@ pnpm add @diphyx/rig @diphyx/rig-azure
 import { createRig } from "@diphyx/rig";
 import { createAzure } from "@diphyx/rig-azure";
 
-const azure = createAzure({ region: "eastus", extra: { subscription: "..." } });
+const azure = createAzure(); // its region: AZURE_LOCATION, else eastus; its subscription: AZURE_SUBSCRIPTION_ID
 
 const rig = createRig({
     rig: 1,
@@ -31,9 +31,9 @@ const rig = createRig({
 The same three ways as every rig provider (spec §8.1), as `AuthFrom`:
 
 ```ts
-createAzure({ region: "eastus" }); // auto: env, the az login, or a managed identity
-createAzure({ region: "eastus", auth: { from: AuthFrom.ENV } }); // RIG_AZURE_TENANT, RIG_AZURE_ID, RIG_AZURE_SECRET
-createAzure({ region: "eastus", auth: { from: AuthFrom.KEYS, keys: { tenant, id, secret } } });
+createAzure(); // auto: env, the az login, or a managed identity
+createAzure({ auth: { from: AuthFrom.ENV } }); // RIG_AZURE_TENANT, RIG_AZURE_ID, RIG_AZURE_SECRET
+createAzure({ auth: { from: AuthFrom.KEYS, keys: { tenant, id, secret } } });
 ```
 
 The keys are a service principal's `tenant`, `id` and `secret`. A missing key is a refusal at once, naming the key.
@@ -42,16 +42,16 @@ The keys are a service principal's `tenant`, `id` and `secret`. A missing key is
 
 The same keys as every rig provider's factory (spec §8.2); azure's own go in `extra`, and any other key is a refusal.
 
-| Option               | Default                                   | Is                                                                    |
-| -------------------- | ----------------------------------------- | --------------------------------------------------------------------- |
-| `region`             | —                                         | the Azure region                                                      |
-| `name`               | `"azure"`                                 | its name in the config; two regions are two providers, with two names |
-| `auth`               | `{ from: AuthFrom.AUTO }`                 | how it signs in: [Auth](#auth)                                        |
-| `identity`           | none                                      | what its machines run as: a user-assigned identity's resource id      |
-| `extra.subscription` | `AZURE_SUBSCRIPTION_ID`                   | the subscription; one of the two is required                          |
-| `extra.group`        | `"rig"`, made on first use                | the resource group its machines go in                                 |
-| `extra.subnet`       | a network of rig's own, made on first use | a subnet's resource id                                                |
-| `extra.request`      | Azure Resource Manager's REST API         | for tests: answers in place of Azure                                  |
+| Option               | Default                                         | Is                                                                    |
+| -------------------- | ----------------------------------------------- | --------------------------------------------------------------------- |
+| `region`             | `AZURE_LOCATION`, `AZURE_REGION`, else `eastus` | the Azure region                                                      |
+| `name`               | `"azure"`                                       | its name in the config; two regions are two providers, with two names |
+| `auth`               | `{ from: AuthFrom.AUTO }`                       | how it signs in: [Auth](#auth)                                        |
+| `identity`           | none                                            | what its machines run as: a user-assigned identity's resource id      |
+| `extra.subscription` | `AZURE_SUBSCRIPTION_ID`                         | the subscription; one of the two is required                          |
+| `extra.group`        | `"rig"`, made on first use                      | the resource group its machines go in                                 |
+| `extra.subnet`       | a network of rig's own, made on first use       | a subnet's resource id                                                |
+| `extra.request`      | Azure Resource Manager's REST API               | for tests: answers in place of Azure                                  |
 
 ## What It Does on Azure
 
@@ -59,19 +59,19 @@ It calls Azure Resource Manager's REST API, signed in with Azure's own `@azure/i
 
 | rig                       | Azure                                                                                                                                                                                       |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `check`                   | reads the subscription: the keys and the subscription work                                                                                                                                  |
+| `check`                   | reads the subscription and its regions: the keys, the subscription and the region work                                                                                                      |
 | `places`                  | the region's resource SKUs: each size's zones, less those closed to the subscription; `eastus-1` is zone 1 of `eastus`, and a region with no zones is one place, `eastus`                   |
 | `create`                  | the group and network once, then one virtual machine, waited for, with its OS disk, network card and public IP                                                                              |
 | `spot`                    | `priority: Spot`, deleted on a take-back                                                                                                                                                    |
 | `distro`, `image`         | the kind's `distro`: its Marketplace image's newest version for the size's arch; or the entry's `image` (a resource id, or `publisher:offer:sku:version`) as it is                          |
 | `script`, `login`         | the first-boot script (spec §6.2) as `customData`, run by cloud-init at first boot; Azure's own admin user, `rig`, signs in by a key whose private half is thrown away, and has no password |
-| `get`, `list`             | the machine, its addresses from its card and IP; the group's machines in the region, every page                                                                                             |
+| `get`, `list`             | the machine, its addresses from its card and IP; the group's machines in the region, every page, with every card's addresses read once                                                      |
 | `start`, `stop`, `reboot` | `start`, `deallocate`, `restart`; stopping a spot machine is `unsupported`                                                                                                                  |
 | `end`                     | the machine deleted with its disk, card and IP, then its security group; groups left by machines gone earlier go too                                                                        |
 | `disk.grow`, `get`        | resizes the OS disk; ready once its change has succeeded                                                                                                                                    |
 | `port.*`                  | a network security group of the machine's own, made before it with the kind's `ports` and a deny-all                                                                                        |
 
-Busy answers come from [`src/azure.json`](src/azure.json): no room in a zone (`ZonalAllocationFailed`, `AllocationFailed`, `SkuNotAvailable`, ...), or in the subscription (`QuotaExceeded`, `OperationNotAllowed`); Azure's inner error, in `details`, is read first. A region without the distro's image for a size's arch is no room for that type, so failover moves on. Any other error is thrown.
+Busy answers come from [`src/azure.json`](src/azure.json): no room in a zone (`ZonalAllocationFailed`, `AllocationFailed`, `SkuNotAvailable`, ...), or in the subscription (`QuotaExceeded`, and `OperationNotAllowed` when it names a quota); Azure's inner error, in `details`, is read first. A region without the distro's image for a size's arch is no room for that type, so failover moves on. A type not in the data file needs its entry's own `image`, as its arch is unknown. Any other error is thrown.
 
 ### Ports
 
@@ -112,7 +112,7 @@ Only `name` is required; every other option has a strong default.
 | `image`             | —                                                          | this provider's image id: the entry's `image`, booted in place of `distro`                   |
 | `disk`              | per preset, from the asked size; with `image`, the image's | GB of the boot disk                                                                          |
 | `market`            | per preset                                                 | in failover order                                                                            |
-| kind keys           | —                                                          | `distro`, `login`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`                     |
+| kind keys           | —                                                          | `distro`, `login`, `script`, `ports`, `worker`, `risk`, `life`, `recovers`, `tags`           |
 
 ```ts
 azure.presets.compute({ name: "worker" });

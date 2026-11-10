@@ -3,6 +3,7 @@ import {
     Arch,
     Busy,
     createPresets,
+    regionOf,
     type Place,
     type Presets,
     type Provider,
@@ -15,12 +16,12 @@ import {
     type Tags,
 } from "@diphyx/rig";
 
-import { tryit } from "radash";
+import { all, tryit } from "radash";
 
 import { codeOf, createArm, gone } from "./arm.js";
 import { KEYS, resolveAuth } from "./auth.js";
 import { type AzureConfig, checkConfig, subscriptionOf } from "./config.js";
-import { busyOf, DISTROS, PRESETS, RIG } from "./data.js";
+import { busyOf, DISTROS, PRESETS, REGION, RIG } from "./data.js";
 import { createDisk } from "./disk.js";
 import { azureName, referenceOf, vmBody } from "./instance.js";
 import { toMachine, type Vm } from "./machine.js";
@@ -50,13 +51,13 @@ function newerFirst(a: string, b: string): number {
 }
 
 /** The azure provider: Virtual Machines, `spot` and `demand`, in one region. */
-export function createAzure(config: AzureConfig): Azure {
+export function createAzure(config: AzureConfig = {}): Azure {
     checkConfig(config);
 
     const subscription = subscriptionOf(config);
     const name = config.name ?? "azure";
     const extra = config.extra ?? {};
-    const region = config.region;
+    const region = regionOf(config.region, REGION.env, REGION.default);
     const arm = createArm(resolveAuth(name, config.auth), extra.request);
     const path = paths(subscription, extra.group ?? "rig");
     const network = createNetwork(arm, path, region, extra.subnet);
@@ -113,6 +114,62 @@ export function createAzure(config: AzureConfig): Azure {
         };
     }
 
+    /* The machine's network card, by its id in lower case: Azure's ids differ in case from call to call. */
+    function nicOf(vm: Vm): string {
+        return (vm.properties?.networkProfile?.networkInterfaces?.[0]?.id ?? "").toLowerCase();
+    }
+
+    /* §16: every card's addresses in the group, in two calls, for `list`. */
+    async function addresses(): Promise<Map<string, { public?: string; private?: string }>> {
+        type Card = {
+            id?: string;
+            properties?: {
+                ipConfigurations?: { properties?: { privateIPAddress?: string; publicIPAddress?: { id?: string } } }[];
+            };
+        };
+
+        const [cards, ips] = await all([
+            arm.all<Card>(path.nics).catch(() => {
+                return [] as Card[];
+            }),
+            arm.all<{ id?: string; properties?: { ipAddress?: string } }>(path.ips).catch(() => {
+                return [];
+            }),
+        ]);
+
+        const publics = new Map(
+            ips.map((ip) => {
+                return [(ip.id ?? "").toLowerCase(), ip.properties?.ipAddress];
+            }),
+        );
+
+        return new Map(
+            cards.map((card) => {
+                const config = card.properties?.ipConfigurations?.[0]?.properties;
+                const address = publics.get((config?.publicIPAddress?.id ?? "").toLowerCase());
+
+                return [
+                    (card.id ?? "").toLowerCase(),
+                    {
+                        ...(address && { public: address }),
+                        ...(config?.privateIPAddress && { private: config.privateIPAddress }),
+                    },
+                ];
+            }),
+        );
+    }
+
+    /* The size's arch, for its distro image: from the data file, or an error that says how to boot it. */
+    function archOf(type: string): Arch {
+        const shape = shapeOf(type);
+
+        if (!shape) {
+            throw new Error(`azure: ${type} is not in the data file, so its arch is unknown: give its entry an image`);
+        }
+
+        return shape.arch;
+    }
+
     async function action(vm: string, verb: "start" | "deallocate" | "restart"): Promise<void> {
         await arm.done("POST", versioned(`${path.vm(vm)}/${verb}`, API.compute));
     }
@@ -123,7 +180,7 @@ export function createAzure(config: AzureConfig): Azure {
             return referenceOf(spec.image);
         }
 
-        const urn = DISTROS.pointerOf(spec.distro!, shapeOf(place.type)?.arch ?? Arch.X86);
+        const urn = DISTROS.pointerOf(spec.distro!, archOf(place.type));
         const [publisher = "", offer = "", sku = ""] = urn.split(":");
 
         let versions: { name?: string }[];
@@ -158,9 +215,19 @@ export function createAzure(config: AzureConfig): Azure {
         keys: KEYS,
         presets: createPresets(name, PRESETS),
 
-        /** §11: the keys and the subscription work. */
+        /** §11: the keys and the subscription work, and the region is one of its own. */
         async check(): Promise<void> {
             await arm.send("GET", path.subscription);
+
+            const locations = await arm.all<{ name?: string }>(path.locations);
+
+            if (
+                !locations.some((one) => {
+                    return one.name === region;
+                })
+            ) {
+                throw new Error(`azure: ${region} is not a region of the subscription`);
+            }
         },
 
         /** §11: from the size's name and the data file. */
@@ -205,7 +272,7 @@ export function createAzure(config: AzureConfig): Azure {
                 await tryit(remove)(vm);
                 await tryit(ports.release)(vm);
 
-                const busy = busyOf(codeOf(error));
+                const busy = busyOf(codeOf(error), (error as Error).message);
 
                 if (busy) {
                     return { busy, message: (error as Error).message };
@@ -222,7 +289,7 @@ export function createAzure(config: AzureConfig): Azure {
             return vm ? toMachine(vm, await ipOf(vm)) : null;
         },
 
-        /** §11: every machine in the group with all the tags, in this region, every page. */
+        /** §11: every machine in the group with all the tags, in this region, every page, with its addresses. */
         async list(tags: Tags): Promise<ProviderMachine[]> {
             let vms: Vm[];
 
@@ -236,12 +303,14 @@ export function createAzure(config: AzureConfig): Azure {
                 throw error;
             }
 
+            const ips = await addresses();
+
             return vms
                 .filter((vm) => {
                     return vm.location === region;
                 })
                 .map((vm) => {
-                    return toMachine(vm);
+                    return toMachine(vm, ips.get(nicOf(vm)));
                 })
                 .filter((machine) => {
                     return Object.entries(tags).every(([key, value]) => {

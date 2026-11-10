@@ -1,6 +1,10 @@
 {
     "rig": 1,
     "name": "azure",
+    "region": {
+        "env": ["AZURE_LOCATION", "AZURE_REGION"],
+        "default": "eastus"
+    },
     "busy": {
         "ZonalAllocationFailed": "zone",
         "AllocationFailed": "zone",

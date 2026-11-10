@@ -4,6 +4,9 @@ import data from "./azure.json" with { type: "json" };
 
 /** §12: the data file, read once. */
 export const RIG = data.rig;
+
+/** §8.2: where its region comes from, when the config gives none: the first env var set, else the default. */
+export const REGION = data.region as { env: string[]; default: string };
 export const PRESETS = data.presets as PresetTable;
 
 /** What `shape` reads: memory per vCPU by family, the low-memory ratio, and fixed sizes. */
@@ -19,8 +22,13 @@ export const DISTROS = createDistroTable("azure", data.distros as DistroTable<st
 const BUSY = data.busy as Record<string, Busy>;
 const TAGS = createTagMap(data.tags as Record<string, string>);
 
-/** The busy answer for an Azure error code; none means it is not about room. */
-export function busyOf(code: string): Busy | undefined {
+/** The busy answer for an Azure error code and message; none means it is not about room. */
+export function busyOf(code: string, message = ""): Busy | undefined {
+    /* `OperationNotAllowed` is a quota only when it says so; Azure uses it for much else. */
+    if (code === "OperationNotAllowed" && !/quota/i.test(message)) {
+        return undefined;
+    }
+
     return BUSY[code];
 }
 

@@ -62,6 +62,12 @@ const NETWORK = {
     [`PUT ${RG}/providers/Microsoft.Network/virtualNetworks/rig-eastus`]: () => {
         return ok();
     },
+    "GET /subscriptions/s": () => {
+        return ok({ subscriptionId: "s" });
+    },
+    "GET /subscriptions/s/locations": () => {
+        return ok({ value: [{ name: "eastus" }, { name: "westeurope" }] });
+    },
     /* Every Marketplace image has two versions. */
     [`GET ${IMAGES}/.*/versions`]: () => {
         return ok([{ name: "1.9.0" }, { name: "1.10.0" }]);
@@ -414,6 +420,72 @@ describe("azure: create", () => {
                 },
             }),
         ).rejects.toThrow("AuthorizationFailed");
+
+        /* `OperationNotAllowed` is room only when it is about a quota. */
+        await expect(
+            answer({
+                [`PUT ${VM}/app-w-0a1b2c3d`]: () => {
+                    return failed(409, "OperationNotAllowed");
+                },
+            }),
+        ).rejects.toThrow("OperationNotAllowed");
+    });
+
+    it("checks that the region is one of the subscription's", async () => {
+        const { provider } = azure(NETWORK);
+
+        await expect(provider.check!()).resolves.toBeUndefined();
+
+        await expect(
+            createAzure({
+                region: "mars",
+                extra: { subscription: "s", request: fake(NETWORK as Record<string, Handler>).request },
+            }).check!(),
+        ).rejects.toThrow(/mars is not a region/);
+    });
+});
+
+describe("azure: calls", () => {
+    it("starts, restarts, resizes the OS disk and reads it back; closes a rule by deleting it", async () => {
+        const { provider, calls } = azure({
+            [`GET ${VM}/app-w-1`]: () => {
+                return ok({ properties: { storageProfile: { osDisk: { managedDisk: { id: "/disks/os-1" } } } } });
+            },
+            [`POST ${VM}/app-w-1/(start|restart)`]: () => {
+                return ok();
+            },
+            "PATCH /disks/os-1": (body) => {
+                return ok(body);
+            },
+            "GET /disks/os-1": () => {
+                return ok({ properties: { diskSizeGB: 60, provisioningState: "Updating" } });
+            },
+            [`DELETE ${NSG}/app-w-1-nsg/securityRules/rig-aaaa`]: () => {
+                return ok();
+            },
+        });
+
+        await provider.start!("app-w-1");
+        await provider.reboot("app-w-1");
+        await provider.disk!.grow("app-w-1", 60);
+
+        expect(await provider.disk!.get("app-w-1")).toEqual({ gb: 60, ready: false });
+
+        await provider.port!.close("app-w-1", "rig-aaaa");
+
+        const sent = calls.map((one) => {
+            return `${one.method} ${one.path.split("?")[0]}`;
+        });
+
+        expect(sent).toContain(`POST ${VM}/app-w-1/start`);
+        expect(sent).toContain(`POST ${VM}/app-w-1/restart`);
+        expect(sent).toContain(`DELETE ${NSG}/app-w-1-nsg/securityRules/rig-aaaa`);
+
+        expect(
+            calls.find((one) => {
+                return one.method === "PATCH";
+            })!.body,
+        ).toEqual({ properties: { diskSizeGB: 60 } });
     });
 });
 
@@ -479,13 +551,28 @@ describe("azure: machines", () => {
             "GET https://next/2": () => {
                 return ok({ value: [{ ...VMBODY, name: "other", tags: { rig: "1", "rig-app": "other" } }] });
             },
+            [`GET ${RG}/providers/Microsoft.Network/networkInterfaces`]: () => {
+                return ok({
+                    value: [
+                        {
+                            id: "/NIC/1",
+                            properties: {
+                                ipConfigurations: [
+                                    { properties: { privateIPAddress: "10.0.0.4", publicIPAddress: { id: "/pip/1" } } },
+                                ],
+                            },
+                        },
+                    ],
+                });
+            },
+            [`GET ${RG}/providers/Microsoft.Network/publicIPAddresses`]: () => {
+                return ok({ value: [{ id: "/pip/1", properties: { ipAddress: "20.1.2.3" } }] });
+            },
         });
 
-        expect(
-            (await provider.list({ rig: "1", "rig-app": "app" })).map((machine) => {
-                return machine.id;
-            }),
-        ).toEqual(["app-w-1"]);
+        expect(await provider.list({ rig: "1", "rig-app": "app" })).toMatchObject([
+            { id: "app-w-1", ip: { public: "20.1.2.3", private: "10.0.0.4" } },
+        ]);
 
         const empty = azure({
             [`GET ${VM}`]: () => {
@@ -609,7 +696,7 @@ describe("azure: ports", () => {
         ]);
 
         expect(await provider.port!.list("app-w-1")).toEqual([
-            { id: "rig-aaaa", port: 22, proto: "tcp", from: "1.2.3.4/32" },
+            { id: "rig-aaaa", port: 22, protocol: "tcp", from: "1.2.3.4/32" },
         ]);
     });
 });

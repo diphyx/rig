@@ -14,6 +14,9 @@ export function paths(subscription: string, group: string) {
 
     return {
         subscription: `${sub}?api-version=${API.subscriptions}`,
+        locations: `${sub}/locations?api-version=${API.subscriptions}`,
+        nics: `${rg}/providers/Microsoft.Network/networkInterfaces?api-version=${API.network}`,
+        ips: `${rg}/providers/Microsoft.Network/publicIPAddresses?api-version=${API.network}`,
         group: `${sub}/resourcegroups/${group}?api-version=${API.resources}`,
         skus: (region: string) => {
             return `${sub}/providers/Microsoft.Compute/skus?api-version=${API.skus}&$filter=${encodeURIComponent(`location eq '${region}'`)}`;

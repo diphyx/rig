@@ -6,7 +6,8 @@ import type { Auth } from "./auth.js";
 /** Spec §8.2: the factory's config, the same keys on every rig provider; azure's own under `extra`. */
 export type AzureConfig = {
     /** An Azure region: `eastus`. */
-    region: string;
+    /** Where its machines go; the cloud's env var's, else its default region. */
+    region?: string;
     /** Its name in the config; `"azure"`. Two regions are two providers, with two names. */
     name?: string;
     /** §8.1: how it signs in; `{ from: "auto" }`, Azure's own sign-in. */
@@ -30,7 +31,7 @@ export type AzureExtra = {
 
 const EXTRA = ["subscription", "group", "subnet", "request"];
 
-/** §8.2: the standard keys and azure's own `extra` keys; `region` is required. */
+/** §8.2: the standard keys and azure's own `extra` keys; every key has a default. */
 export function checkConfig(config: AzureConfig): void {
     checkFactory("azure", config, EXTRA);
 }
