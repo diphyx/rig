@@ -3,13 +3,14 @@ import { isArray, isFunction, isObject, isString } from "radash";
 import { Guard, Market, Reason, Slot } from "./enums.js";
 import { isDur, isPct, isUint, NAME } from "./parse.js";
 import { Refusal } from "./refusal.js";
+import { checkRule } from "./rules.js";
 import type { Provider, RigConfig } from "./types.js";
 
 /** The rig generation this core follows. */
 export const RIG = 1;
 
 const ROOT = ["rig", "app", "providers", "kinds", "guard", "every", "poll", "store", "extra"];
-const KIND = ["name", "try", "image", "disk", "script", "risk", "life", "recovers", "tags"];
+const KIND = ["name", "try", "image", "disk", "script", "risk", "life", "recovers", "tags", "ports"];
 const ENTRY = ["provider", "market", "types", "image", "extra"];
 const RESERVED: Record<string, string[]> = { root: ["hub"], kind: ["node", "save"] };
 
@@ -231,6 +232,20 @@ export function config(config: RigConfig): void {
             }
         }
 
+        if (kind.ports !== undefined) {
+            if (!isArray(kind.ports)) {
+                fail(`${path}ports`, "a list of rules");
+            }
+
+            kind.ports.forEach((rule, index) => {
+                try {
+                    checkRule(rule);
+                } catch (error) {
+                    fail(`${path}ports[${index}]`, (error as Error).message);
+                }
+            });
+        }
+
         if (!isArray(kind.try) || kind.try.length === 0) {
             fail(`${path}try`, "at least one entry");
         }
@@ -261,6 +276,10 @@ export function config(config: RigConfig): void {
                 })
             ) {
                 fail(`${at}market`, "a list of spot and demand, at least one, no repeats");
+            }
+
+            if (kind.ports !== undefined && !provider.can?.port) {
+                fail(`${path}ports`, `${provider.name} cannot open ports`);
             }
 
             if (entry.market.includes(Market.SPOT) && !provider.can?.spot) {

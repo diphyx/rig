@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { Busy, Event, Status } from "./enums.js";
+import { Busy, Event, Market, Status } from "./enums.js";
 import type { Context } from "./context.js";
 import { countCreated, countTry, within } from "./risk.js";
 import type { Known } from "./store.js";
@@ -44,6 +44,7 @@ function specOf(context: Context, kind: Kind, entry: Entry): Spec {
     return {
         name,
         tags: { ...kind.tags, rig: "1", "rig-app": app, "rig-kind": kind.name, "rig-name": name },
+        ports: kind.ports ?? [],
         ...(image !== undefined && { image }),
         ...(kind.disk !== undefined && { disk: kind.disk }),
         ...(kind.script !== undefined && { script: kind.script }),
@@ -115,7 +116,10 @@ export async function failover(context: Context, kind: Kind, chain: number): Pro
                 return known;
             }
 
-            switch (answer.busy) {
+            /* §14: a spot quota is its own, so on a spot place `account` is the market's, and demand may still have room. */
+            const busy = answer.busy === Busy.ACCOUNT && step.market === Market.SPOT ? Busy.MARKET : answer.busy;
+
+            switch (busy) {
                 case Busy.TYPE:
                     skip = { market: step.market, type: step.type };
                     break;

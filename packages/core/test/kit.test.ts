@@ -7,7 +7,19 @@ import { describe, expect, it } from "vitest";
 
 import { Busy, createRig, Event, Refusal, Slot, Status } from "../src/index.js";
 import { dur } from "../src/parse.js";
-import type { Answer, Place, Provider, ProviderMachine, Rig, RigConfig, Shape, Spec, Tags } from "../src/index.js";
+
+import type {
+    Answer,
+    Place,
+    Provider,
+    ProviderMachine,
+    Rig,
+    RigConfig,
+    Rule,
+    Shape,
+    Spec,
+    Tags,
+} from "../src/index.js";
 
 /* The kit's own format: spec/kit/README.md. */
 type Fake = {
@@ -86,6 +98,7 @@ function fakes(
     const machines = new Map<string, ProviderMachine[]>();
     const ends = new Map<string, string[]>();
     let next = 0;
+    let rules = 0;
 
     const providers = (
         config.providers as unknown as { name: string; can?: Provider["can"]; rig?: number; check?: string }[]
@@ -94,6 +107,7 @@ function fakes(
         const own: ProviderMachine[] = structuredClone(fake.machines ?? []);
         const booting = new Map<string, number>();
         const disks = new Map<string, number>();
+        const ports = new Map<string, Rule[]>();
 
         const answers = new Map(
             Object.entries(fake.answers).map(([at, answer]) => {
@@ -155,6 +169,17 @@ function fakes(
                 next += 1;
                 booting.set(`m${next}`, fake.boot ?? 0);
 
+                if (written.can?.port) {
+                    ports.set(
+                        `m${next}`,
+                        spec.ports.map((rule) => {
+                            rules += 1;
+
+                            return { ...rule, id: `r${rules}` };
+                        }),
+                    );
+                }
+
                 own.push({
                     id: `m${next}`,
                     status: (fake.boot ?? 0) > 0 ? Status.PENDING : Status.RUNNING,
@@ -213,6 +238,30 @@ function fakes(
                     },
                     async get(id: string) {
                         return { gb: disks.get(id) ?? 30, ready: true };
+                    },
+                },
+            }),
+            ...(written.can?.port && {
+                port: {
+                    async open(id: string, rule: Rule) {
+                        rules += 1;
+
+                        const made = { ...rule, id: `r${rules}` };
+
+                        ports.set(id, [...(ports.get(id) ?? []), made]);
+
+                        return made;
+                    },
+                    async close(id: string, rule: string) {
+                        ports.set(
+                            id,
+                            (ports.get(id) ?? []).filter((one) => {
+                                return one.id !== rule;
+                            }),
+                        );
+                    },
+                    async list(id: string) {
+                        return structuredClone(ports.get(id) ?? []);
                     },
                 },
             }),

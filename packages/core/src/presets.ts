@@ -8,7 +8,7 @@ import type { Kind } from "./types.js";
 export type PresetTable = Record<string, Record<string, string[] | Record<string, string[]>>>;
 
 /** The kind keys a preset passes on unchanged, §7.2. */
-type Pass = Pick<Kind, "image" | "disk" | "script" | "risk" | "life" | "recovers" | "tags">;
+type Pass = Pick<Kind, "image" | "disk" | "script" | "risk" | "life" | "recovers" | "tags" | "ports">;
 
 type Common = Pass & {
     name: string;
@@ -34,16 +34,27 @@ export type Presets = {
     gpu(options: Common & { gpu?: string }): Kind;
 };
 
-/* §7.1: each preset's size option, default size and default market. */
-const PRESETS: Record<PresetName, { size?: "cpu" | "mem" | "gpu"; default?: number; market: Market[] }> = {
-    [PresetName.SMALL]: { market: [Market.DEMAND] },
-    [PresetName.GENERAL]: { size: "cpu", default: 2, market: [Market.DEMAND] },
-    [PresetName.COMPUTE]: { size: "cpu", default: 4, market: [Market.SPOT, Market.DEMAND] },
-    [PresetName.MEMORY]: { size: "mem", default: 32, market: [Market.DEMAND] },
-    [PresetName.GPU]: { size: "gpu", market: [Market.SPOT, Market.DEMAND] },
+/* §7.1: each preset's size option, default size and default market; its default disk is `base` GB, and `per` GB for each of the asked size. */
+const PRESETS: Record<
+    PresetName,
+    { size?: "cpu" | "mem" | "gpu"; default?: number; market: Market[]; disk: { base: number; per: number } }
+> = {
+    [PresetName.SMALL]: { market: [Market.DEMAND], disk: { base: 30, per: 0 } },
+    [PresetName.GENERAL]: { size: "cpu", default: 2, market: [Market.DEMAND], disk: { base: 30, per: 5 } },
+    [PresetName.COMPUTE]: { size: "cpu", default: 4, market: [Market.SPOT, Market.DEMAND], disk: { base: 30, per: 5 } },
+    [PresetName.MEMORY]: { size: "mem", default: 32, market: [Market.DEMAND], disk: { base: 30, per: 0.5 } },
+    [PresetName.GPU]: { size: "gpu", market: [Market.SPOT, Market.DEMAND], disk: { base: 200, per: 0 } },
 };
 
-const PASS = ["image", "disk", "script", "risk", "life", "recovers", "tags"];
+/* §7.3: the default disk, from the asked size, up to a multiple of 10 GB: room for the provider's own image, and more. */
+function diskOf(preset: PresetName, wanted: unknown): number {
+    const { size, default: fallback, disk } = PRESETS[preset];
+    const asked = size === "gpu" ? 0 : Number(wanted ?? fallback ?? 0);
+
+    return Math.ceil((disk.base + disk.per * asked) / 10) * 10;
+}
+
+const PASS = ["image", "disk", "script", "risk", "life", "recovers", "tags", "ports"];
 const ARCHES = [Arch.ARM, Arch.X86];
 
 function refuse(preset: PresetName, message: string): never {
@@ -168,6 +179,7 @@ export function createPresets(provider: string, table: PresetTable): Presets {
         );
 
         return {
+            ...(options.image === undefined && { disk: diskOf(preset, wanted) }),
             ...pass,
             name: options.name,
             try: [{ provider, market: options.market ?? [...rule.market], types }],

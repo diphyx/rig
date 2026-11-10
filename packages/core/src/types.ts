@@ -23,6 +23,8 @@ export type Kind = {
     recovers?: number;
     /** The app's own tags; no key starts with `rig`. */
     tags?: Tags;
+    /** The inbound rules every machine of the kind starts with; all else is closed. */
+    ports?: Rule[];
 };
 
 /** Where a machine could be created. */
@@ -49,6 +51,8 @@ export type Spec = {
     disk?: number;
     script?: string;
     tags: Tags;
+    /** The kind's ports: the only inbound rules the machine starts with. */
+    ports: Rule[];
     extra?: Record<string, unknown>;
 };
 

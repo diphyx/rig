@@ -1,10 +1,11 @@
 import { Event, Market, Reason, Status } from "./enums.js";
 import { capable, type Context, kindOf, knownOf, live, providerOf, toMachine } from "./context.js";
 import { entrySteps, failover } from "./failover.js";
-import { dur, isDur } from "./parse.js";
+import { dur, isDur, isUint } from "./parse.js";
 import { Refusal } from "./refusal.js";
 import { end } from "./rounds.js";
 import { riskOf } from "./risk.js";
+import { checkRule, sameRule } from "./rules.js";
 import type { Listed, Machine, Rule } from "./types.js";
 
 type Disk = { gb: number; ready: boolean };
@@ -190,10 +191,17 @@ export function calls(context: Context) {
         },
 
         disk: {
+            /** §20: a disk only grows: a size not above it now is a refusal. */
             async grow(id: string, gb: number): Promise<void> {
                 const known = knownOf(context, id);
+                const disk = capable(context, known, "disk").disk!;
+                const now = await disk.get(known.id);
 
-                await capable(context, known, "disk").disk!.grow(known.id, gb);
+                if (!isUint(gb) || gb <= now.gb) {
+                    throw new Refusal(Reason.CONFIG, `disk: ${String(gb)} GB is not above its ${now.gb} GB`);
+                }
+
+                await disk.grow(known.id, gb);
             },
 
             async get(id: string): Promise<Disk> {
@@ -221,16 +229,31 @@ export function calls(context: Context) {
         },
 
         port: {
+            /** §20: a rule that is one; an equal rule the machine has is given back as it is. */
             async open(id: string, rule: Rule): Promise<Rule> {
                 const known = knownOf(context, id);
+                const port = capable(context, known, "port").port!;
 
-                return capable(context, known, "port").port!.open(known.id, rule);
+                checkRule(rule);
+
+                const equal = (await port.list(known.id)).find((one) => {
+                    return sameRule(one, rule);
+                });
+
+                return equal ?? port.open(known.id, rule);
             },
 
+            /** §20: a rule the machine does not have is done. */
             async close(id: string, rule: string): Promise<void> {
                 const known = knownOf(context, id);
+                const port = capable(context, known, "port").port!;
+                const held = (await port.list(known.id)).some((one) => {
+                    return one.id === rule;
+                });
 
-                await capable(context, known, "port").port!.close(known.id, rule);
+                if (held) {
+                    await port.close(known.id, rule);
+                }
             },
 
             async list(id: string): Promise<Rule[]> {

@@ -42,6 +42,37 @@ await rig.machine.wait(machine.id, Status.RUNNING); // live status and ip from t
 - **Recover:** replaces a lost machine, up to the kind's `recovers`, after ending it so its provider removes what it left.
 - **Guard:** warns about risky kinds when it opens: spot whose data a take-back loses, spot for a long life, spot on too few places.
 
+## Disk and Ports
+
+```ts
+// at create: the boot disk's size, in GB, and the only inbound ports open; all else is closed
+const kind = {
+    name: "worker",
+    try: [...],
+    disk: 100,
+    ports: [{ port: 22, from: "1.2.3.4/32" }],
+}; // or aws.presets.compute({ name: "worker", disk: 100, ports: [...] })
+
+const machine = await rig.machine.create("worker"); // a recovered one starts the same way
+
+// later
+await rig.disk.grow(machine.id, 200);
+await rig.disk.wait(machine.id);
+const web = await rig.port.open(machine.id, { port: 443, from: "::/0" });
+await rig.port.close(machine.id, web.id);
+```
+
+Every machine starts closed to every inbound port, inside its network too, but its kind's `ports`. The provider sets them as it makes the machine, so it is never open before they are.
+
+The same on every provider (spec §20):
+
+| Call         | Rule                                                                                                                                    |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `disk.grow`  | only grows: a size not above the disk's now is a refusal                                                                                |
+| `port.open`  | `port` and `to` from `1` to `65535`, `proto` a `Proto` (`TCP` by default), `from` an IPv4 or IPv6 CIDR; else a refusal naming the field |
+| `port.open`  | a rule the machine already has is given back, not added twice                                                                           |
+| `port.close` | a rule already gone is done                                                                                                             |
+
 ## Providers
 
 Each cloud is a provider, made by its factory, the same way on every cloud (spec §8.2):
