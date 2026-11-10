@@ -141,7 +141,7 @@ When the core opens, each of these MUST be a refusal, `config`, naming the key b
 | `name`     | `name`                          | —                    | unique among kinds                                                                                    |
 | `try`      | `[entry]`                       | —                    | where to try, in order; at least one                                                                  |
 | `distro`   | `?distro`                       | `{ name: "ubuntu" }` | the distro every machine of the kind boots, but on an entry with its own `image`, §6.1                |
-| `disk`     | `?uint`                         | —                    | GB of the boot disk, from `30`: room for every distro's image on every cloud; a preset sets it (§7.1) |
+| `disk`     | `?uint`                         | the provider's       | GB of the boot disk, from `30`: room for every distro's image on every cloud; a preset sets it (§7.1) |
 | `login`    | `?{ user?: name, keys: [str] }` | —                    | who can sign in over SSH: `keys`, SSH public keys, for `user`, by default the distro's (§6.1), §6.2   |
 | `script`   | `?str` or `?[str]`              | —                    | what every machine of the kind runs once, at first boot, §6.2                                         |
 | `risk`     | `?{ max: pct }`                 | —                    | §15                                                                                                   |

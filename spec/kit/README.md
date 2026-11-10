@@ -13,7 +13,7 @@ A core that passes every case MAY say it follows rig generation 1.
 | `failover.json` | the order of tries, every busy answer, a throw, no room, a place tried once                  |
 | `risk.json`     | `risk.max`, the core's own count, `place.list`                                               |
 | `rounds.json`   | lost, recover, `recovers`, `life`, found, orphan, close                                      |
-| `guard.json`    | `spot-warn`, `spot-long`, `guard: "refuse"`                                                  |
+| `guard.json`    | `spot-warn`, `spot-long`, `spot-narrow`, `guard: "refuse"`                                   |
 | `calls.json`    | the app's calls: machines, disks, ports, first boot, workers; unknown ids, unsupported calls |
 
 ```json
