@@ -12,6 +12,22 @@ export type KindWorker = {
     [key: string]: unknown;
 };
 
+/** §20: which machines `machine.list` gives: those with every key given. */
+export type MachineFilter = {
+    /** Of this kind. */
+    kind?: string;
+    /** With this status. */
+    status?: Status;
+    /** With this tag in its `worker`'s tags. */
+    tag?: string;
+};
+
+/** §20: what `machine.create` sets for its one machine, over its kind. */
+export type CreateOptions = {
+    /** The kind's `worker`, its keys over the kind's own for this machine: its `tags`, grid's `cmds`; not its `name`. */
+    worker?: { tags?: string[]; [key: string]: unknown };
+};
+
 /** §22.1: a worker: a plugin that runs jobs on the machines of kinds with a `worker`. */
 export type Worker = {
     slot: Slot.WORKER;

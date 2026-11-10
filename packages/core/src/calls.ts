@@ -1,15 +1,15 @@
-import { isString, tryit } from "radash";
+import { isObject, isString, tryit } from "radash";
 
 import { Event, Market, Reason, Status } from "./enums.js";
 import { capable, type Context, kindOf, knownOf, live, providerOf, toMachine } from "./context.js";
 import { entrySteps, failover } from "./failover.js";
-import { dur, isDur, isUint } from "./parse.js";
+import { dur, isDur, isUint, NAME } from "./parse.js";
 import { Refusal } from "./refusal.js";
-import { addWorker } from "./workers.js";
+import { addWorker, checkOptions, kindWith } from "./workers.js";
 import { end } from "./rounds.js";
 import { riskOf } from "./risk.js";
 import { checkMatch, expandRule, matchesRule, sameRule } from "./rules.js";
-import type { Listed, Machine, Match, Rule } from "./types.js";
+import type { CreateOptions, Listed, Machine, MachineFilter, Match, Rule } from "./types.js";
 
 type Disk = { gb: number; ready: boolean };
 
@@ -81,6 +81,31 @@ async function fresh(context: Context, last: Machine): Promise<Machine> {
     return toMachine(known);
 }
 
+/* §20: a filter's keys, each one of `keys`: a kind in the config, a status, a name. */
+function checkFilter(context: Context, filter: MachineFilter, keys: (keyof MachineFilter)[]): void {
+    if (!isObject(filter)) {
+        throw new Refusal(Reason.CONFIG, "filter: not an object");
+    }
+
+    for (const key of Object.keys(filter)) {
+        if (!(keys as string[]).includes(key)) {
+            throw new Refusal(Reason.CONFIG, `filter.${key}: unknown key`);
+        }
+    }
+
+    if (filter.kind !== undefined) {
+        kindOf(context, filter.kind);
+    }
+
+    if (filter.status !== undefined && !Object.values(Status).includes(filter.status)) {
+        throw new Refusal(Reason.CONFIG, `filter.status: ${String(filter.status)} is not a status`);
+    }
+
+    if (filter.tag !== undefined && (!isString(filter.tag) || !NAME.test(filter.tag))) {
+        throw new Refusal(Reason.CONFIG, "filter.tag: not a name");
+    }
+}
+
 /** §20: what the app calls on an open core. */
 export function calls(context: Context) {
     return {
@@ -107,11 +132,13 @@ export function calls(context: Context) {
         },
 
         machine: {
-            /** §14: a failover; `null` when there is no room. */
-            async create(kind: string): Promise<Machine | null> {
+            /** §14: a failover, with `options` over the kind for this machine; `null` when there is no room. */
+            async create(kind: string, options?: CreateOptions): Promise<Machine | null> {
                 live(context);
 
-                const created = await failover(context, kindOf(context, kind), 0);
+                const one = kindOf(context, kind);
+                const checked = checkOptions(context, one, options);
+                const created = await failover(context, kindWith(one, checked), 0, checked);
 
                 if (!created) {
                     return null;
@@ -157,18 +184,34 @@ export function calls(context: Context) {
                 );
             },
 
-            async list(filter: { kind?: string } = {}): Promise<Machine[]> {
+            /** §20: the store's machines, those with every key the filter gives. */
+            async list(filter: MachineFilter = {}): Promise<Machine[]> {
                 live(context);
-
-                if (filter.kind !== undefined) {
-                    kindOf(context, filter.kind);
-                }
+                checkFilter(context, filter, ["kind", "status", "tag"]);
 
                 return context.store.machines
                     .filter((machine) => {
-                        return filter.kind === undefined || machine.kind === filter.kind;
+                        return (
+                            (filter.kind === undefined || machine.kind === filter.kind) &&
+                            (filter.status === undefined || machine.status === filter.status) &&
+                            (filter.tag === undefined || Boolean(machine.worker?.tags.includes(filter.tag)))
+                        );
                     })
                     .map(toMachine);
+            },
+
+            /** §20: the lost machines still waiting for their replacement, of a kind when it is given. */
+            async lost(filter: Pick<MachineFilter, "kind"> = {}): Promise<Machine[]> {
+                live(context);
+                checkFilter(context, filter, ["kind"]);
+
+                return context.store.pending
+                    .filter((pending) => {
+                        return filter.kind === undefined || pending.lost.kind === filter.kind;
+                    })
+                    .map((pending) => {
+                        return structuredClone(pending.lost);
+                    });
             },
 
             async end(id: string): Promise<void> {

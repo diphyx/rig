@@ -84,7 +84,7 @@ export function capable(context: Context, machine: Machine, call: "stop" | "disk
 
 /** A known machine as the app sees it: a copy, without the core's own keys. */
 export function toMachine(known: Known): Machine {
-    const { chain: _, ...machine } = known;
+    const { chain: _, options: __, ...machine } = known;
 
     return structuredClone(machine);
 }

@@ -1,12 +1,13 @@
 import { isArray, isFunction, isObject, isString, tryit } from "radash";
 
+import { checkBoot } from "./boot.js";
 import type { Context } from "./context.js";
 import { Reason, Slot } from "./enums.js";
 import { NAME } from "./parse.js";
 import { Refusal } from "./refusal.js";
 import { expandRule } from "./rules.js";
 import type { Known } from "./store.js";
-import type { Kind, KindWorker, Machine, RigConfig, Worker } from "./types.js";
+import type { CreateOptions, Kind, KindWorker, Machine, RigConfig, Worker } from "./types.js";
 
 const CALLS = ["check", "setup", "add", "drop", "spent"] as const;
 
@@ -131,6 +132,60 @@ export function checkKindWorker(path: string, kind: Kind, config: RigConfig): Re
     });
 
     return setup;
+}
+
+/** §20: a kind for one machine: its `worker`, with the create's keys over the kind's own. */
+export function kindWith(kind: Kind, options: CreateOptions | undefined): Kind {
+    return options?.worker && kind.worker ? { ...kind, worker: { ...kind.worker, ...options.worker } } : kind;
+}
+
+/** §20: a create's options: only `worker`, on a kind with one, without `name`; checked as the kind's own is when the core opens. */
+export function checkOptions(context: Context, kind: Kind, options: unknown): CreateOptions | undefined {
+    if (options === undefined) {
+        return undefined;
+    }
+
+    if (!isObject(options)) {
+        fail("options", "not an object");
+    }
+
+    for (const key of Object.keys(options)) {
+        if (key !== "worker") {
+            fail(`options.${key}`, "unknown key");
+        }
+    }
+
+    const { worker } = options as CreateOptions;
+
+    if (worker === undefined) {
+        return undefined;
+    }
+
+    if (!isObject(worker)) {
+        fail("options.worker", "not an object");
+    }
+
+    if (!kind.worker) {
+        fail("options.worker", `kind ${kind.name} has no worker`);
+    }
+
+    if (Object.hasOwn(worker, "name")) {
+        fail("options.worker.name", "the kind's own");
+    }
+
+    const checked = structuredClone({ worker });
+    const one = kindWith(kind, checked);
+    const setup = checkKindWorker("options.", one, context.config);
+
+    checkBoot("options.", one, setup.script);
+
+    for (const entry of kind.try) {
+        if (setup.ports.length > 0 && !context.providers.get(entry.provider)?.can?.port) {
+            fail("options.worker", `${entry.provider} cannot open the ports its worker needs`);
+        }
+    }
+
+    return checked;
 }
 
 /** §22.2: the worker takes a machine once it has an IP, and again when its IPs change. */

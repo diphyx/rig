@@ -71,7 +71,9 @@ A kind is a named recipe for machines. A preset makes one from a name ([Presets]
     ],
     distro: { name: Distro.UBUNTU },
     disk: 100,
-    login: { keys: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGm5nRrnDrU0H8wXkVhQvTq1aXj4Q0bQ0aQ0bQ0aQ0bQ me@laptop"] },
+    login: {
+        keys: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGm5nRrnDrU0H8wXkVhQvTq1aXj4Q0bQ0aQ0bQ0aQ0bQ me@laptop"],
+    },
     script: ["apt-get update", "apt-get install -y nginx"],
     ports: [{ port: 443, from: From.ANY }],
     risk: { max: "10%" },
@@ -105,7 +107,10 @@ A kind is a named recipe for machines. A preset makes one from a name ([Presets]
 
 ```ts
 // each machine boots the version's newest image, on arm or x86 as its type is
-const worker = aws.presets.compute({ name: "worker", distro: { name: Distro.DEBIAN, version: "13" } });
+const worker = aws.presets.compute({
+    name: "worker",
+    distro: { name: Distro.DEBIAN, version: "13" },
+});
 ```
 
 | `Distro` | Versions         | Default | Login user |
@@ -121,8 +126,12 @@ The provider finds the version's newest image each time it creates a machine, so
 const web = aws.presets.small({
     name: "web",
     distro: { name: Distro.DEBIAN },
-    login: { keys: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGm5nRrnDrU0H8wXkVhQvTq1aXj4Q0bQ0aQ0bQ0aQ0bQ me@laptop"] }, // ssh debian@<ip>, on every cloud
-    script: ["apt-get update", "apt-get install -y nginx", "systemctl enable --now nginx"], // or one str
+    // ssh debian@<ip>, on every cloud
+    login: {
+        keys: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGm5nRrnDrU0H8wXkVhQvTq1aXj4Q0bQ0aQ0bQ0aQ0bQ me@laptop"],
+    },
+    // its lines, or one str
+    script: ["apt-get update", "apt-get install -y nginx", "systemctl enable --now nginx"],
 });
 ```
 
@@ -140,7 +149,11 @@ const web = aws.presets.small({
 
 ```ts
 // at create: the boot disk, in GB, from 30, and the only inbound ports open; all else is closed, inside its network too
-const worker = aws.presets.compute({ name: "worker", disk: 100, ports: [{ port: 22, from: "1.2.3.4/32" }] });
+const worker = aws.presets.compute({
+    name: "worker",
+    disk: 100,
+    ports: [{ port: 22, from: "1.2.3.4/32" }],
+});
 
 // later
 await rig.disk.grow(machine.id, 200);
@@ -191,7 +204,12 @@ const rig = createRig({
         aws.presets.compute({
             name: "builder",
             life: "8h",
-            worker: { tags: ["build"], cmds: { make: { exec: ["make", "-j8"], timeout: "1h" } } },
+            worker: {
+                tags: ["build"],
+                cmds: {
+                    make: { exec: ["make", "-j8"], timeout: "1h" },
+                },
+            },
         }),
     ],
 });
@@ -202,6 +220,25 @@ const rig = createRig({
 | `name`       | the worker's `name`; without it, the config's only worker                    |
 | `tags`       | the kinds of work its machines do: a job runs only on a machine with its tag |
 | the others   | the worker's own: grid's `cmds` and `signal`                                 |
+
+One kind can make machines for different work: `machine.create`'s `worker` goes over the kind's, for that machine.
+
+```ts
+// a machine for one request: its own tag, its own cmds
+await rig.machine.create("builder", {
+    worker: {
+        tags: ["req-42"],
+        cmds: {
+            train: { exec: ["python", "train.py"], timeout: "4h" },
+        },
+    },
+});
+```
+
+- **Over the kind's:** each key given replaces the kind's; the rest is the kind's. Not `name`: the worker is the kind's.
+- **Checked at the call:** as the kind's `worker` is when rig opens; a bad one is a refusal, before any try.
+- **Kept:** a lost machine's replacement gets the same `worker`.
+- **Its own tag:** a machine with its own cmds needs its own tag too, so only its jobs go to it.
 
 - **Fixed at create:** a job machine is reached at its first boot, then only through its worker. To change what it runs, change the kind: new machines get it, and the old ones end by `life`, `machine.end`, or a take-back. A short `life` suits job machines; a new tag (`build-v2`) keeps jobs off the old ones.
 - **Joining:** at create, the worker gives the machine's first-boot lines and the ports it needs. Once it has an IP, the core gives it to the worker, again when its IPs change, and after the core opens; once it is ended or lost, the core drops it. `machine.worker` shows its worker, key, tags, and the IPs the worker has.
@@ -235,8 +272,10 @@ Only `name` is required. The other options are `arch`, `up`, `market`, `image`, 
 | `round()`                                                           | a round now: finds lost machines, recovers them, ends those past `life` |
 | `on(event, handler)`                                                | hears an event: [Events](#events)                                       |
 | `place.list(kind)`                                                  | the places a failover would try, in order, each with its risk           |
-| `machine.create(kind)`                                              | a machine, by failover; `null` when there is no room anywhere           |
-| `machine.get(id)`, `machine.list({ kind? })`                        | live from the provider; from the store                                  |
+| `machine.create(kind, { worker? })`                                 | a machine, by failover; `null` when there is no room anywhere           |
+| `machine.get(id)`                                                   | live from the provider                                                  |
+| `machine.list({ kind?, status?, tag? })`                            | from the store: those with every key given; `tag`: a worker's tag       |
+| `machine.lost({ kind? })`                                           | lost machines still waiting for their replacement                       |
 | `machine.wait(id, status, timeout?)`                                | until the machine has `status`, or is ended                             |
 | `machine.end(id)`, `start`, `stop`, `reboot`                        | the provider's; `stop` on a spot machine is a refusal                   |
 | `disk.grow(id, gb)`, `disk.get(id)`, `disk.wait(id)`                | the boot disk                                                           |

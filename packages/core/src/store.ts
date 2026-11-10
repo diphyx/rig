@@ -3,13 +3,13 @@ import { join } from "node:path";
 
 import { Reason } from "./enums.js";
 import { Refusal } from "./refusal.js";
-import type { Machine, Place, Seen } from "./types.js";
+import type { CreateOptions, Machine, Place, Seen } from "./types.js";
 
-/** A machine the core knows, with the replacements made along its chain. */
-export type Known = Machine & { chain: number };
+/** A machine the core knows, with the replacements made along its chain, and its create's options, for its recovers. */
+export type Known = Machine & { chain: number; options?: CreateOptions };
 
-/** A lost machine still waiting for a recover. */
-export type Pending = { lost: Machine; chain: number };
+/** A lost machine still waiting for a recover, with its create's options. */
+export type Pending = { lost: Machine; chain: number; options?: CreateOptions };
 
 type Machines = { machines: Known[]; pending: Pending[] };
 

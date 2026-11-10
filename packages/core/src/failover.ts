@@ -8,7 +8,7 @@ import { workerOf } from "./workers.js";
 import { expandRule, sameRule } from "./rules.js";
 import { countCreated, countTry, within } from "./risk.js";
 import { type Known, placeKey } from "./store.js";
-import type { Answer, Entry, Kind, Place, Rule, Spec } from "./types.js";
+import type { Answer, CreateOptions, Entry, Kind, Place, Rule, Spec } from "./types.js";
 
 /** A place in failover order, with the provider that sells it. */
 export type Step = Place & { provider: string };
@@ -96,8 +96,13 @@ async function attempt(context: Context, kind: Kind, step: Step, spec: Spec): Pr
     }
 }
 
-/** §14: one failover. The first `ok` gives a known machine, counted as created; none gives `null`. */
-export async function failover(context: Context, kind: Kind, chain: number): Promise<Known | null> {
+/** §14: one failover, for a kind already with its create's options. The first `ok` gives a known machine, counted as created; none gives `null`. */
+export async function failover(
+    context: Context,
+    kind: Kind,
+    chain: number,
+    options?: CreateOptions,
+): Promise<Known | null> {
     const { store } = context;
 
     /* §14: no place is tried twice in one failover, across its entries too. */
@@ -135,6 +140,7 @@ export async function failover(context: Context, kind: Kind, chain: number): Pro
                     ...(kind.login && { user: userOf(kind)! }),
                     ...(worker && { worker }),
                     chain,
+                    ...(options && { options }),
                 };
 
                 store.machines.push(known);

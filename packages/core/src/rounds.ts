@@ -1,7 +1,7 @@
 import { tryit } from "radash";
 
 import { userOf } from "./boot.js";
-import { addWorker, dropWorker, spentWorker } from "./workers.js";
+import { addWorker, dropWorker, kindWith, spentWorker } from "./workers.js";
 import { Event, Status, Why } from "./enums.js";
 import { type Context, providerOf, toMachine } from "./context.js";
 import { failover } from "./failover.js";
@@ -42,7 +42,8 @@ async function recover(context: Context, pending: Pending): Promise<void> {
         return;
     }
 
-    const known = await failover(context, kind, pending.chain + 1);
+    /* §20: the replacement gets the lost machine's create options too. */
+    const known = await failover(context, kindWith(kind, pending.options), pending.chain + 1, pending.options);
 
     if (!known) {
         if (!store.pending.includes(pending)) {
@@ -73,7 +74,7 @@ async function lose(context: Context, known: Known): Promise<void> {
     const lost = toMachine({ ...known, status: Status.ENDED });
 
     context.emit(Event.MACHINE_LOST, { machine: lost });
-    await recover(context, { lost, chain: known.chain });
+    await recover(context, { lost, chain: known.chain, ...(known.options && { options: known.options }) });
 }
 
 /* A machine on the provider, by `<provider>/<id>`. */
