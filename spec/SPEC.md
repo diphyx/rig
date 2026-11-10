@@ -492,6 +492,9 @@ takeback = 100 × (lost + p × 2) ÷ (months + 2)                 2 machine-mont
 
 **A round**: every `every`, the core MUST list its machines (§13) and compare them with the store. For each machine still running, the core MUST copy its `status` and `ip` into the store.
 
+- One round MUST run at a time; a round asked for while one runs is that round.
+- A round MUST judge only the machines the store held before it listed: a machine made meanwhile is never lost in it.
+
 | Seen                                                       | Is         | The core MUST                                                                                  |
 | ---------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
 | in the store, now `ended` or absent, not ended by the core | **lost**   | count it (§15), `end` it so the provider removes what it left, emit `machine:lost`, recover it |
