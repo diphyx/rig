@@ -14,7 +14,9 @@ import {
 import {
     type Answer,
     Arch,
+    Busy,
     createPresets,
+    regionOf,
     Market,
     Reason,
     Slot,
@@ -33,7 +35,7 @@ import { sleep, tryit } from "radash";
 
 import { KEYS, resolveAuth } from "./auth.js";
 import { type AwsConfig, checkConfig } from "./config.js";
-import { busyOf, DISTROS, PRESETS, RIG, toAws } from "./data.js";
+import { busyOf, DISTROS, PRESETS, REGION, RIG, toAws } from "./data.js";
 import { createDisk } from "./disk.js";
 import { codeOf, createEc2 } from "./ec2.js";
 import { LIVE, toMachine } from "./machine.js";
@@ -41,6 +43,17 @@ import { createPorts } from "./ports.js";
 import { shapeOf } from "./shape.js";
 
 export type Aws = Provider & { keys: string[]; presets: Presets };
+
+/* EC2's answer to an image it cannot find in the region: an AMI it does not have, or an SSM parameter it cannot read. */
+function missing(error: unknown): boolean {
+    const code = codeOf(error);
+
+    return (
+        code === "InvalidAMIID.NotFound" ||
+        code === "InvalidAMIID.Unavailable" ||
+        (code === "InvalidParameterValue" && /ssm/i.test((error as Error).message ?? ""))
+    );
+}
 
 /* How long `end` waits for a machine to terminate, so its group can go: up to 5 minutes. */
 const TERMINATING = { every: 5000, tries: 60 };
@@ -52,12 +65,13 @@ function awsTags(tags: Tags): { Key: string; Value: string }[] {
 }
 
 /** The aws provider: EC2, `spot` and `demand`, in one region. */
-export function createAws(config: AwsConfig): Aws {
+export function createAws(config: AwsConfig = {}): Aws {
     checkConfig(config);
 
     const name = config.name ?? "aws";
     const extra = config.extra ?? {};
-    const ec2 = createEc2(config.region, extra, resolveAuth(name, config.auth));
+    const region = regionOf(config.region, REGION.env, REGION.default);
+    const ec2 = createEc2(region, extra, resolveAuth(name, config.auth));
     const ports = createPorts(ec2);
 
     /* Terminated, and waited for: its group is held until then; one held longer is left for a sweep. */
@@ -106,14 +120,22 @@ export function createAws(config: AwsConfig): Aws {
                 { ResourceType: "volume", Tags: tags },
             ],
             ...(spec.script !== undefined && { UserData: Buffer.from(spec.script).toString("base64") }),
-            ...(spec.disk !== undefined && {
-                BlockDeviceMappings: [
-                    {
-                        DeviceName: root,
-                        Ebs: { VolumeSize: spec.disk, VolumeType: "gp3", DeleteOnTermination: true },
+            /* §11: the root disk always goes with the machine, whatever the image says; the entry's other disks stay. */
+            BlockDeviceMappings: [
+                ...((spec.extra as Partial<RunInstancesCommandInput> | undefined)?.BlockDeviceMappings ?? []).filter(
+                    (mapping) => {
+                        return mapping.DeviceName !== root;
                     },
-                ],
-            }),
+                ),
+                {
+                    DeviceName: root,
+                    Ebs: {
+                        VolumeType: "gp3",
+                        DeleteOnTermination: true,
+                        ...(spec.disk !== undefined && { VolumeSize: spec.disk }),
+                    },
+                },
+            ],
             ...(place.market === Market.SPOT && {
                 InstanceMarketOptions: {
                     MarketType: "spot",
@@ -143,18 +165,30 @@ export function createAws(config: AwsConfig): Aws {
             return shapeOf(type);
         },
 
-        /** §11: the entry's types, in every zone that sells them and has a subnet, once per market. */
+        /** §11: the entry's types, in every zone that sells them and has a subnet, once per market, every page. */
         async places(entry: Entry): Promise<Place[]> {
             const zones = await ec2.subnets();
 
-            const answer = await ec2.send<{ InstanceTypeOfferings?: { InstanceType?: string; Location?: string }[] }>(
-                new DescribeInstanceTypeOfferingsCommand({
-                    LocationType: "availability-zone",
-                    Filters: [{ Name: "instance-type", Values: entry.types }],
-                }),
-            );
+            const offers: { InstanceType?: string; Location?: string }[] = [];
+            let token: string | undefined;
 
-            return (answer.InstanceTypeOfferings ?? [])
+            do {
+                const answer = await ec2.send<{
+                    InstanceTypeOfferings?: { InstanceType?: string; Location?: string }[];
+                    NextToken?: string;
+                }>(
+                    new DescribeInstanceTypeOfferingsCommand({
+                        LocationType: "availability-zone",
+                        Filters: [{ Name: "instance-type", Values: entry.types }],
+                        ...(token && { NextToken: token }),
+                    }),
+                );
+
+                offers.push(...(answer.InstanceTypeOfferings ?? []));
+                token = answer.NextToken;
+            } while (token);
+
+            return offers
                 .filter((offer) => {
                     return zones.has(offer.Location ?? "");
                 })
@@ -175,10 +209,20 @@ export function createAws(config: AwsConfig): Aws {
                     new RunInstancesCommand(await input(place, spec, subnet, group)),
                 );
 
-                return { ok: { id: answer.Instances![0]!.InstanceId! } };
+                const id = answer.Instances![0]!.InstanceId!;
+
+                /* So `end` finds the group even once the machine is gone. */
+                await tryit(ports.own)(group, id);
+
+                return { ok: { id } };
             } catch (error) {
                 /* §11: a failed try leaves nothing it made; a group that will not go is left for a sweep. */
                 await tryit(ports.remove)(group);
+
+                /* §11: a region without the distro's image has no room for the type. */
+                if (spec.distro && missing(error)) {
+                    return { busy: Busy.TYPE, message: (error as Error).message };
+                }
 
                 const busy = busyOf(codeOf(error));
 

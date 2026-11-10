@@ -16,7 +16,7 @@ pnpm add @diphyx/rig @diphyx/rig-aws
 import { createRig } from "@diphyx/rig";
 import { createAws } from "@diphyx/rig-aws";
 
-const aws = createAws({ region: "us-east-1" });
+const aws = createAws(); // its region: AWS_REGION, else us-east-1
 
 const rig = createRig({
     rig: 1,
@@ -31,9 +31,9 @@ const rig = createRig({
 The same three ways as every rig provider (spec §8.1), as `AuthFrom`:
 
 ```ts
-createAws({ region: "us-east-1" }); // auto: env, `~/.aws`, or the instance role
-createAws({ region: "us-east-1", auth: { from: AuthFrom.ENV } }); // RIG_AWS_ID, RIG_AWS_SECRET, RIG_AWS_TOKEN?
-createAws({ region: "us-east-1", auth: { from: AuthFrom.KEYS, keys: { id, secret } } });
+createAws(); // auto: env, `~/.aws`, or the instance role
+createAws({ auth: { from: AuthFrom.ENV } }); // RIG_AWS_ID, RIG_AWS_SECRET, RIG_AWS_TOKEN?
+createAws({ auth: { from: AuthFrom.KEYS, keys: { id, secret } } });
 ```
 
 The keys are an access key's `id` and `secret`, and a `token` for a session. A missing key is a refusal at once, naming the key.
@@ -42,32 +42,34 @@ The keys are an access key's `id` and `secret`, and a `token` for a session. A m
 
 The same keys as every rig provider's factory (spec §8.2); aws's own go in `extra`, and any other key is a refusal.
 
-| Option          | Default                         | Is                                                                    |
-| --------------- | ------------------------------- | --------------------------------------------------------------------- |
-| `region`        | —                               | the AWS region                                                        |
-| `name`          | `"aws"`                         | its name in the config; two regions are two providers, with two names |
-| `auth`          | `{ from: AuthFrom.AUTO }`       | how it signs in: [Auth](#auth)                                        |
-| `identity`      | none                            | what its machines run as: an IAM instance profile's name              |
-| `extra.subnets` | the default VPC's, one per zone | the subnets to use, one per zone                                      |
-| `extra.client`  | the SDK's client                | for tests: answers in place of EC2                                    |
+| Option          | Default                                              | Is                                                                    |
+| --------------- | ---------------------------------------------------- | --------------------------------------------------------------------- |
+| `region`        | `AWS_REGION`, `AWS_DEFAULT_REGION`, else `us-east-1` | the AWS region                                                        |
+| `name`          | `"aws"`                                              | its name in the config; two regions are two providers, with two names |
+| `auth`          | `{ from: AuthFrom.AUTO }`                            | how it signs in: [Auth](#auth)                                        |
+| `identity`      | none                                                 | what its machines run as: an IAM instance profile's name              |
+| `extra.subnets` | the default VPC's, one per zone                      | the subnets to use, one per zone                                      |
+| `extra.client`  | the SDK's client                                     | for tests: answers in place of EC2                                    |
 
 ## What It Does on EC2
 
 It calls EC2 with the AWS SDK's `@aws-sdk/client-ec2`.
 
-| rig                       | EC2                                                                                                                                                           |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `check`                   | `DescribeAvailabilityZones`: the keys and the region work                                                                                                     |
-| `places`                  | `DescribeInstanceTypeOfferings`, in the zones that have a subnet                                                                                              |
-| `create`                  | one `RunInstances`, tagged, and named with `Name`; IMDSv2 required                                                                                            |
-| `spot`                    | a one-time spot request, terminated on a take-back                                                                                                            |
-| `distro`, `image`         | the kind's `distro`: its version's newest image for the type's arch; or the entry's `image`, an AMI id, as it is                                              |
-| `script`, `login`         | the first-boot script (spec §6.2) as `UserData`, run by cloud-init at first boot                                                                              |
-| `get`, `list`             | `DescribeInstances`, by id, or by tag in the region, every page                                                                                               |
-| `start`, `stop`, `reboot` | `StartInstances`, `StopInstances`, `RebootInstances`; stopping a spot machine is `unsupported`                                                                |
-| `end`                     | `TerminateInstances`, waited for, then the machine's security group deleted; groups left by machines gone earlier go too; the root disk goes with the machine |
-| `disk.grow`, `get`        | `ModifyVolume` on the root volume; ready once the change is past `modifying`                                                                                  |
-| `port.*`                  | a security group of the machine's own, made before it with the kind's `ports`                                                                                 |
+| rig                       | EC2                                                                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `check`                   | `DescribeAvailabilityZones`: the keys and the region work                                                                                                          |
+| `places`                  | `DescribeInstanceTypeOfferings`, in the zones that have a subnet, every page                                                                                       |
+| `create`                  | one `RunInstances`, tagged, and named with `Name`; IMDSv2 required; the root disk always goes with the machine; a region without the distro's image is busy `type` |
+| `spot`                    | a one-time spot request, terminated on a take-back                                                                                                                 |
+| `distro`, `image`         | the kind's `distro`: its version's newest image for the type's arch; or the entry's `image`, an AMI id, as it is                                                   |
+| `script`, `login`         | the first-boot script (spec §6.2) as `UserData`, run by cloud-init at first boot                                                                                   |
+| `get`, `list`             | `DescribeInstances`, by id, or by tag in the region, every page                                                                                                    |
+| `start`, `stop`, `reboot` | `StartInstances`, `StopInstances`, `RebootInstances`; stopping a spot machine is `unsupported`                                                                     |
+| `end`                     | `TerminateInstances`, waited for, then the machine's security group deleted; groups left by machines gone earlier go too; the root disk goes with the machine      |
+| `disk.grow`, `get`        | `ModifyVolume` on the root volume; ready once the change is past `modifying`                                                                                       |
+| `port.*`                  | a security group of the machine's own, made before it with the kind's `ports`                                                                                      |
+
+Its keys need the EC2 calls above, and `ec2:CreateTags` on security groups, so `end` finds a machine's group once the machine is gone.
 
 Busy answers come from [`src/aws.json`](src/aws.json): no room in a zone (`InsufficientInstanceCapacity`, `Unsupported`, ...), in the spot market (`SpotMaxPriceTooLow`, ...), or in the account (`VcpuLimitExceeded`, ...). Any other error is thrown.
 
@@ -110,7 +112,7 @@ Only `name` is required; every other option has a strong default.
 | `image`             | —                                                          | this provider's image id: the entry's `image`, booted in place of `distro`                   |
 | `disk`              | per preset, from the asked size; with `image`, the image's | GB of the boot disk                                                                          |
 | `market`            | per preset                                                 | in failover order                                                                            |
-| kind keys           | —                                                          | `distro`, `login`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`                     |
+| kind keys           | —                                                          | `distro`, `login`, `script`, `ports`, `worker`, `risk`, `life`, `recovers`, `tags`           |
 
 ```ts
 aws.presets.compute({ name: "worker" });

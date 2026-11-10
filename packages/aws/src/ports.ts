@@ -1,5 +1,6 @@
 import {
     AuthorizeSecurityGroupIngressCommand,
+    CreateTagsCommand,
     CreateSecurityGroupCommand,
     DeleteSecurityGroupCommand,
     DescribeSecurityGroupRulesCommand,
@@ -9,7 +10,7 @@ import {
     type Tag,
 } from "@aws-sdk/client-ec2";
 
-import { Proto, type Rule } from "@diphyx/rig";
+import { Protocol, type Rule } from "@diphyx/rig";
 
 import { codeOf, type Ec2 } from "./ec2.js";
 import { tagsOf } from "./machine.js";
@@ -17,6 +18,7 @@ import { tagsOf } from "./machine.js";
 /* The tags on the security group rig makes for one machine: its rig name, and when it was made. */
 const GROUP = "rig-machine";
 const MADE = "rig-made";
+const INSTANCE = "rig-instance";
 
 /* The start of its name; the rest is the machine's rig name. */
 const PREFIX = "rig-";
@@ -39,7 +41,7 @@ type Answer = {
 /** A rule, as EC2 takes it; an IPv6 source goes in its own field. */
 function permissionOf(rule: Rule): IpPermission {
     return {
-        IpProtocol: rule.proto ?? Proto.TCP,
+        IpProtocol: rule.protocol ?? Protocol.TCP,
         FromPort: rule.port,
         ToPort: rule.to ?? rule.port,
         ...(rule.from.includes(":")
@@ -50,14 +52,22 @@ function permissionOf(rule: Rule): IpPermission {
 
 /** A machine's ports: a security group of its own, made before it, with nothing open but the kind's ports. */
 export function createPorts(ec2: Ec2) {
-    /* The machine's own group: the one it runs in, named `rig-<its rig name>`. */
+    /* The machine's own group: the one it runs in, named `rig-<its rig name>`; once it is gone, by its tag. */
     async function groupOf(id: string): Promise<string | null> {
         const instance = await ec2.instance(id);
         const own = instance?.SecurityGroups?.find((group) => {
             return group.GroupName?.startsWith(PREFIX);
         });
 
-        return own?.GroupId ?? null;
+        if (own?.GroupId) {
+            return own.GroupId;
+        }
+
+        const tagged = await ec2.send<{ SecurityGroups?: { GroupId?: string }[] }>(
+            new DescribeSecurityGroupsCommand({ Filters: [{ Name: `tag:${INSTANCE}`, Values: [id] }] }),
+        );
+
+        return tagged.SecurityGroups?.[0]?.GroupId ?? null;
     }
 
     async function mine(id: string): Promise<string> {
@@ -82,6 +92,11 @@ export function createPorts(ec2: Ec2) {
     return {
         groupOf,
         remove,
+
+        /** Tags the group with its machine's id, once the machine has one. */
+        async own(group: string, id: string): Promise<void> {
+            await ec2.send(new CreateTagsCommand({ Resources: [group], Tags: [{ Key: INSTANCE, Value: id }] }));
+        },
 
         /** §11: the machine's own group, made before it: inbound closed but `rules`; a failed one leaves nothing. */
         async make(name: string, vpc: string, rules: Rule[]): Promise<string> {
@@ -157,7 +172,7 @@ export function createPorts(ec2: Ec2) {
                         id: one.SecurityGroupRuleId!,
                         port: one.FromPort ?? 0,
                         ...(one.ToPort !== one.FromPort && { to: one.ToPort ?? 0 }),
-                        proto: one.IpProtocol === Proto.UDP ? Proto.UDP : Proto.TCP,
+                        protocol: one.IpProtocol === Protocol.UDP ? Protocol.UDP : Protocol.TCP,
                         from: one.CidrIpv4 ?? one.CidrIpv6 ?? "",
                     };
                 });
@@ -165,15 +180,27 @@ export function createPorts(ec2: Ec2) {
 
         /** §11: rig's groups that nothing holds any more, but those young enough to be a try still running. */
         async sweep(): Promise<void> {
-            const found = await ec2.send<{ SecurityGroups?: { GroupId?: string; Tags?: Tag[] }[] }>(
-                new DescribeSecurityGroupsCommand({ Filters: [{ Name: "tag-key", Values: [GROUP] }] }),
-            );
+            let token: string | undefined;
 
-            for (const group of found.SecurityGroups ?? []) {
-                if (Date.now() - Number(tagsOf(group.Tags)[MADE] ?? 0) >= YOUNG) {
-                    await remove(group.GroupId!);
+            do {
+                const found = await ec2.send<{
+                    SecurityGroups?: { GroupId?: string; Tags?: Tag[] }[];
+                    NextToken?: string;
+                }>(
+                    new DescribeSecurityGroupsCommand({
+                        Filters: [{ Name: "tag-key", Values: [GROUP] }],
+                        ...(token && { NextToken: token }),
+                    }),
+                );
+
+                for (const group of found.SecurityGroups ?? []) {
+                    if (Date.now() - Number(tagsOf(group.Tags)[MADE] ?? 0) >= YOUNG) {
+                        await remove(group.GroupId!);
+                    }
                 }
-            }
+
+                token = found.NextToken;
+            } while (token);
         },
     };
 }

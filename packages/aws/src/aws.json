@@ -1,6 +1,10 @@
 {
     "rig": 1,
     "name": "aws",
+    "region": {
+        "env": ["AWS_REGION", "AWS_DEFAULT_REGION"],
+        "default": "us-east-1"
+    },
     "busy": {
         "InsufficientInstanceCapacity": "zone",
         "InsufficientHostCapacity": "zone",

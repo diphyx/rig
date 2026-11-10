@@ -103,9 +103,8 @@ describe("aws: factory", () => {
             return createAws({ region: "us-east-1", extra: { subnet: ["subnet-a"] } } as never);
         }).toThrow(/unknown key extra.subnet/);
 
-        expect(() => {
-            return createAws({} as never);
-        }).toThrow(/region is required/);
+        /* No region: the cloud's own env var's, else its default. */
+        expect(createAws({ extra: { client: fake({}).client } })).toMatchObject({ name: "aws" });
     });
 });
 
@@ -164,16 +163,19 @@ describe("aws: auth", () => {
 });
 
 describe("aws: places", () => {
-    it("gives the entry's types in zones with a subnet, once per market", async () => {
+    it("gives the entry's types in zones with a subnet, once per market, every page", async () => {
         const { client } = fake({
             ...SUBNETS,
-            DescribeInstanceTypeOfferings: () => {
-                return {
-                    InstanceTypeOfferings: [
-                        { InstanceType: "c8g.xlarge", Location: "us-east-1a" },
-                        { InstanceType: "c8g.xlarge", Location: "us-east-1c" },
-                    ],
-                };
+            DescribeInstanceTypeOfferings: (input) => {
+                return input.NextToken
+                    ? { InstanceTypeOfferings: [{ InstanceType: "c8g.xlarge", Location: "us-east-1b" }] }
+                    : {
+                          InstanceTypeOfferings: [
+                              { InstanceType: "c8g.xlarge", Location: "us-east-1a" },
+                              { InstanceType: "c8g.xlarge", Location: "us-east-1c" },
+                          ],
+                          NextToken: "page-2",
+                      };
             },
         });
 
@@ -186,6 +188,8 @@ describe("aws: places", () => {
         expect(places).toEqual([
             { market: "spot", type: "c8g.xlarge", zone: "us-east-1a" },
             { market: "demand", type: "c8g.xlarge", zone: "us-east-1a" },
+            { market: "spot", type: "c8g.xlarge", zone: "us-east-1b" },
+            { market: "demand", type: "c8g.xlarge", zone: "us-east-1b" },
         ]);
     });
 });
@@ -236,6 +240,46 @@ describe("aws: create", () => {
         });
 
         expect(inputs[1]).toMatchObject({ BlockDeviceMappings: [{ DeviceName: "/dev/xvda" }] });
+    });
+
+    it("always deletes the root disk with the machine, and tags its group with its id", async () => {
+        const inputs: Record<string, unknown>[] = [];
+        const { client, sent } = fake({
+            ...SUBNETS,
+            ...GROUP,
+            ...ARM,
+            RunInstances: run(inputs),
+            CreateTags: () => {
+                return {};
+            },
+        });
+
+        await createAws({ region: "us-east-1", extra: { client } }).create(PLACE, SPEC);
+
+        expect(inputs[0]).toMatchObject({
+            BlockDeviceMappings: [{ DeviceName: "/dev/sda1", Ebs: { DeleteOnTermination: true } }],
+        });
+
+        expect(
+            sent.find((one) => {
+                return one.command === "CreateTags";
+            })!.input,
+        ).toEqual({ Resources: ["sg-rig"], Tags: [{ Key: "rig-instance", Value: "i-1" }] });
+    });
+
+    it("answers busy type when the region has no image of the distro", async () => {
+        const { client } = fake({
+            ...SUBNETS,
+            ...GROUP,
+            ...ARM,
+            RunInstances: () => {
+                return fail("InvalidAMIID.NotFound");
+            },
+        });
+
+        expect(await createAws({ region: "us-east-1", extra: { client } }).create(PLACE, SPEC)).toMatchObject({
+            busy: "type",
+        });
     });
 
     it("makes the machine's own group first, with only the kind's ports, and runs the machine in it", async () => {
@@ -362,6 +406,63 @@ describe("aws: create", () => {
         expect(await answer("SpotMaxPriceTooLow")).toMatchObject({ busy: "market" });
         expect(await answer("VcpuLimitExceeded")).toMatchObject({ busy: "account" });
         await expect(answer("UnauthorizedOperation")).rejects.toThrow("UnauthorizedOperation");
+    });
+});
+
+describe("aws: calls", () => {
+    const INSTANCE = {
+        InstanceId: "i-1",
+        State: { Name: "running" },
+        RootDeviceName: "/dev/sda1",
+        BlockDeviceMappings: [{ DeviceName: "/dev/sda1", Ebs: { VolumeId: "vol-1" } }],
+        SecurityGroups: [{ GroupId: "sg-own", GroupName: "rig-app-w-1" }],
+    };
+
+    it("starts, reboots, grows the root disk and reads it back; closes a rule by its id", async () => {
+        const { client, sent } = fake({
+            DescribeInstances: () => {
+                return { Reservations: [{ Instances: [INSTANCE] }] };
+            },
+            StartInstances: () => {
+                return {};
+            },
+            RebootInstances: () => {
+                return {};
+            },
+            ModifyVolume: () => {
+                return {};
+            },
+            DescribeVolumes: () => {
+                return { Volumes: [{ Size: 30 }] };
+            },
+            DescribeVolumesModifications: () => {
+                return { VolumesModifications: [{ ModificationState: "modifying", TargetSize: 60 }] };
+            },
+            RevokeSecurityGroupIngress: () => {
+                return {};
+            },
+        });
+
+        const aws = createAws({ region: "us-east-1", extra: { client } });
+
+        await aws.start!("i-1");
+        await aws.reboot("i-1");
+        await aws.disk!.grow("i-1", 60);
+
+        expect(await aws.disk!.get("i-1")).toEqual({ gb: 60, ready: false });
+
+        await aws.port!.close("i-1", "sgr-1");
+
+        const input = (command: string): Record<string, unknown> => {
+            return sent.find((one) => {
+                return one.command === command;
+            })!.input;
+        };
+
+        expect(input("StartInstances")).toEqual({ InstanceIds: ["i-1"] });
+        expect(input("RebootInstances")).toEqual({ InstanceIds: ["i-1"] });
+        expect(input("ModifyVolume")).toEqual({ VolumeId: "vol-1", Size: 60 });
+        expect(input("RevokeSecurityGroupIngress")).toEqual({ GroupId: "sg-own", SecurityGroupRuleIds: ["sgr-1"] });
     });
 });
 
@@ -701,8 +802,8 @@ describe("aws: ports", () => {
         expect((opened[1]!.IpPermissions as object[])[0]).toMatchObject({ Ipv6Ranges: [{ CidrIpv6: "::/0" }] });
 
         expect(await port!.list("i-1")).toEqual([
-            { id: "sgr-1", port: 22, proto: "tcp", from: "1.2.3.4/32" },
-            { id: "sgr-2", port: 443, proto: "tcp", from: "::/0" },
+            { id: "sgr-1", port: 22, protocol: "tcp", from: "1.2.3.4/32" },
+            { id: "sgr-2", port: 443, protocol: "tcp", from: "::/0" },
         ]);
     });
 });

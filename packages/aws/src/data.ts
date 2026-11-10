@@ -4,6 +4,9 @@ import data from "./aws.json" with { type: "json" };
 
 /** §12: the data file, read once. */
 export const RIG = data.rig;
+
+/** §8.2: where its region comes from, when the config gives none: the first env var set, else the default. */
+export const REGION = data.region as { env: string[]; default: string };
 export const PRESETS = data.presets as PresetTable;
 
 /** What `shape` reads: memory per vCPU by class, GPU families, burstable sizes. */

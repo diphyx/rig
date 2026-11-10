@@ -5,7 +5,8 @@ import type { Auth } from "./auth.js";
 
 /** Spec §8.2: the factory's config, the same keys on every rig provider; aws's own under `extra`. */
 export type AwsConfig = {
-    region: string;
+    /** Where its machines go; the cloud's env var's, else its default region. */
+    region?: string;
     /** Its name in the config; `"aws"`. Two regions are two providers, with two names. */
     name?: string;
     /** §8.1: how it signs in; `{ from: "auto" }`, the AWS SDK's own chain. */
@@ -25,7 +26,7 @@ export type AwsExtra = {
 
 const EXTRA = ["subnets", "client"];
 
-/** §8.2: the standard keys and aws's own `extra` keys; `region` is required. */
+/** §8.2: the standard keys and aws's own `extra` keys; every key has a default. */
 export function checkConfig(config: AwsConfig): void {
     checkFactory("aws", config, EXTRA);
 }
