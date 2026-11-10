@@ -8,7 +8,7 @@
 
 Rig creates machines on cloud providers with **failover**: when a try finds no room, the core tries the next place, across zones, types, markets and providers.
 
-On `spot`, a provider may take a machine back. The core counts how often that happens per place, replaces lost machines, and warns about risky kinds when it opens.
+On `spot`, a provider may take a machine back. The core estimates how often that happens per place, from each type's shape and its own counts, replaces lost machines, and warns about risky kinds when it opens.
 
 This document defines the contract between a **core** and its **providers**. Any core and any provider that follow it work together, in any language.
 
@@ -52,7 +52,8 @@ Each term of §2 has one meaning in this document, and each thing has one term.
 | **failover**  | trying the next place after a busy answer                                    |
 | **lost**      | a machine that ended without the core ending it                              |
 | **recover**   | a failover that replaces a lost machine                                      |
-| **risk**      | how often a place's machines are lost                                        |
+| **risk**      | the core's own estimate of how often a place's machines are taken back, §15  |
+| **shape**     | a type's vCPUs, memory, GPU and CPU arch, from the provider's data           |
 | **round**     | one pass of the core over its machines                                       |
 | **guard**     | the risk checks the core runs on kinds when it opens                         |
 | **refusal**   | the core declining a config, a plugin or a call                              |
@@ -79,7 +80,7 @@ Core verbs: **open** (begin rounds) · **close** (end rounds). Neither touches a
 | `{K: T}` | a map from `K` to `T`, no order                                                    |
 | `?T`     | optional `T`; absent means none                                                    |
 
-Where the order of a list matters, this spec says so. An item of a list is named by its `name`, never by its position.
+Where the order of a list matters, this spec says so. An item of a list is named by its `name`.
 
 ## 4. Generation
 
@@ -110,6 +111,7 @@ Within a generation, a change MUST only add: an optional key, a field, a busy co
 | `every`     | `dur`                  | `"30s"`    | time between rounds, §16; `"0"`: only `round()` |
 | `poll`      | `dur`                  | `"5s"`     | time between polls of a wait, §20; not `"0"`    |
 | `store`     | `str`                  | `"./.rig"` | a folder; the core uses `<store>/rig/1/`        |
+| `extra`     | `?{str: any}`          | —          | the lib's own settings, as the lib defines them |
 
 When the core opens, each of these MUST be a refusal, `config`, naming the key by path (`kinds[worker].try[0].types`):
 
@@ -148,7 +150,7 @@ When the core opens, each of these MUST be a refusal, `config`, naming the key b
 
 ## 7. Preset
 
-A preset makes a kind from a `name` and a few options, so the app needs to know no type names. Every provider MUST offer every preset below. The core never sees a preset; it sees the kind the preset returns.
+A preset makes a kind from a `name` and a few options, so the app needs to know no type names. Every provider MUST offer every preset below. The core sees the kind a preset returns.
 
 ### 7.1 Presets
 
@@ -164,21 +166,25 @@ A preset makes a kind from a `name` and a few options, so the app needs to know 
 
 Only `name` is required.
 
-| Option    | Type                 | Default          | Definition                                                                          |
-| --------- | -------------------- | ---------------- | ----------------------------------------------------------------------------------- |
-| `name`    | `name`               | —                | the kind's name                                                                     |
-| `cpu`     | `?uint`              | per preset       | vCPUs; `general`, `compute`                                                         |
-| `mem`     | `?uint`              | per preset       | GB of memory; `memory`                                                              |
-| `gpu`     | `?str`               | per preset       | the GPU model: `"l4"`, `"a10"`, `"h100"`; `gpu`                                     |
-| `market`  | `?[market]`          | per preset       |                                                                                     |
-| `arch`    | `?"arm"` or `?"x86"` | `"arm"`, if sold | the CPU architecture                                                                |
-| kind keys | —                    | —                | `image`, `disk`, `script`, `risk`, `life`, `recovers`: passed to the kind unchanged |
+| Option    | Type                           | Default                                              | Definition                                                                                  |
+| --------- | ------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `name`    | `name`                         | —                                                    | the kind's name                                                                             |
+| `cpu`     | `?uint`                        | per preset                                           | vCPUs; `general`, `compute`                                                                 |
+| `mem`     | `?uint`                        | per preset                                           | GB of memory; `memory`                                                                      |
+| `gpu`     | `?str`                         | per preset                                           | the GPU model: `"l4"`, `"a10"`, `"h100"`; `gpu`                                             |
+| `market`  | `?[market]`                    | per preset                                           |                                                                                             |
+| `arch`    | `?"arm"`, `?"x86"` or `?"any"` | `"any"`; with `image`, `"arm"` if sold, else `"x86"` | the CPU architecture; `"any"` is `arm`'s types, then `x86`'s                                |
+| `up`      | `?uint`                        | `0`                                                  | also try the next `up` sizes, after every type of the asked size; not `small`, not `gpu`    |
+| kind keys | —                              | —                                                    | `image`, `disk`, `script`, `risk`, `life`, `recovers`, `tags`: passed to the kind unchanged |
 
 ### 7.3 Rules
 
 - A preset MUST return a kind with one entry: this provider, `market` as given, `types` from the data file (§12).
 - A size not sold MUST round up to the next size that is.
+- `arch: "any"` with `image` MUST be a refusal, `config`: an image fits one arch.
+- Each type MUST appear once, the first time it is reached.
 - An option the preset does not take (`mem` on `compute`) MUST be a refusal: `config`.
+- A preset without `name` MUST be a refusal: `config`.
 - A preset MUST NOT call the provider.
 - How a lib shows presets is its own choice. It SHOULD put them next to the provider, so they are found at once.
 
@@ -203,6 +209,7 @@ A provider is a plugin: one object with these keys.
 | `name`    | `name`         | how entries refer to it; unique among providers |
 | `rig`     | `uint`         | the generation it follows                       |
 | `can`     | `?{str: bool}` | what it supports, below                         |
+| `keys`    | `[str]`        | the key names its `auth` takes, §8.1            |
 | `presets` | functions      | §7                                              |
 | calls     | functions      | §9                                              |
 
@@ -223,6 +230,38 @@ When the core opens, it MUST check every plugin in this order, and the first fai
 
 The core MUST NOT list, create or end a machine before every plugin passes.
 
+### 8.1 Auth
+
+Every provider takes the same `auth` option, so the app signs in the same way on every cloud. Each provider implements it in its own package, and `auth` stays inside the provider.
+
+| `auth`                               | Signs in with                                                                              |
+| ------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `{ from: "auto" }`, the default      | whatever the environment already has: the cloud's own env vars, login, or machine identity |
+| `{ from: "env", prefix?: str }`      | keys from env vars `<prefix>_<KEY>`; `prefix` defaults to `RIG_<NAME>`                     |
+| `{ from: "keys", keys: {str: str} }` | keys passed in                                                                             |
+
+- A provider MUST name its keys on the plugin: `keys: ["id", "secret", "token?"]`; `?` marks an optional key.
+- `<NAME>` and `<KEY>` are upper case, `-` as `_`: provider `aws-east`, key `id` → `RIG_AWS_EAST_ID`.
+- With `env` or `keys`, every key without `?` MUST be there, and no key the provider does not name: otherwise a refusal, `plugin`.
+- A provider MUST resolve its `auth` when it is made, and its `check` (§9) proves the keys work when the core opens.
+- No secret MAY appear in the store, an event, a log, or an error: a refusal names the key, never its value.
+
+### 8.2 Factory
+
+A provider is made by a **factory**: one call that takes the provider's config and gives the plugin. Every provider's factory takes the same config, so changing cloud only changes `extra`.
+
+| Key        | Type          | Default            | Definition                                                |
+| ---------- | ------------- | ------------------ | --------------------------------------------------------- |
+| `region`   | `str`         | —                  | where its machines go, by the provider's own name for it  |
+| `name`     | `?name`       | the cloud's own    | its name in the config, §8; two regions are two providers |
+| `auth`     | `?auth`       | `{ from: "auto" }` | how it signs in, §8.1                                     |
+| `identity` | `?str`        | none               | what its machines run as: a role, a service account       |
+| `extra`    | `?{str: any}` | —                  | the provider's own settings, as the provider defines them |
+
+- A factory MUST refuse, `config`, a key outside this table: anything of the provider's own goes in `extra`.
+- It gives the plugin of §8, with `keys` (§8.1), `presets` (§7) and, if it has one, `shape` (§9).
+- A lib SHOULD name its factories alike, and the core's with them: in TypeScript, `createRig` and `createAws`, `createGcp`.
+
 ## 9. Calls
 
 Every call is asynchronous. A failure §11 does not define MUST throw. The core passes a throw to the app.
@@ -236,6 +275,7 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 | `end`        | `id: str`              | —                           | always     |
 | `reboot`     | `id: str`              | —                           | always     |
 | `check`      | —                      | —                           | optional   |
+| `shape`      | `type: str`            | `?shape`                    | optional   |
 | `start`      | `id: str`              | —                           | `can.stop` |
 | `stop`       | `id: str`              | —                           | `can.stop` |
 | `disk.grow`  | `id: str`, `gb: uint`  | —                           | `can.disk` |
@@ -248,13 +288,12 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 
 **place**
 
-| Key      | Type     | Definition                                   |
-| -------- | -------- | -------------------------------------------- |
-| `market` | `market` |                                              |
-| `type`   | `str`    | the provider's type name                     |
-| `zone`   | `str`    | the provider's zone name                     |
-| `price`  | `?str`   | per hour, with currency: `"0.0412 USD"`      |
-| `rate`   | `?str`   | the provider's published take-back rate, §15 |
+| Key      | Type     | Definition                                          |
+| -------- | -------- | --------------------------------------------------- |
+| `market` | `market` |                                                     |
+| `type`   | `str`    | the provider's type name                            |
+| `zone`   | `str`    | the provider's zone name                            |
+| `price`  | `?str`   | per hour, with currency: `"0.0412 USD"`; for people |
 
 **spec**: filled by the core.
 
@@ -287,6 +326,15 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 | `ip`      | `?{ public?: str, private?: str }` |                                |
 | `created` | `ms`                               |                                |
 
+**shape**: a type, as §15 sees it.
+
+| Key    | Type               | Definition                    |
+| ------ | ------------------ | ----------------------------- |
+| `cpu`  | `uint`             | vCPUs                         |
+| `mem`  | `uint`             | GB of memory                  |
+| `gpu`  | `?str`             | the GPU model: `"l4"`, `"t4"` |
+| `arch` | `"arm"` or `"x86"` | the CPU architecture          |
+
 **rule**
 
 | Key     | Type    | Definition                           |
@@ -299,19 +347,20 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 
 ## 11. Rules
 
-| Call     | Rule                                                                                      |
-| -------- | ----------------------------------------------------------------------------------------- |
-| `places` | MUST return only places sold now for the entry's markets and types, in any order          |
-| `create` | MUST make exactly one try: no second try, no other place                                  |
-| `create` | MUST put every tag of `spec.tags` on the machine as it is created, or throw               |
-| `create` | MUST answer `busy` only when there is no room, with the code below; else MUST throw       |
-| `check`  | MUST throw when the provider cannot work: wrong keys, no access, an unknown region        |
-| `get`    | an unknown id MUST give `null`, not throw                                                 |
-| `list`   | MUST return every machine with all the given tags, in every status but `ended`, all pages |
-| `end`    | an unknown or ended id MUST succeed                                                       |
-| `end`    | MUST also remove what the machine leaves: its port rules, its unattached disks            |
-| `stop`   | on a `spot` machine MUST be a refusal: `unsupported`                                      |
-| status   | MUST map the provider's own statuses onto `status`; after a take-back, `ended`            |
+| Call     | Rule                                                                                                                            |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `places` | MUST return only places sold now for the entry's markets and types, in any order                                                |
+| `create` | MUST make exactly one try: no second try, no other place                                                                        |
+| `create` | MUST put every tag of `spec.tags` on the machine as it is created, or throw; `spec.extra` MUST NOT change that, nor the one try |
+| `create` | MUST answer `busy` only when there is no room, with the code below; else MUST throw                                             |
+| `check`  | MUST throw when the provider cannot work: wrong keys, no access, an unknown region                                              |
+| `shape`  | MUST come from the provider's own data, never from a call to the cloud; a type it does not know is `null`                       |
+| `get`    | an unknown id MUST give `null`, not throw                                                                                       |
+| `list`   | MUST return every machine with all the given tags, in every status but `ended`, all pages                                       |
+| `end`    | an unknown or ended id MUST succeed                                                                                             |
+| `end`    | MUST also remove what the machine leaves: its port rules, its unattached disks                                                  |
+| `stop`   | on a `spot` machine MUST be a refusal: `unsupported`                                                                            |
+| status   | MUST map the provider's own statuses onto `status`; after a take-back, `ended`                                                  |
 
 | `busy`    | No room                                  |
 | --------- | ---------------------------------------- |
@@ -324,13 +373,14 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 
 A provider MUST keep what is not code in a data file (Appendix A), so that providers for the same cloud in different languages agree.
 
-| Key       | Definition                                                                    |
-| --------- | ----------------------------------------------------------------------------- |
-| `rig`     | the generation                                                                |
-| `name`    | the provider's name                                                           |
-| `busy`    | the provider's error code → `busy`; a code not listed MUST throw              |
-| `tags`    | tag names the provider cannot hold → names it can: `{ "rig-app": "rig_app" }` |
-| `presets` | preset → arch → size → types; `small` has no size: arch → types               |
+| Key       | Definition                                                                                                                                               |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rig`     | the generation                                                                                                                                           |
+| `name`    | the provider's name                                                                                                                                      |
+| `busy`    | the provider's error code → `busy`; a code not listed MUST throw                                                                                         |
+| `tags`    | tag names the provider cannot hold → names it can: `{ "rig-app": "rig_app" }`; the provider MUST map them both ways, so the core only sees its own names |
+| `presets` | preset → arch → size → types; `small` has no size: arch → types                                                                                          |
+| `shapes`  | what `shape` reads; its form is the provider's own                                                                                                       |
 
 - Types MUST be listed best first: newest generation first, older ones as fallback.
 - The first size listed is the default, unless §7.1 sets one. For `gpu`, the first model listed is the cheapest.
@@ -384,21 +434,55 @@ return null
 
 ## 15. Risk
 
-| Key      | Type                                         | Definition                                                                                             |
-| -------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `rate`   | `?str`                                       | the provider's published take-back rate, a month: `"<5%"`, `"5-10%"`, `"10-15%"`, `"15-20%"`, `">20%"` |
-| `source` | `?name`                                      | the provider that published `rate`                                                                     |
-| `seen`   | `{ created: uint, lost: uint, hours: uint }` | the core's own count for the place                                                                     |
+Risk is the core's own estimate of how often a place's machines are taken back, as a percent a month. It needs nothing from a provider but each type's shape (§9), and the core's own counts. Every core MUST compute it the same way, with the constants below.
 
-- The core MUST keep `seen` per place in `<store>/rig/1/risk.json`, written after every change: a map from `<provider>/<market>/<type>/<zone>` to `seen`.
+### 15.1 Counts
+
+The core MUST keep, per place, in `<store>/rig/1/risk.json`, written after every change: a map from `<provider>/<market>/<type>/<zone>` to `seen`.
+
+| Key       | Type   | Counts                                                                       |
+| --------- | ------ | ---------------------------------------------------------------------------- |
+| `tries`   | `uint` | tries at the place                                                           |
+| `busy`    | `uint` | of those, `busy` answers                                                     |
+| `created` | `uint` | machines created at the place                                                |
+| `lost`    | `uint` | of those, lost; a machine the core ends MUST NOT count                       |
+| `hours`   | `uint` | the hours machines ran at the place, counted when each leaves: lost or ended |
 
 ```json
-{ "aws/spot/c8g.2xlarge/us-east-1a": { "created": 40, "lost": 3, "hours": 31 } }
+{ "aws/spot/c8g.2xlarge/us-east-1a": { "tries": 52, "busy": 12, "created": 40, "lost": 3, "hours": 2190 } }
 ```
 
-- `seen.hours` is the mean hours a lost machine ran before it was lost; `0` if none was.
-- A machine the core ends MUST NOT count as lost.
-- `risk.max` removes a place when the upper bound of its `rate` is above `max`, or when `seen.created ≥ 10` and `seen.lost ÷ seen.created` is above `max`. A place with neither MUST be kept.
+### 15.2 Prior
+
+Before the core has seen a place, its risk is a **prior**, from the type's shape. A `demand` place's prior is `0`. A `spot` place's:
+
+```
+base    = 25  with a gpu
+        =  5  with 2 vCPU or fewer
+        =  8  else
+size    = 1   up to 4 vCPU
+        = 1.25  up to 16
+        = 1.5   up to 48
+        = 2     more
+arch    = 0.8 on arm, 1 else
+prior   = min(50, base × size × arch)
+```
+
+A type with no shape (the provider gives none) is `base 8`, `size 1`, `arch 1`: `8`.
+
+### 15.3 Estimate
+
+```
+pressure = busy ÷ (tries + 5)                                  a place often full is more likely taken back
+months   = (hours + the hours the place's running machines have run so far) ÷ 730
+p        = min(50, prior × (1 + pressure)) ÷ 100
+takeback = 100 × (lost + p × 2) ÷ (months + 2)                 2 machine-months of the prior, fading as months grow
+```
+
+- `takeback` MUST be rounded to one decimal; `pressure` is shown as a percent, `100 × pressure`, rounded the same.
+- With no counts, `takeback` is the prior. After a few machine-months, the counts lead.
+- **risk** is `{ takeback, pressure, prior, seen }`.
+- `risk.max` removes a place when its `takeback` is above `max`.
 
 ## 16. Rounds
 
@@ -432,10 +516,11 @@ return null
 
 When the core opens, it MUST check every kind for risk. Each code MUST be emitted at most once per kind, as `guard`, and MUST be a refusal when `guard` is `"refuse"`.
 
-| Code        | When                                                                                       |
-| ----------- | ------------------------------------------------------------------------------------------ |
-| `spot-warn` | `spot` in any entry's `market`: nothing warns before a take-back, so its data is lost      |
-| `spot-long` | `spot` in any entry's `market`, no `life`, and a place with a published `rate` above `10%` |
+| Code          | When                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------ |
+| `spot-warn`   | `spot` in any entry's `market`: nothing warns before a take-back, so its data is lost                  |
+| `spot-long`   | `spot` in any entry's `market`, no `life`, and a spot place whose `takeback` is above `10`             |
+| `spot-narrow` | `spot` in any entry's `market`, and fewer than `3` spot places in all: one busy pool can take them all |
 
 Until the hub (§22) defines a warning before a take-back, `spot-warn` holds for every kind with `spot`.
 
@@ -477,27 +562,27 @@ A refusal carries `reason` and `message`. Code MUST read only `reason`; `message
 
 What the app calls on the core. A lib MAY name them in its own style (`machine.create`, `machine_create`), but MUST keep their meaning.
 
-| Call             | Input                                | Output          | Does                                                                                  |
-| ---------------- | ------------------------------------ | --------------- | ------------------------------------------------------------------------------------- |
-| `open`           | —                                    | —               | §16                                                                                   |
-| `close`          | —                                    | —               | §16                                                                                   |
-| `round`          | —                                    | —               | runs a round now, §16                                                                 |
-| `on`             | `event: str`, a handler              | —               | calls the handler on every such event, §18                                            |
-| `place.list`     | `kind: name`                         | `[place]`       | the places a failover would try, in its order, each with `provider` and `risk`        |
-| `machine.create` | `kind: name`                         | `?machine`      | a failover, §14; `null` when there is no room                                         |
-| `machine.get`    | `id: str`                            | `?machine`      | the provider's `get`, copied into the store; `null` for an id the store does not hold |
-| `machine.wait`   | `id: str`, `status`, `?timeout: dur` | `machine`       | `machine.get` every `poll`, until the machine has `status`, or is `ended`             |
-| `machine.list`   | `?{ kind?: name }`                   | `[machine]`     | from the store                                                                        |
-| `machine.end`    | `id: str`                            | —               | the provider's `end`; emits `machine:ended`                                           |
-| `machine.start`  | `id: str`                            | —               | the provider's `start`                                                                |
-| `machine.stop`   | `id: str`                            | —               | the provider's `stop`                                                                 |
-| `machine.reboot` | `id: str`                            | —               | the provider's `reboot`                                                               |
-| `disk.grow`      | `id: str`, `gb: uint`                | —               | the provider's                                                                        |
-| `disk.get`       | `id: str`                            | `{ gb, ready }` | the provider's                                                                        |
-| `disk.wait`      | `id: str`, `?timeout: dur`           | `{ gb, ready }` | `disk.get` every `poll`, until `ready`                                                |
-| `port.open`      | `id: str`, `rule`                    | `rule`          | the provider's                                                                        |
-| `port.close`     | `id: str`, `rule: str`               | —               | the provider's                                                                        |
-| `port.list`      | `id: str`                            | `[rule]`        | the provider's                                                                        |
+| Call             | Input                                | Output          | Does                                                                                                             |
+| ---------------- | ------------------------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `open`           | —                                    | —               | §16                                                                                                              |
+| `close`          | —                                    | —               | §16                                                                                                              |
+| `round`          | —                                    | —               | runs a round now, §16                                                                                            |
+| `on`             | `event: str`, a handler              | —               | calls the handler on every such event, §18                                                                       |
+| `place.list`     | `kind: name`                         | `[place]`       | the places a failover would try, in its order, each with `provider` and `risk`; its length is the kind's breadth |
+| `machine.create` | `kind: name`                         | `?machine`      | a failover, §14; `null` when there is no room                                                                    |
+| `machine.get`    | `id: str`                            | `?machine`      | the provider's `get`, copied into the store; `null` for an id the store does not hold                            |
+| `machine.wait`   | `id: str`, `status`, `?timeout: dur` | `machine`       | `machine.get` every `poll`, until the machine has `status`, or is `ended`                                        |
+| `machine.list`   | `?{ kind?: name }`                   | `[machine]`     | from the store                                                                                                   |
+| `machine.end`    | `id: str`                            | —               | the provider's `end`; emits `machine:ended`                                                                      |
+| `machine.start`  | `id: str`                            | —               | the provider's `start`                                                                                           |
+| `machine.stop`   | `id: str`                            | —               | the provider's `stop`                                                                                            |
+| `machine.reboot` | `id: str`                            | —               | the provider's `reboot`                                                                                          |
+| `disk.grow`      | `id: str`, `gb: uint`                | —               | the provider's                                                                                                   |
+| `disk.get`       | `id: str`                            | `{ gb, ready }` | the provider's                                                                                                   |
+| `disk.wait`      | `id: str`, `?timeout: dur`           | `{ gb, ready }` | `disk.get` every `poll`, until `ready`                                                                           |
+| `port.open`      | `id: str`, `rule`                    | `rule`          | the provider's                                                                                                   |
+| `port.close`     | `id: str`, `rule: str`               | —               | the provider's                                                                                                   |
+| `port.list`      | `id: str`                            | `[rule]`        | the provider's                                                                                                   |
 
 - Every call but `open` and `on` MUST be a refusal before `open`, and after `close`: `closed`.
 - `on` MAY be called before `open`, so the app hears `guard` while the core opens.
@@ -532,13 +617,15 @@ Until then, each of these MUST be a refusal, `config`:
 
 # Appendix A · An aws data file
 
+A part of `packages/aws/src/aws.json`, the official aws provider's data file.
+
 ```json
 {
     "rig": 1,
     "name": "aws",
     "busy": {
         "InsufficientInstanceCapacity": "zone",
-        "InsufficientCapacity": "zone",
+        "InsufficientHostCapacity": "zone",
         "InsufficientFreeAddressesInSubnet": "zone",
         "Unsupported": "zone",
         "SpotMaxPriceTooLow": "market",
@@ -548,29 +635,49 @@ Until then, each of these MUST be a refusal, `config`:
     },
     "tags": {},
     "presets": {
-        "small": { "arm": ["t4g.small"], "x86": ["t3.small"] },
-        "general": {
-            "arm": {
-                "2": ["m8g.large", "m7g.large"],
-                "4": ["m8g.xlarge", "m7g.xlarge"]
-            },
-            "x86": { "2": ["m7i.large", "m6i.large"] }
+        "small": {
+            "arm": ["t4g.small", "t4g.medium"],
+            "x86": ["t3.small", "t3a.small", "t3.medium", "t3a.medium"]
         },
         "compute": {
             "arm": {
-                "4": ["c8g.xlarge", "c7g.xlarge", "c6g.xlarge"],
-                "8": ["c8g.2xlarge", "c7g.2xlarge", "c6g.2xlarge"]
+                "4": ["c8g.xlarge", "c7g.xlarge", "c7gn.xlarge", "c6g.xlarge", "c6gn.xlarge"]
             },
-            "x86": { "4": ["c7i.xlarge", "c6i.xlarge"] }
-        },
+            "x86": {
+                "4": ["c7i.xlarge", "c7a.xlarge", "c6i.xlarge", "c6a.xlarge", "c5.xlarge"]
+            }
+        }
+    },
+    "shapes": {
         "memory": {
-            "arm": {
-                "32": ["r8g.xlarge", "r7g.xlarge"],
-                "64": ["r8g.2xlarge", "r7g.2xlarge"]
+            "c": 2,
+            "m": 4,
+            "r": 8,
+            "x": 16,
+            "z": 8,
+            "i": 8,
+            "d": 8,
+            "h": 4
+        },
+        "families": {
+            "g5g": {
+                "memory": 2,
+                "gpu": "t4"
+            },
+            "g6": {
+                "memory": 4,
+                "gpu": "l4"
             }
         },
-        "gpu": {
-            "x86": { "l4": ["g6.xlarge", "g6.2xlarge"], "a10": ["g5.xlarge"] }
+        "burstable": {
+            "small": {
+                "cpu": 2,
+                "mem": 2
+            },
+            "medium": {
+                "cpu": 2,
+                "mem": 4
+            }
         }
     }
 }
