@@ -45,6 +45,7 @@ const rig = createRig({
 await rig.open();
 
 const machine = await rig.machine.create("worker"); // null if no room anywhere
+await rig.machine.wait(machine.id, "running"); // live status and ip from the provider
 rig.on("machine:lost", ({ machine }) => { ... });
 ```
 
@@ -96,14 +97,15 @@ At least one provider: official, or your own.
 | ---------------- | ------------------------------ |
 | `spec/SPEC.md`   | the contract                   |
 | `spec/kit/`      | the conformance suite, as data |
-| `packages/core`  | `@diphyx/rig`, planned         |
+| `packages/core`  | `@diphyx/rig`, passes the kit  |
 | `packages/aws`   | `@diphyx/rig-aws`, planned     |
 | `packages/gcp`   | `@diphyx/rig-gcp`, planned     |
 | `packages/azure` | `@diphyx/rig-azure`, planned   |
 
 ```bash
 pnpm install
-pnpm run check   # lint, format, tests
+pnpm run build   # every package
+pnpm run check   # types, lint, format, tests, the kit
 ```
 
 ## License

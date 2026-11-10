@@ -2,7 +2,7 @@
 
 The rig core: create machines on any cloud, with failover.
 
-**Status: planned.** Not written yet.
+**Status: draft.** Passes the kit; not published yet.
 
 ## What It Does
 
@@ -34,6 +34,7 @@ const rig = createRig({
 await rig.open();
 
 const machine = await rig.machine.create("worker"); // null if no room anywhere
+await rig.machine.wait(machine.id, "running"); // live status and ip from the provider
 ```
 
 ## Spec
