@@ -16,6 +16,7 @@ export {
     Status,
 } from "./enums.js";
 
+export { checkFactory, createTagMap, FACTORY_KEYS } from "./factory.js";
 export { createPresets, type Presets, type PresetTable } from "./presets.js";
 export { Refusal } from "./refusal.js";
 export { createRig, type Rig } from "./rig.js";
