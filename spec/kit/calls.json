@@ -1795,6 +1795,169 @@
             ]
         },
         {
+            "id": "calls/port-open-ip",
+            "description": "an IP as from is its own CIDR, /32 for IPv4 and /128 for IPv6; a match by that IP finds it",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 22,
+                            "from": "1.2.3.4"
+                        }
+                    ],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r1",
+                                "port": 22,
+                                "from": "1.2.3.4/32"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 22,
+                            "from": "2001:db8::1"
+                        }
+                    ],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r2",
+                                "port": 22,
+                                "from": "2001:db8::1/128"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 22,
+                            "from": "1.2.3.4/32"
+                        }
+                    ],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r1"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.close",
+                    "args": [
+                        "m1",
+                        {
+                            "from": "1.2.3.4"
+                        }
+                    ],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r1"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
             "id": "calls/port-equal",
             "description": "an equal rule the machine has is given back, with no provider call",
             "given": {
@@ -1899,7 +2062,7 @@
                         {
                             "port": 22,
                             "to": 22,
-                            "proto": "tcp",
+                            "protocol": "tcp",
                             "from": "1.2.3.4/32"
                         }
                     ],
@@ -2366,7 +2529,7 @@
                         "m1",
                         {
                             "port": 53,
-                            "proto": "udp",
+                            "protocol": "udp",
                             "from": "1.2.3.4/32"
                         }
                     ]
@@ -2422,8 +2585,8 @@
             ]
         },
         {
-            "id": "calls/port-close-proto",
-            "description": "a match by port and proto closes only rules of that proto; an absent proto is tcp",
+            "id": "calls/port-close-protocol",
+            "description": "a match by port and protocol closes only rules of that protocol; an absent protocol is tcp",
             "given": {
                 "config": {
                     "rig": 1,
@@ -2525,7 +2688,7 @@
                         "m1",
                         {
                             "port": 53,
-                            "proto": "udp",
+                            "protocol": "udp",
                             "from": "1.2.3.4/32"
                         }
                     ]
@@ -2548,7 +2711,7 @@
                         "m1",
                         {
                             "port": 22,
-                            "proto": "udp"
+                            "protocol": "udp"
                         }
                     ],
                     "expect": {
@@ -2561,7 +2724,7 @@
                     "args": [
                         "m1",
                         {
-                            "proto": "udp"
+                            "protocol": "udp"
                         }
                     ],
                     "expect": {
@@ -2697,7 +2860,7 @@
                         "m1",
                         {
                             "port": 53,
-                            "proto": "udp",
+                            "protocol": "udp",
                             "from": "1.2.3.4/32"
                         }
                     ]
@@ -2994,7 +3157,7 @@
                         "m1",
                         {
                             "port": 22,
-                            "proto": "icmp",
+                            "protocol": "icmp",
                             "from": "1.2.3.4/32"
                         }
                     ],
@@ -3691,6 +3854,581 @@
                     "do": "open",
                     "expect": {
                         "refusal": "config"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/worker-boot",
+            "description": "a machine with a worker gets the worker's lines in its first boot, and the ports the worker needs",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            }
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"],
+                    "expect": {
+                        "fake": {
+                            "a": {
+                                "scripts": [
+                                    "#!/bin/bash\n# rig: the kind's first boot, once, as root\n[ -e /var/lib/rig/boot.ran ] && exit 0\nmkdir -p /var/lib/rig /var/log/rig\nchmod 700 /var/lib/rig /var/log/rig\ntouch /var/lib/rig/boot.ran\nexec >>/var/log/rig/boot.log 2>&1\ntrap 'echo $? > /var/lib/rig/boot.exit' EXIT\nset -eo pipefail\necho worker\n"
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.list",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r1",
+                                "port": 9420,
+                                "from": "203.0.113.9/32"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/worker-add",
+            "description": "the worker takes a machine once it has an IP, and forgets it once it ends",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            }
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"],
+                    "expect": {
+                        "result": {
+                            "worker": {
+                                "name": "g",
+                                "key": "key-1",
+                                "tags": ["build"]
+                            }
+                        },
+                        "workers": {
+                            "g": {
+                                "adds": []
+                            }
+                        }
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "machine.get",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": {
+                            "worker": {
+                                "name": "g",
+                                "key": "key-1",
+                                "ip": {
+                                    "private": "10.0.0.1"
+                                }
+                            }
+                        },
+                        "workers": {
+                            "g": {
+                                "adds": [
+                                    {
+                                        "ip": {
+                                            "private": "10.0.0.1"
+                                        },
+                                        "key": "key-1",
+                                        "tags": ["build"]
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "machine.get",
+                    "args": ["m1"],
+                    "expect": {
+                        "workers": {
+                            "g": {
+                                "adds": [
+                                    {
+                                        "key": "key-1"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "machine.end",
+                    "args": ["m1"],
+                    "expect": {
+                        "workers": {
+                            "g": {
+                                "drops": [{}]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/worker-lost",
+            "description": "a lost machine is dropped from its worker, and its recovered machine is added, with a key of its own",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            }
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "round",
+                    "expect": {
+                        "workers": {
+                            "g": {
+                                "adds": [
+                                    {
+                                        "key": "key-1"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "do": "take-back",
+                    "id": "m1"
+                },
+                {
+                    "do": "round",
+                    "expect": {
+                        "workers": {
+                            "g": {
+                                "adds": [
+                                    {
+                                        "key": "key-1"
+                                    }
+                                ],
+                                "drops": [{}]
+                            }
+                        }
+                    }
+                },
+                {
+                    "do": "round",
+                    "expect": {
+                        "workers": {
+                            "g": {
+                                "adds": [
+                                    {
+                                        "key": "key-1"
+                                    },
+                                    {
+                                        "key": "key-2",
+                                        "ip": {
+                                            "private": "10.0.0.2"
+                                        }
+                                    }
+                                ],
+                                "drops": [{}]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/worker-spent",
+            "description": "when the core stops recovering a lost machine of a worker kind, its worker hears its tags are spent",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "recovers": 0,
+                            "worker": {
+                                "tags": ["build"]
+                            }
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "take-back",
+                    "id": "m1"
+                },
+                {
+                    "do": "round",
+                    "expect": {
+                        "events": [
+                            {
+                                "event": "machine:lost"
+                            },
+                            {
+                                "event": "machine:failed"
+                            }
+                        ],
+                        "workers": {
+                            "g": {
+                                "spents": [["build"]]
+                            }
+                        }
                     }
                 }
             ]
@@ -4751,6 +5489,264 @@
                         },
                         "result": {
                             "user": "ops"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/worker-ip",
+            "description": "a machine whose IPs change is given to its worker again, with them",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            }
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "round"
+                },
+                {
+                    "do": "ip",
+                    "id": "m1",
+                    "ip": {
+                        "private": "10.0.9.9"
+                    }
+                },
+                {
+                    "do": "round",
+                    "expect": {
+                        "workers": {
+                            "g": {
+                                "adds": [
+                                    {
+                                        "ip": {
+                                            "private": "10.0.0.1"
+                                        }
+                                    },
+                                    {
+                                        "ip": {
+                                            "private": "10.0.9.9"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/worker-add-fails",
+            "description": "a worker's add that throws is not done, and is asked again the next round",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            }
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g",
+                            "fails": 1
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "round",
+                    "expect": {
+                        "workers": {
+                            "g": {
+                                "adds": []
+                            }
+                        }
+                    }
+                },
+                {
+                    "do": "round",
+                    "expect": {
+                        "workers": {
+                            "g": {
+                                "adds": [
+                                    {
+                                        "key": "key-1"
+                                    }
+                                ]
+                            }
                         }
                     }
                 }

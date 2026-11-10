@@ -146,7 +146,7 @@
             "required": ["do"],
             "properties": {
                 "do": {
-                    "enum": ["open", "close", "round", "call", "take-back", "clock"]
+                    "enum": ["open", "close", "round", "call", "take-back", "clock", "ip"]
                 },
                 "expect": {
                     "$ref": "#/$defs/expect"
@@ -232,6 +232,29 @@
                         },
                         "additionalProperties": false
                     }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "do": {
+                                "const": "ip"
+                            }
+                        }
+                    },
+                    "then": {
+                        "required": ["id", "ip"],
+                        "properties": {
+                            "do": true,
+                            "expect": true,
+                            "id": {
+                                "type": "string"
+                            },
+                            "ip": {
+                                "type": "object"
+                            }
+                        },
+                        "additionalProperties": false
+                    }
                 }
             ]
         },
@@ -262,6 +285,9 @@
                     "type": "object"
                 },
                 "fake": {
+                    "type": "object"
+                },
+                "workers": {
                     "type": "object"
                 }
             },

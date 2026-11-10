@@ -567,6 +567,115 @@
                     }
                 }
             ]
+        },
+        {
+            "id": "guard/spot-long-counted",
+            "description": "spot-long reads the store's own counts: a place its counts put above 10, with no shape",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot", "demand"],
+                                    "types": ["t1", "t2"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                },
+                "store": {
+                    "risk": {
+                        "a/spot/t1/za": {
+                            "tries": 3,
+                            "busy": 0,
+                            "created": 3,
+                            "lost": 3,
+                            "hours": 0
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open",
+                    "expect": {
+                        "events": [
+                            {
+                                "event": "guard",
+                                "kind": "w",
+                                "code": "spot-warn"
+                            },
+                            {
+                                "event": "guard",
+                                "kind": "w",
+                                "code": "spot-long"
+                            }
+                        ]
+                    }
+                }
+            ]
         }
     ]
 }

@@ -1,8 +1,8 @@
 # rig spec, generation 1
 
-| Status | Generation | Scope                                   |
-| ------ | ---------- | --------------------------------------- |
-| draft  | 1          | core and providers; the hub is reserved |
+| Status | Generation | Scope                                                    |
+| ------ | ---------- | -------------------------------------------------------- |
+| draft  | 1          | core, providers and workers; a worker's jobs are its own |
 
 ## Abstract
 
@@ -10,7 +10,7 @@ Rig creates Linux machines on cloud providers with **failover**: when a try find
 
 On `spot`, a provider may take a machine back. The core estimates how often that happens per place, from each type's shape and its own counts, replaces lost machines, and warns about risky kinds when it opens.
 
-This document defines the contract between a **core** and its **providers**. Any core and any provider that follow it work together, in any language.
+This document defines the contract between a **core**, its **providers**, which make machines, and its **workers**, which run jobs on them. Any core and any plugin that follow it work together, in any language.
 
 ## Contents
 
@@ -19,7 +19,7 @@ This document defines the contract between a **core** and its **providers**. Any
 - Part 3 · Provider: 8 Plugin · 9 Calls · 10 Shapes · 11 Rules · 12 Data file
 - Part 4 · Core: 13 Tags · 14 Failover · 15 Risk · 16 Rounds · 17 Guard · 18 Events · 19 Refusals
 - Part 5 · App: 20 Calls · 21 Kit
-- Part 6 · Reserved: 22 Hub
+- Part 6 · Workers: 22 Workers
 - Appendix A · An aws data file
 
 ---
@@ -34,31 +34,33 @@ Each term of §2 has one meaning in this document, and each thing has one term.
 
 ## 2. Terms
 
-| Term          | Definition                                                                   |
-| ------------- | ---------------------------------------------------------------------------- |
-| **app**       | the program that runs a core                                                 |
-| **core**      | the implementation of this spec inside the app                               |
-| **store**     | the folder where the core keeps what it knows                                |
-| **provider**  | a plugin for one cloud                                                       |
-| **machine**   | one Linux server a provider runs for the core                                |
-| **kind**      | a named recipe for machines                                                  |
-| **entry**     | one item of a kind's `try` list: a provider, markets, types                  |
-| **preset**    | a provider's ready recipe that makes a kind from a name                      |
-| **market**    | how a machine is paid: `spot`, which the provider may take back, or `demand` |
-| **take-back** | the provider ending a `spot` machine on its own                              |
-| **place**     | a provider, market, type and zone where a machine could be created           |
-| **try**       | one `create` call at one place                                               |
-| **busy**      | the answer to a try that found no room                                       |
-| **failover**  | trying the next place after a busy answer                                    |
-| **lost**      | a machine that ended without the core ending it                              |
-| **recover**   | a failover that replaces a lost machine                                      |
-| **risk**      | the core's own estimate of how often a place's machines are taken back, §15  |
-| **distro**    | a Linux distribution at one major version, which a machine boots: §6.1       |
-| **image**     | the disk a machine boots from, as its provider names it                      |
-| **shape**     | a type's vCPUs, memory, GPU and CPU arch, from the provider's data           |
-| **round**     | one pass of the core over its machines                                       |
-| **guard**     | the risk checks the core runs on kinds when it opens                         |
-| **refusal**   | the core declining a config, a plugin or a call                              |
+| Term            | Definition                                                                   |
+| --------------- | ---------------------------------------------------------------------------- |
+| **app**         | the program that runs a core                                                 |
+| **core**        | the implementation of this spec inside the app                               |
+| **store**       | the folder where the core keeps what it knows                                |
+| **provider**    | a plugin for one cloud                                                       |
+| **machine**     | one Linux server a provider runs for the core                                |
+| **kind**        | a named recipe for machines                                                  |
+| **entry**       | one item of a kind's `try` list: a provider, markets, types                  |
+| **preset**      | a provider's ready recipe that makes a kind from a name                      |
+| **market**      | how a machine is paid: `spot`, which the provider may take back, or `demand` |
+| **take-back**   | the provider ending a `spot` machine on its own                              |
+| **place**       | a provider, market, type and zone where a machine could be created           |
+| **try**         | one `create` call at one place                                               |
+| **busy**        | the answer to a try that found no room                                       |
+| **failover**    | trying the next place after a busy answer                                    |
+| **lost**        | a machine that ended without the core ending it                              |
+| **recover**     | a failover that replaces a lost machine                                      |
+| **risk**        | the core's own estimate of how often a place's machines are taken back, §15  |
+| **distro**      | a Linux distribution at one major version, which a machine boots: §6.1       |
+| **image**       | the disk a machine boots from, as its provider names it                      |
+| **shape**       | a type's vCPUs, memory, GPU and CPU arch, from the provider's data           |
+| **round**       | one pass of the core over its machines                                       |
+| **guard**       | the risk checks the core runs on kinds when it opens                         |
+| **refusal**     | the core declining a config, a plugin or a call                              |
+| **worker**      | a plugin that runs jobs on machines, §22                                     |
+| **job machine** | a machine of a kind with a `worker`: short-lived, made to run jobs           |
 
 Machine verbs: **create** (new) · **start** (power on) · **stop** (power off) · **reboot** · **end** (delete).
 
@@ -66,22 +68,22 @@ Core verbs: **open** (begin rounds) · **close** (end rounds). Neither touches a
 
 ## 3. Types
 
-| Type     | Definition                                                                         |
-| -------- | ---------------------------------------------------------------------------------- |
-| `str`    | a UTF-8 string                                                                     |
-| `uint`   | a whole number ≥ 0                                                                 |
-| `bool`   | `true` or `false`                                                                  |
-| `ms`     | `uint`: unix time in milliseconds                                                  |
-| `dur`    | `str`: a number and one of `s`, `m`, `h`, `d`: `"30s"`, `"10m"`; `"0"` means never |
-| `pct`    | `str`: a number and `%`: `"10%"`                                                   |
-| `name`   | `str` matching `[a-z][a-z0-9-]{0,31}`                                              |
-| `market` | `"spot"` or `"demand"`                                                             |
-| `busy`   | `"zone"`, `"type"`, `"market"` or `"account"`                                      |
-| `distro` | `{ name: str, version?: str }`: a distro of §6.1                                   |
-| `status` | `"pending"`, `"running"`, `"stopping"`, `"stopped"`, `"ending"` or `"ended"`       |
-| `[T]`    | a list of `T`, in order                                                            |
-| `{K: T}` | a map from `K` to `T`, no order                                                    |
-| `?T`     | optional `T`; absent means none                                                    |
+| Type     | Definition                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------------ |
+| `str`    | a UTF-8 string                                                                                   |
+| `uint`   | a whole number ≥ 0                                                                               |
+| `bool`   | `true` or `false`                                                                                |
+| `ms`     | `uint`: unix time in milliseconds                                                                |
+| `dur`    | `str`: a number and one of `s`, `m`, `h`, `d`: `"30s"`, `"10m"`; `"0"`, or any zero, means never |
+| `pct`    | `str`: a number and `%`: `"10%"`                                                                 |
+| `name`   | `str` matching `[a-z][a-z0-9-]{0,31}`                                                            |
+| `market` | `"spot"` or `"demand"`                                                                           |
+| `busy`   | `"zone"`, `"type"`, `"market"` or `"account"`                                                    |
+| `distro` | `{ name: str, version?: str }`: a distro of §6.1                                                 |
+| `status` | `"pending"`, `"running"`, `"stopping"`, `"stopped"`, `"ending"` or `"ended"`                     |
+| `[T]`    | a list of `T`, in order                                                                          |
+| `{K: T}` | a map from `K` to `T`, no order                                                                  |
+| `?T`     | optional `T`; absent means none                                                                  |
 
 Where the order of a list matters, this spec says so. An item of a list is named by its `name`.
 
@@ -114,6 +116,7 @@ Within a generation, a change MUST only add: an optional key, a field, a busy co
 | `every`     | `dur`                  | `"30s"`    | time between rounds, §16; `"0"`: only `round()` |
 | `poll`      | `dur`                  | `"5s"`     | time between polls of a wait, §20; not `"0"`    |
 | `store`     | `str`                  | `"./.rig"` | a folder; the core uses `<store>/rig/1/`        |
+| `workers`   | `?[worker]`            | —          | the plugins that run jobs on machines, §22      |
 | `extra`     | `?{str: any}`          | —          | the lib's own settings, as the lib defines them |
 
 When the core opens, each of these MUST be a refusal, `config`, naming the key by path (`kinds[worker].try[0].types`):
@@ -129,7 +132,7 @@ When the core opens, each of these MUST be a refusal, `config`, naming the key b
 - a `disk` below `30`;
 - a `login` that is not one (§6.2), or a `login` without `user` on a kind with an entry with its own `image`;
 - a `script` that is not a `str` or a `[str]`, or a first-boot script above 16 KB (§6.2);
-- a reserved key, §22.
+- a kind's `worker` whose `name` is not in `workers` (or, without a `name`, a config without exactly one worker), whose `tags` are not at least one `name`, or that its worker's `check` refuses; a `worker` on a kind with an entry whose provider has no `can.port`, when its worker needs ports (§22.2).
 
 ## 6. Kind
 
@@ -146,6 +149,7 @@ When the core opens, each of these MUST be a refusal, `config`, naming the key b
 | `recovers` | `?uint`                         | `3`                  | how many recovers a lost machine may have; `0` = none                                                 |
 | `tags`     | `?{str: str}`                   | —                    | the app's own tags; no key may start with `rig`                                                       |
 | `ports`    | `?[rule]`                       | none                 | the inbound rules every machine of the kind starts with; all else is closed                           |
+| `worker`   | `?worker`                       | none                 | every machine works for a worker: its jobs run on it, §22.2                                           |
 
 **entry**
 
@@ -177,11 +181,11 @@ When the core opens, each of these MUST be a refusal, `config`, naming the key b
 
 ### 6.2 First boot
 
-At first boot, every machine signs in its kind's `login`, then runs its kind's `script`; the core builds both into one bash script, `spec.script`.
+At first boot, every machine signs in its kind's `login`, then runs its worker's lines (§22.2), then its kind's `script`; the core builds them into one bash script, `spec.script`.
 
-- `login.keys` is at least one SSH public key, one line each: `ssh-ed25519 AAAA... me@laptop`. `login.user` is a `name` that is not `root`; without it, the distro's login user (§6.1), the same on every cloud. The user gets the keys and `sudo` without a password; one the image already has keeps its own keys too, and a system user (uid below 1000) fails the first boot. Only root reads the log and its exit code.
+- `login.keys` is at least one SSH public key, one line each: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGm5nRrnDrU0H8wXkVhQvTq1aXj4Q0bQ0aQ0bQ0aQ0bQ me@laptop`. `login.user` is a `name` that is not `root`; without it, the distro's login user (§6.1), the same on every cloud. The user gets the keys and `sudo` without a password; one the image already has keeps its own keys too, and a system user (uid below 1000) fails the first boot. Only root reads the log and its exit code.
 - `script` is a script of its own: a `str`, or a `[str]` of its lines, joined by `\n`, with one more at the end. It runs under its own `#!` if it has one, else by `bash`.
-- The core MUST build the first-boot script exactly as below, each part only when the kind has it; a kind with neither has none. It runs once, as root, on every provider and distro; its output goes to `/var/log/rig/boot.log`, and its exit code to `/var/lib/rig/boot.exit`. A failed first boot is not run again.
+- The core MUST build the first-boot script exactly as below, then each part the kind has, in that order: `login`, the worker's lines (§22.2), `script`; a kind with none has none. It runs once, as root, on every provider and distro; its output goes to `/var/log/rig/boot.log`, and its exit code to `/var/lib/rig/boot.exit`. A failed first boot is not run again.
 - `<user>` is the login user; `<keys>` is `login.keys`, joined as `script` is, then base64 on one line; `<script>` is the `script`, joined, then base64 on one line. The lines are joined by `\n`, and the first-boot script ends with one.
 
 ```bash
@@ -220,7 +224,7 @@ if head -n 1 /var/lib/rig/script | grep -q '^#!'; then /var/lib/rig/script; else
 ```
 
 ```
-{ name: "web", try: [...], distro: { name: "debian" }, login: { keys: ["ssh-ed25519 AAAA..."] } }
+{ name: "web", try: [...], distro: { name: "debian" }, login: { keys: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGm5nRrnDrU0H8wXkVhQvTq1aXj4Q0bQ0aQ0bQ0aQ0bQ me@laptop"] } }
   → ssh debian@<ip>, on every cloud
 ```
 
@@ -242,18 +246,18 @@ A preset makes a kind from a `name` and a few options, so the app needs to know 
 
 Only `name` is required.
 
-| Option    | Type                           | Default                                              | Definition                                                                                             |
-| --------- | ------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `name`    | `name`                         | —                                                    | the kind's name                                                                                        |
-| `cpu`     | `?uint`                        | per preset                                           | vCPUs; `general`, `compute`                                                                            |
-| `mem`     | `?uint`                        | per preset                                           | GB of memory; `memory`                                                                                 |
-| `gpu`     | `?str`                         | per preset                                           | the GPU model: `"l4"`, `"a10"`, `"h100"`; `gpu`                                                        |
-| `market`  | `?[market]`                    | per preset                                           |                                                                                                        |
-| `arch`    | `?"arm"`, `?"x86"` or `?"any"` | `"any"`; with `image`, `"arm"` if sold, else `"x86"` | the CPU architecture; `"any"` is `arm`'s types, then `x86`'s; a `distro` fits every arch               |
-| `up`      | `?uint`                        | `0`                                                  | also try the next `up` sizes, after every type of the asked size; not `small`, not `gpu`               |
-| `image`   | `?str`                         | —                                                    | this provider's id of a Linux image: the entry's `image`, booted in place of `distro`                  |
-| `disk`    | `?uint`                        | per preset; with `image`, the image's                | GB of the boot disk                                                                                    |
-| kind keys | —                              | —                                                    | `distro`, `login`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`: passed to the kind unchanged |
+| Option    | Type                           | Default                                              | Definition                                                                                                       |
+| --------- | ------------------------------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `name`    | `name`                         | —                                                    | the kind's name                                                                                                  |
+| `cpu`     | `?uint`                        | per preset                                           | vCPUs; `general`, `compute`                                                                                      |
+| `mem`     | `?uint`                        | per preset                                           | GB of memory; `memory`                                                                                           |
+| `gpu`     | `?str`                         | per preset                                           | the GPU model: `"l4"`, `"a10"`, `"h100"`; `gpu`                                                                  |
+| `market`  | `?[market]`                    | per preset                                           |                                                                                                                  |
+| `arch`    | `?"arm"`, `?"x86"` or `?"any"` | `"any"`; with `image`, `"arm"` if sold, else `"x86"` | the CPU architecture; `"any"` is `arm`'s types, then `x86`'s; a `distro` fits every arch                         |
+| `up`      | `?uint`                        | `0`                                                  | also try the next `up` sizes, after every type of the asked size; not `small`, not `gpu`                         |
+| `image`   | `?str`                         | —                                                    | this provider's id of a Linux image: the entry's `image`, booted in place of `distro`                            |
+| `disk`    | `?uint`                        | per preset; with `image`, the image's                | GB of the boot disk                                                                                              |
+| kind keys | —                              | —                                                    | `distro`, `login`, `worker`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`: passed to the kind unchanged |
 
 ### 7.3 Rules
 
@@ -286,7 +290,7 @@ A provider is a plugin: one object with these keys.
 
 | Key       | Type           | Definition                                                              |
 | --------- | -------------- | ----------------------------------------------------------------------- |
-| `slot`    | `"provider"`   | the slot it fills; `"hub"` is reserved, §22                             |
+| `slot`    | `"provider"`   | the slot it fills; a worker fills `"worker"`, in `workers`, §22         |
 | `name`    | `name`         | how entries refer to it; unique among providers                         |
 | `rig`     | `uint`         | the generation it follows                                               |
 | `can`     | `?{str: bool}` | what it supports, below                                                 |
@@ -305,7 +309,7 @@ A provider is a plugin: one object with these keys.
 When the core opens, it MUST check every plugin in this order, and the first failure MUST be a refusal, `plugin`, unless named:
 
 1. `rig` is `1`; otherwise `generation`, §4.
-2. `slot` is `"provider"`; `"hub"` is a refusal, `config`, §22.
+2. `slot` is `"provider"`; `"worker"` among `providers` is a refusal, `config`: a worker goes in `workers`, §22.
 3. `name` is a `name`, not taken.
 4. Every call that is always present is there, and every call that `can` enables.
 5. `distros` offers every distro of §6.1 at its default version.
@@ -327,19 +331,19 @@ Every provider takes the same `auth` option, so the app signs in the same way on
 - `<NAME>` and `<KEY>` are upper case, `-` as `_`: provider `aws-east`, key `id` → `RIG_AWS_EAST_ID`.
 - With `env` or `keys`, every key without `?` MUST be there, and no key the provider does not name: otherwise a refusal, `plugin`.
 - A provider MUST resolve its `auth` when it is made, and its `check` (§9) proves the keys work when the core opens.
-- No secret MAY appear in the store, an event, a log, or an error: a refusal names the key, never its value.
+- No secret MAY appear in the store, an event, a log, or an error: a refusal names the key, never its value. A worker's lines (§22.2) MAY hold a secret of one machine's own, like its key: it MUST appear only in that machine's first-boot script.
 
 ### 8.2 Factory
 
 A provider is made by a **factory**: one call that takes the provider's config and gives the plugin. Every provider's factory takes the same config, so changing cloud only changes `extra`.
 
-| Key        | Type          | Default            | Definition                                                |
-| ---------- | ------------- | ------------------ | --------------------------------------------------------- |
-| `region`   | `str`         | —                  | where its machines go, by the provider's own name for it  |
-| `name`     | `?name`       | the cloud's own    | its name in the config, §8; two regions are two providers |
-| `auth`     | `?auth`       | `{ from: "auto" }` | how it signs in, §8.1                                     |
-| `identity` | `?str`        | none               | what its machines run as: a role, a service account       |
-| `extra`    | `?{str: any}` | —                  | the provider's own settings, as the provider defines them |
+| Key        | Type          | Default                                        | Definition                                                                                                     |
+| ---------- | ------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `region`   | `?str`        | the cloud's env var's, else its default region | where its machines go, by the provider's own name for it; each provider's README names its env var and default |
+| `name`     | `?name`       | the cloud's own                                | its name in the config, §8; two regions are two providers                                                      |
+| `auth`     | `?auth`       | `{ from: "auto" }`                             | how it signs in, §8.1                                                                                          |
+| `identity` | `?str`        | none                                           | what its machines run as: a role, a service account                                                            |
+| `extra`    | `?{str: any}` | —                                              | the provider's own settings, as the provider defines them                                                      |
 
 - A factory MUST refuse, `config`, a key outside this table: anything of the provider's own goes in `extra`.
 - It gives the plugin of §8, with `keys` (§8.1), `presets` (§7) and, if it has one, `shape` (§9).
@@ -380,16 +384,16 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 
 **spec**: filled by the core.
 
-| Key      | Type                           | Definition                                                                                                     |
-| -------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `name`   | `str`                          | `<app>-<kind>-<8 lowercase hex>`                                                                               |
-| `distro` | `?{ name: str, version: str }` | the kind's `distro`, its version filled in; absent with `image`                                                |
-| `image`  | `?str`                         | the entry's image id; absent with `distro`                                                                     |
-| `disk`   | `?uint`                        | GB of the boot disk; absent → the provider's default                                                           |
-| `script` | `?str`                         | the first-boot script the core built from the kind's `login` and `script`, §6.2; the provider runs it as it is |
-| `tags`   | `{str: str}`                   | the rig tags and the kind's own, §13                                                                           |
-| `extra`  | `?{str: any}`                  | the entry's `extra`, unchanged                                                                                 |
-| `ports`  | `[rule]`                       | the kind's `ports`, each `from: "any"` as two rules (§20); none is `[]`                                        |
+| Key      | Type                           | Definition                                                                                                                             |
+| -------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`   | `str`                          | `<app>-<kind>-<8 lowercase hex>`                                                                                                       |
+| `distro` | `?{ name: str, version: str }` | the kind's `distro`, its version filled in; absent with `image`                                                                        |
+| `image`  | `?str`                         | the entry's image id; absent with `distro`                                                                                             |
+| `disk`   | `?uint`                        | GB of the boot disk; absent → the provider's default                                                                                   |
+| `script` | `?str`                         | the first-boot script the core built from the kind's `login`, its worker's lines and its `script`, §6.2; the provider runs it as it is |
+| `tags`   | `{str: str}`                   | the rig tags and the kind's own, §13                                                                                                   |
+| `extra`  | `?{str: any}`                  | the entry's `extra`, unchanged                                                                                                         |
+| `ports`  | `[rule]`                       | the kind's `ports` and its worker's, each once, each `from` a CIDR (§20); none is `[]`                                                 |
 
 **answer**: exactly one of:
 
@@ -423,22 +427,22 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 
 **rule**
 
-| Key     | Type    | Definition                                                                                                                      |
-| ------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `id`    | `?str`  | the provider's id; set on output                                                                                                |
-| `port`  | `uint`  | the port, or the first of a range                                                                                               |
-| `to`    | `?uint` | the last port of a range                                                                                                        |
-| `proto` | `?str`  | `"tcp"` or `"udp"`; absent → `"tcp"`                                                                                            |
-| `from`  | `str`   | an IPv4 or IPv6 CIDR: `"1.2.3.4/32"`, `"::/0"`; or `"any"`, which the core makes two rules (§20), so a provider only gets CIDRs |
+| Key        | Type    | Definition                                                                                                                                                        |
+| ---------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`       | `?str`  | the provider's id; set on output                                                                                                                                  |
+| `port`     | `uint`  | the port, or the first of a range                                                                                                                                 |
+| `to`       | `?uint` | the last port of a range                                                                                                                                          |
+| `protocol` | `?str`  | `"tcp"` or `"udp"`; absent → `"tcp"`                                                                                                                              |
+| `from`     | `str`   | where traffic comes in from: an IP, `"1.2.3.4"`, a CIDR, `"10.0.0.0/8"`, or `"any"`; the core makes each a CIDR by its value (§20), so a provider only gets CIDRs |
 
 **match**: the rules `port.close` closes, §20.
 
-| Key     | Type    | Definition                                                    |
-| ------- | ------- | ------------------------------------------------------------- |
-| `port`  | `?uint` | the rule's `port`                                             |
-| `to`    | `?uint` | the rule's `to`; a rule without one has its `port`            |
-| `proto` | `?str`  | the rule's `proto`; a rule without one has `"tcp"`            |
-| `from`  | `?str`  | the rule's `from`; `"any"` is both `"0.0.0.0/0"` and `"::/0"` |
+| Key        | Type    | Definition                                                                                 |
+| ---------- | ------- | ------------------------------------------------------------------------------------------ |
+| `port`     | `?uint` | the rule's `port`                                                                          |
+| `to`       | `?uint` | the rule's `to`; a rule without one has its `port`                                         |
+| `protocol` | `?str`  | the rule's `protocol`; a rule without one has `"tcp"`                                      |
+| `from`     | `?str`  | the rule's `from`, as the core makes it a CIDR; `"any"` is both `"0.0.0.0/0"` and `"::/0"` |
 
 ## 11. Rules
 
@@ -479,6 +483,7 @@ A provider MUST keep what is not code in a data file (Appendix A), so that provi
 | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `rig`     | the generation                                                                                                                                                                                                              |
 | `name`    | the provider's name                                                                                                                                                                                                         |
+| `region`  | where its region comes from when the factory gets none (§8.2): `{ env: [str], default: str }`, the first env var set, else `default`                                                                                        |
 | `busy`    | the provider's error code → `busy`; a code not listed MUST throw                                                                                                                                                            |
 | `tags`    | tag names the provider cannot hold → names it can: `{ "rig-app": "rig_app" }`; the provider MUST map them both ways, so the core only sees its own names                                                                    |
 | `presets` | preset → arch → size → types; `small` has no size: arch → types                                                                                                                                                             |
@@ -523,7 +528,7 @@ for entry in kind.try:
                 answer = provider(entry).create(place, spec)
                 ok            → return the machine
                 busy zone     → next place
-                busy type     → next type
+                busy type     → next type, and this type in the entry's other markets too
                 busy market   → next market
                 busy account  → next entry; on a spot place, next market
                 throw         → pass the throw to the app
@@ -591,22 +596,23 @@ takeback = 100 × (lost + p × 2) ÷ (months + 2)                 2 machine-mont
 
 ## 16. Rounds
 
-**Open**, in order: generation (§4), plugins (§8), config (§5), guard (§17), the store, the first round. The first round adopts every machine of this app.
+**Open**, in order: generation (§4), of the config and every plugin; plugins (§8, steps 2 to 5); workers (§22.1); each provider's `check` (§8, step 6); each worker's `open` (§22.1); config (§5); the store; guard (§17), so it reads the store's counts; the first round. The first round adopts every machine of this app.
 
 **Close**: end the rounds, write the store. The core MUST NOT end a machine when it closes.
 
-**A round**: every `every`, the core MUST list its machines (§13) and compare them with the store. For each machine still running, the core MUST copy its `status` and `ip` into the store.
+**A round**: every `every`, the core MUST list its machines (§13) and compare them with the store. For each machine still running, the core MUST copy its `status` and `ip` into the store, and give a machine with a `worker` to its worker once it has an IP (§22.2).
 
 - One round MUST run at a time; a round asked for while one runs is that round.
 - A round MUST judge only the machines the store held before it listed: a machine made meanwhile is never lost in it.
 
-| Seen                                                       | Is         | The core MUST                                                                                  |
-| ---------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| in the store, now `ended` or absent, not ended by the core | **lost**   | count it (§15), `end` it so the provider removes what it left, emit `machine:lost`, recover it |
-| in the store, ended by the core                            | **ended**  | remove it from the store                                                                       |
-| in the store, older than its kind's `life`                 | **old**    | end it, emit `machine:ended`                                                                   |
-| not in the store, its kind in the config                   | **found**  | add it to the store                                                                            |
-| not in the store, its kind not in the config               | **orphan** | emit `machine:orphan`; MUST NOT end it                                                         |
+| Seen                                                         | Is                       | The core MUST                                                                                  |
+| ------------------------------------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| in the store, now `ended` or absent, not ended by the core   | **lost**                 | count it (§15), `end` it so the provider removes what it left, emit `machine:lost`, recover it |
+| in the store, ended by the core                              | **ended**                | remove it from the store                                                                       |
+| in the store, older than its kind's `life`                   | **old**                  | end it, emit `machine:ended`                                                                   |
+| not in the store, its kind in the config, without a `worker` | **found**                | add it to the store                                                                            |
+| not in the store, its kind in the config, with a `worker`    | **found**, a job machine | end it, emit `machine:ended` with `reason: "found"`: its worker cannot take it (§22.2)         |
+| not in the store, its kind not in the config                 | **orphan**               | emit `machine:orphan`; MUST NOT end it                                                         |
 
 **Recover**: a failover (§14) for the lost machine's kind, from its first entry.
 
@@ -624,26 +630,26 @@ takeback = 100 × (lost + p × 2) ÷ (months + 2)                 2 machine-mont
 
 When the core opens, it MUST check every kind for risk. Each code MUST be emitted at most once per kind, as `guard`, and MUST be a refusal when `guard` is `"refuse"`.
 
-| Code          | When                                                                                                   |
-| ------------- | ------------------------------------------------------------------------------------------------------ |
-| `spot-warn`   | `spot` in any entry's `market`: nothing warns before a take-back, so its data is lost                  |
-| `spot-long`   | `spot` in any entry's `market`, no `life`, and a spot place whose `takeback` is above `10`             |
-| `spot-narrow` | `spot` in any entry's `market`, and fewer than `3` spot places in all: one busy pool can take them all |
+| Code          | When                                                                                                                   |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `spot-warn`   | `spot` in any entry's `market`: a take-back may come with little warning, or none, and the machine's data goes with it |
+| `spot-long`   | `spot` in any entry's `market`, no `life`, and a spot place whose `takeback` is above `10`                             |
+| `spot-narrow` | `spot` in any entry's `market`, and fewer than `3` spot places in all: one busy pool can take them all                 |
 
-Until the hub (§22) defines a warning before a take-back, `spot-warn` holds for every kind with `spot`.
+`spot-warn` holds for every kind with `spot`: a job keeps its own work, §22.3.
 
 ## 18. Events
 
-| Event               | Data                      | When                                            |
-| ------------------- | ------------------------- | ----------------------------------------------- |
-| `try`               | `{ kind, place, answer }` | after every try; a throw is `answer: { error }` |
-| `machine:created`   | `{ machine }`             | `machine.create` gave a machine                 |
-| `machine:ended`     | `{ machine }`             | the core ended a machine                        |
-| `machine:lost`      | `{ machine }`             | §16                                             |
-| `machine:recovered` | `{ lost, machine }`       | a recover gave a machine                        |
-| `machine:failed`    | `{ machine, recovers }`   | lost, with `recovers` spent                     |
-| `machine:orphan`    | `{ machine }`             | §16                                             |
-| `guard`             | `{ kind, code }`          | §17                                             |
+| Event               | Data                      | When                                                                   |
+| ------------------- | ------------------------- | ---------------------------------------------------------------------- |
+| `try`               | `{ kind, place, answer }` | after every try; a throw is `answer: { error }`                        |
+| `machine:created`   | `{ machine }`             | `machine.create` gave a machine                                        |
+| `machine:ended`     | `{ machine, reason? }`    | the core ended a machine; `reason: "found"`, a found job machine (§16) |
+| `machine:lost`      | `{ machine }`             | §16                                                                    |
+| `machine:recovered` | `{ lost, machine }`       | a recover gave a machine                                               |
+| `machine:failed`    | `{ machine, recovers }`   | lost, with `recovers` spent                                            |
+| `machine:orphan`    | `{ machine }`             | §16                                                                    |
+| `guard`             | `{ kind, code }`          | §17                                                                    |
 
 An event MUST be emitted only after the change it reports is in the store.
 
@@ -699,13 +705,13 @@ What the app calls on the core. A lib MAY name them in its own style (`machine.c
 - A wait whose machine leaves the store (a round found it lost) MUST end with that machine, `status: "ended"`.
 - A wait MUST check once before its first `poll`, and MUST be a refusal, `timeout`, when `timeout` (default `"10m"`) has passed since it began.
 - `disk.grow` MUST be a refusal, `config`, for a `gb` not above the disk's size now, as `disk.get` gives it.
-- `port.open` MUST be a refusal, `config`, for a rule that is not one: `port` and `to` from `1` to `65535`, `to` not below `port`, `proto` `"tcp"` or `"udp"`, `from` an IPv4 or IPv6 CIDR, or `"any"`.
-- `from: "any"` MUST be two rules, `"0.0.0.0/0"` then `"::/0"`, the same in a kind's `ports`; the provider only sees CIDRs. `port.open` gives back its rules, in that order, and is all or none: when the provider fails one, the core closes what the call opened, then throws.
-- `port.open` MUST give back, for each rule, without the provider's `port.open`, a rule of `port.list` with the same `port`, `to`, `proto` and `from`; an absent `to` is `port`, an absent `proto` is `tcp`.
+- `port.open` MUST be a refusal, `config`, for a rule that is not one, or with a key that is not a rule's: `port` and `to` from `1` to `65535`, `to` not below `port`, `protocol` `"tcp"` or `"udp"`, `from` an IP, an IPv4 or IPv6 CIDR, or `"any"`.
+- The core MUST make each `from` a CIDR by its value, the same in a kind's `ports`: an IPv4 address its `/32`, an IPv6 address its `/128`, and `"any"` two rules, `"0.0.0.0/0"` then `"::/0"`; the provider only sees CIDRs. `port.open` gives back its rules, in that order, and is all or none: when the provider fails one, the core closes what the call opened, then throws.
+- `port.open` MUST give back, for each rule, without the provider's `port.open`, a rule of `port.list` with the same `port`, `to`, `protocol` and `from`; an absent `to` is `port`, an absent `protocol` is `tcp`.
 - `port.close` with a `match` MUST close every rule of `port.list` that has every key the `match` gives, as §10 reads them; a `match` without a key, or with one that is not a rule's (a `port` out of range), MUST be a refusal: `config`.
 - `port.close` MUST give back the rules it closed, in `port.list` order; a rule id `port.list` does not give, or a `match` none of its rules has, is `[]`, without the provider's `port.close`.
 - A machine the provider no longer has comes back from `machine.get` with `status: "ended"`. The round that follows finds it lost, §16.
-- The machine the app sees is the provider's `machine` (§10) with `provider`, `kind` and `name`, and, when its kind has a `login`, `user`: its login user.
+- The machine the app sees is the provider's `machine` (§10) with `provider`, `kind` and `name`, and, when its kind has a `login`, `user`: its login user; when it has a `worker`, `worker: { name, key, tags, ip }`: its worker, what the worker knows it by, its tags, and the IPs the worker has.
 
 ## 21. Kit
 
@@ -715,17 +721,66 @@ A core that passes every case MAY say it follows rig generation 1.
 
 ---
 
-# Part 6 · Reserved
+# Part 6 · Workers
 
-## 22. Hub
+## 22. Workers
 
-A later minor of generation 1 defines the `hub`: jobs on machines, a warning before a take-back, and keeping a job's files. The hub speaks **grid** (`grid/2`, defined by grid's own spec) to its machines; this spec will refer to grid's spec, not repeat it.
+A **worker** is a plugin that runs jobs on machines, as a provider is one that makes them: `workers: [grid]`, as `providers: [aws]`. A kind with a `worker` makes **job machines** for it: short-lived, often `spot`, made to run jobs and replaced at will. How a worker runs its jobs is its own: this spec defines what the core and a worker give each other, and a worker's own README the rest.
 
-Until then, each of these MUST be a refusal, `config`:
+The core reaches a job machine twice: its first-boot script, once, then the worker, which runs only what the machine was made for. So a job machine's `worker`, like its type and its distro, is fixed at its create: a kind's new `worker` is for the machines made after; a machine with the old one runs until it ends, by its kind's `life`, `machine.end`, or a take-back. A kind without a `worker` makes machines that live as long as the app wants them.
 
-- the config key `hub`;
-- the kind keys `node` and `save`;
-- a plugin with `slot: "hub"`.
+### 22.1 Plugin
+
+A worker is a plugin in the config's `workers`: one object with these keys.
+
+| Key    | Type       | Definition                                  |
+| ------ | ---------- | ------------------------------------------- |
+| `slot` | `"worker"` | the slot it fills                           |
+| `name` | `name`     | how kinds refer to it; unique among workers |
+| `rig`  | `uint`     | the generation it follows                   |
+| calls  | functions  | below                                       |
+
+| Call    | Input                                                              | Output                                       | Does                                                                                                                                                 |
+| ------- | ------------------------------------------------------------------ | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open`  | —                                                                  | —                                            | optional: called once when the core opens, before any `setup`: what the worker finds out first, like its own address; a throw is a refusal, `plugin` |
+| `check` | the kind's `worker`                                                | —                                            | throws when the worker's own keys are not one: a refusal, `config`                                                                                   |
+| `setup` | `{ name: str, tags: [name], worker }`                              | `{ script: [str], ports: [rule], key: str }` | for one machine, at its create: its first-boot lines, the inbound rules it needs, what it knows it by                                                |
+| `add`   | `{ name: str, ip: { public?, private? }, key: str, tags: [name] }` | —                                            | takes the machine                                                                                                                                    |
+| `drop`  | `name: str`                                                        | —                                            | forgets the machine                                                                                                                                  |
+| `spent` | `tags: [name]`                                                     | —                                            | no more machines come for these tags: a job waiting for one SHOULD fail                                                                              |
+
+- When the core opens, each worker MUST pass §8's steps 1 and 3, with `slot: "worker"`, and have every call but `open`: otherwise a refusal, `plugin`. The core then awaits each worker's `open`, if it has one.
+- `check` and `setup` are synchronous, and MUST NOT call out: `setup` makes what it gives, like a key pair.
+- `add` and `drop` of a name the worker has, or has not, MUST succeed: the core may ask twice.
+
+### 22.2 Kind
+
+| Key    | Type     | Definition                                                                                 |
+| ------ | -------- | ------------------------------------------------------------------------------------------ |
+| `name` | `?name`  | the worker's `name`; without it, the config's only worker                                  |
+| `tags` | `[name]` | the kinds of work its machines do, at least one; a job runs only on a machine with its tag |
+| others | —        | the worker's own, as its README defines them, checked by its `check`                       |
+
+For each machine of a kind with a `worker`, the core MUST:
+
+- call `setup` at its create, and put its `script` lines in the machine's first-boot script (§6.2), and its `ports` in `spec.ports`;
+- give the machine to its worker, `add({ name, ip, key, tags })`, once the machine has an IP, and again when its IPs change; the `tags` are those the machine was made with;
+- `drop` it once it is ended or lost, after the store has forgotten it;
+- call `spent(<its tags>)`, the lost machine's own, when it stops recovering it: when it emits `machine:failed`;
+- add every machine with a `worker` again after it opens: a worker may keep its machines in memory only;
+- treat a worker's `add`, `drop` or `spent` that throws as not done, and go on: an `add` is asked again the next round.
+
+When the core opens, it MUST call `setup` once for each kind with a `worker`, with the trial name `<app>-<kind>-00000000`, to check the first-boot script's size (§6.2), the rules it needs (§20), and whether its entries' providers can open them.
+
+A machine a round finds (§16) has no `key` in the store, so its worker cannot take it: the core MUST end it, and emit `machine:ended` with `reason: "found"`.
+
+The store keeps, as the machine's `worker`: its worker's `name`, the `key` from `setup`, its `tags`, and the IPs the worker has. A `key` is no secret; anything secret in `setup`'s `script` stays there (§8.1).
+
+### 22.3 Jobs
+
+A worker runs its jobs. When a machine is lost, rig replaces it, up to its kind's `recovers`, and the worker runs its job again, as it defines, on any machine with its tags: the replacement too, once it joins. When rig stops replacing it, `spent` tells the worker, so the job does not wait for a machine that will not come.
+
+A job on `spot` keeps its own work: a take-back may come with little warning, or none, and the core recovers the machine, not the job's files. A job that must survive one SHOULD save its progress as part of its own steps, where its workflow wants it, and resume from there when the worker runs it again.
 
 ---
 
@@ -747,6 +802,7 @@ A part of `packages/aws/src/aws.json`, the official aws provider's data file.
         "InstanceLimitExceeded": "account",
         "VcpuLimitExceeded": "account"
     },
+    "region": { "env": ["AWS_REGION", "AWS_DEFAULT_REGION"], "default": "us-east-1" },
     "tags": {},
     "distros": {
         "ubuntu": {

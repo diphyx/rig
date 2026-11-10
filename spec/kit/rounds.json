@@ -747,6 +747,134 @@
             ]
         },
         {
+            "id": "rounds/found-worker",
+            "description": "a found job machine is ended, with reason found: its worker cannot take it",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "worker": {
+                                "tags": ["build"]
+                            }
+                        }
+                    ],
+                    "workers": [
+                        {
+                            "name": "g"
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {},
+                        "machines": [
+                            {
+                                "id": "x1",
+                                "status": "running",
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za",
+                                "created": 0,
+                                "tags": {
+                                    "rig": "1",
+                                    "rig-app": "app",
+                                    "rig-kind": "d",
+                                    "rig-name": "app-d-00000001"
+                                }
+                            }
+                        ]
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open",
+                    "expect": {
+                        "events": [
+                            {
+                                "event": "machine:ended",
+                                "machine": {
+                                    "id": "x1"
+                                },
+                                "reason": "found"
+                            }
+                        ],
+                        "fake": {
+                            "a": {
+                                "ends": ["x1"]
+                            }
+                        }
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "machine.list",
+                    "args": [],
+                    "expect": {
+                        "result": []
+                    }
+                }
+            ]
+        },
+        {
             "id": "rounds/orphan",
             "description": "a machine of this app with a kind not in the config is reported, never ended",
             "given": {

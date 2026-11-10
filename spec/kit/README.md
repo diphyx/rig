@@ -6,15 +6,15 @@ A core that passes every case MAY say it follows rig generation 1.
 
 ## 1. Files
 
-| File            | Area                                                     |
-| --------------- | -------------------------------------------------------- |
-| `schema.json`   | the JSON Schema of every kit file                        |
-| `open.json`     | generation, plugins, config, distros, closed calls       |
-| `failover.json` | the order of tries, every busy answer, a throw, no room  |
-| `risk.json`     | `risk.max`, the core's own count, `place.list`           |
-| `rounds.json`   | lost, recover, `recovers`, `life`, found, orphan, close  |
-| `guard.json`    | `spot-warn`, `spot-long`, `guard: "refuse"`              |
-| `calls.json`    | the app's calls: unknown ids, unsupported calls, distros |
+| File            | Area                                                                                         |
+| --------------- | -------------------------------------------------------------------------------------------- |
+| `schema.json`   | the JSON Schema of every kit file                                                            |
+| `open.json`     | generation, plugins, config, distros, login, script, disk, workers, closed calls             |
+| `failover.json` | the order of tries, every busy answer, a throw, no room, a place tried once                  |
+| `risk.json`     | `risk.max`, the core's own count, `place.list`                                               |
+| `rounds.json`   | lost, recover, `recovers`, `life`, found, orphan, close                                      |
+| `guard.json`    | `spot-warn`, `spot-long`, `guard: "refuse"`                                                  |
+| `calls.json`    | the app's calls: machines, disks, ports, first boot, workers; unknown ids, unsupported calls |
 
 ```json
 {
@@ -77,6 +77,7 @@ In `config.providers`, each provider is written as data:
 - With `can.port`, a new machine starts with `spec.ports` as its rules, each with the next id, and every machine keeps its rules: `port.open` adds one with the next id across all fakes, `r1`, `r2`, ...; `port.close` removes it; `port.list` gives them, in order.
 - Every `ok` try keeps its `spec.script` in the fake's `scripts`, in order; `null` without one.
 - `end` makes a machine `ended`, and is kept in the fake's `ends`, in order. `list` never returns an `ended` machine.
+- The config's `workers`, when it has them, are written as data too: `[{ "name": "g" }]`, with `slot: "worker"` and `rig: 1` unless given. The runner MUST turn each into a fake worker: its `check` refuses a kind's `worker` with `"refuse": true`; its `setup` gives `script: ["echo worker"]`, the worker's `ports` (by default `[{ "port": 9420, "from": "203.0.113.9/32" }]`), and `key: "key-<n>"` for its n-th `setup` call, a busy try's too (`"trial"` for the core's trial name, `<app>-<kind>-00000000`); with `"fails": n`, its first n `add`s throw; with `"missing": "<call>"`, it has not that call; with `"open": "fail"`, its `open` throws. It keeps each `add`, as given, in its `adds`, each `drop` as `{ name }` in its `drops`, and each `spent`'s tags in its `spents`, in order.
 - `get` and `list` MUST return copies, as a real provider does: a later change in the fake MUST NOT show through what the core already holds.
 
 ## 4. Steps
@@ -89,19 +90,21 @@ In `config.providers`, each provider is written as data:
 | `call`      | `call`, `args` | calls that app call: `"machine.create"`, `["w"]`    |
 | `take-back` | `id`           | the fake makes that machine `ended`, as a take-back |
 | `clock`     | `by`           | moves the clock forward by a `dur`: `"3h"`          |
+| `ip`        | `id`, `ip`     | the fake gives that machine these IPs from now on   |
 
 The runner MUST register a handler with `on` for every event before the first step, and collect the events of each step.
 
 ## 5. Expect
 
-| Key       | Passes when                                                         |
-| --------- | ------------------------------------------------------------------- |
-| `result`  | the call's result matches, §6                                       |
-| `refusal` | the step is a refusal with this `reason`                            |
-| `throws`  | `true`: the step throws, and is not a refusal                       |
-| `events`  | the step's events match in order, with none more and none fewer, §6 |
-| `store`   | the store matches: `{ "risk": {} }`                                 |
-| `fake`    | the fakes match: `{ "a": { "machines": [] } }`                      |
+| Key       | Passes when                                                                             |
+| --------- | --------------------------------------------------------------------------------------- |
+| `result`  | the call's result matches, §6                                                           |
+| `refusal` | the step is a refusal with this `reason`                                                |
+| `throws`  | `true`: the step throws, and is not a refusal                                           |
+| `events`  | the step's events match in order, with none more and none fewer, §6                     |
+| `store`   | the store matches: `{ "risk": {} }`                                                     |
+| `fake`    | the fakes match: `{ "a": { "machines": [] } }`                                          |
+| `workers` | each fake worker matches, by name: `{ "g": { "adds": [], "drops": [], "spents": [] } }` |
 
 - A key absent from `expect` is not checked.
 - A step without `refusal` or `throws` MUST NOT refuse or throw.

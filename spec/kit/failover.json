@@ -1538,6 +1538,108 @@
                     }
                 }
             ]
+        },
+        {
+            "id": "failover/once",
+            "description": "a place listed twice, by one entry or two, is tried once",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot"],
+                                    "types": ["t2", "t2"]
+                                },
+                                {
+                                    "provider": "a",
+                                    "market": ["spot"],
+                                    "types": ["t2"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "spot/t2/za": "busy zone"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["w"],
+                    "expect": {
+                        "result": null,
+                        "events": [
+                            {
+                                "event": "try",
+                                "kind": "w",
+                                "place": "a/spot/t2/za",
+                                "answer": "busy zone"
+                            }
+                        ]
+                    }
+                }
+            ]
         }
     ]
 }
