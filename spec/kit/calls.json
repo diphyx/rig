@@ -1671,6 +1671,1176 @@
                     }
                 }
             ]
+        },
+        {
+            "id": "calls/port-open",
+            "description": "port.open adds a rule, with its id; port.list gives it",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 22,
+                            "from": "1.2.3.4/32"
+                        }
+                    ],
+                    "expect": {
+                        "result": {
+                            "id": "r1",
+                            "port": 22,
+                            "from": "1.2.3.4/32"
+                        }
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.list",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r1",
+                                "port": 22,
+                                "from": "1.2.3.4/32"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/port-equal",
+            "description": "an equal rule the machine has is given back, with no provider call",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 22,
+                            "from": "1.2.3.4/32"
+                        }
+                    ]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 22,
+                            "to": 22,
+                            "proto": "tcp",
+                            "from": "1.2.3.4/32"
+                        }
+                    ],
+                    "expect": {
+                        "result": {
+                            "id": "r1"
+                        }
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.list",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r1"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/port-close",
+            "description": "port.close removes a rule",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 22,
+                            "from": "1.2.3.4/32"
+                        }
+                    ]
+                },
+                {
+                    "do": "call",
+                    "call": "port.close",
+                    "args": ["m1", "r1"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.list",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": []
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/port-close-unknown",
+            "description": "port.close of a rule the machine does not have is done",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.close",
+                    "args": ["m1", "zz"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.list",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": []
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/port-bad-rule",
+            "description": "a rule that is not one is a refusal",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 70000,
+                            "from": "1.2.3.4/32"
+                        }
+                    ],
+                    "expect": {
+                        "refusal": "config"
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 80,
+                            "to": 70,
+                            "from": "1.2.3.4/32"
+                        }
+                    ],
+                    "expect": {
+                        "refusal": "config"
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 22,
+                            "proto": "icmp",
+                            "from": "1.2.3.4/32"
+                        }
+                    ],
+                    "expect": {
+                        "refusal": "config"
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 22,
+                            "from": "nope"
+                        }
+                    ],
+                    "expect": {
+                        "refusal": "config"
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "port.open",
+                    "args": [
+                        "m1",
+                        {
+                            "port": 443,
+                            "from": "::/0"
+                        }
+                    ],
+                    "expect": {
+                        "result": {
+                            "id": "r1"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/disk-grow",
+            "description": "a disk only grows: a size not above it now is a refusal",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "ok"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "disk.grow",
+                    "args": ["m1", 10],
+                    "expect": {
+                        "refusal": "config"
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "disk.grow",
+                    "args": ["m1", 30],
+                    "expect": {
+                        "refusal": "config"
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "disk.grow",
+                    "args": ["m1", 40]
+                },
+                {
+                    "do": "call",
+                    "call": "disk.get",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": {
+                            "gb": 40,
+                            "ready": true
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/kind-ports",
+            "description": "a machine starts with its kind's ports, and only those",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "ports": [
+                                {
+                                    "port": 22,
+                                    "from": "1.2.3.4/32"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "call",
+                    "call": "port.list",
+                    "args": ["m1"],
+                    "expect": {
+                        "result": [
+                            {
+                                "id": "r1",
+                                "port": 22,
+                                "from": "1.2.3.4/32"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/kind-ports-recover",
+            "description": "a machine a recover makes starts with its kind's ports too",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "ports": [
+                                {
+                                    "port": 22,
+                                    "from": "1.2.3.4/32"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["d"]
+                },
+                {
+                    "do": "take-back",
+                    "id": "m1"
+                },
+                {
+                    "do": "round"
+                },
+                {
+                    "do": "call",
+                    "call": "port.list",
+                    "args": ["m2"],
+                    "expect": {
+                        "result": [
+                            {
+                                "port": 22,
+                                "from": "1.2.3.4/32"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/kind-ports-bad",
+            "description": "a rule in a kind's ports that is not one is a refusal",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                }
+                            ],
+                            "ports": [
+                                {
+                                    "port": 0,
+                                    "from": "1.2.3.4/32"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open",
+                    "expect": {
+                        "refusal": "config"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "calls/kind-ports-no-port",
+            "description": "ports on a kind whose provider has no can.port is a refusal",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true,
+                                "disk": true,
+                                "port": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "d",
+                            "try": [
+                                {
+                                    "provider": "b",
+                                    "market": ["demand"],
+                                    "types": ["t3"]
+                                }
+                            ],
+                            "ports": [
+                                {
+                                    "port": 22,
+                                    "from": "1.2.3.4/32"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": ["ok", "ok"]
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {}
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open",
+                    "expect": {
+                        "refusal": "config"
+                    }
+                }
+            ]
         }
     ]
 }

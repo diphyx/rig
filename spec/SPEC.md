@@ -120,21 +120,23 @@ When the core opens, each of these MUST be a refusal, `config`, naming the key b
 - an entry whose `provider` is not in `providers`;
 - `spot` in an entry's `market`, its provider without `can.spot`;
 - a kind tag whose key starts with `rig`;
+- a rule in a kind's `ports` that is not one (§20), or `ports` on a kind with an entry whose provider has no `can.port`;
 - a reserved key, §22.
 
 ## 6. Kind
 
-| Key        | Type            | Default | Definition                                            |
-| ---------- | --------------- | ------- | ----------------------------------------------------- |
-| `name`     | `name`          | —       | unique among kinds                                    |
-| `try`      | `[entry]`       | —       | where to try, in order; at least one                  |
-| `image`    | `?str`          | —       | for every entry without its own                       |
-| `disk`     | `?uint`         | —       | GB of the boot disk                                   |
-| `script`   | `?str`          | —       | a startup script                                      |
-| `risk`     | `?{ max: pct }` | —       | §15                                                   |
-| `life`     | `?dur`          | never   | the core ends the machine after this                  |
-| `recovers` | `?uint`         | `3`     | how many recovers a lost machine may have; `0` = none |
-| `tags`     | `?{str: str}`   | —       | the app's own tags; no key may start with `rig`       |
+| Key        | Type            | Default | Definition                                                                  |
+| ---------- | --------------- | ------- | --------------------------------------------------------------------------- |
+| `name`     | `name`          | —       | unique among kinds                                                          |
+| `try`      | `[entry]`       | —       | where to try, in order; at least one                                        |
+| `image`    | `?str`          | —       | for every entry without its own                                             |
+| `disk`     | `?uint`         | —       | GB of the boot disk; a preset sets it (§7.1)                                |
+| `script`   | `?str`          | —       | a startup script                                                            |
+| `risk`     | `?{ max: pct }` | —       | §15                                                                         |
+| `life`     | `?dur`          | never   | the core ends the machine after this                                        |
+| `recovers` | `?uint`         | `3`     | how many recovers a lost machine may have; `0` = none                       |
+| `tags`     | `?{str: str}`   | —       | the app's own tags; no key may start with `rig`                             |
+| `ports`    | `?[rule]`       | none    | the inbound rules every machine of the kind starts with; all else is closed |
 
 **entry**
 
@@ -154,33 +156,35 @@ A preset makes a kind from a `name` and a few options, so the app needs to know 
 
 ### 7.1 Presets
 
-| Preset    | For                     | Size option | Default size            | Default `market`     |
-| --------- | ----------------------- | ----------- | ----------------------- | -------------------- |
-| `small`   | a light, long-lived box | —           | —                       | `["demand"]`         |
-| `general` | balanced cpu and memory | `cpu`       | `2`                     | `["demand"]`         |
-| `compute` | cpu-heavy work          | `cpu`       | `4`                     | `["spot", "demand"]` |
-| `memory`  | memory-heavy work       | `mem`       | `32`                    | `["demand"]`         |
-| `gpu`     | gpu work                | `gpu`       | the provider's cheapest | `["spot", "demand"]` |
+| Preset    | For                     | Size option | Default size            | Default `market`     | Default disk (GB) |
+| --------- | ----------------------- | ----------- | ----------------------- | -------------------- | ----------------- |
+| `small`   | a light, long-lived box | —           | —                       | `["demand"]`         | `30`              |
+| `general` | balanced cpu and memory | `cpu`       | `2`                     | `["demand"]`         | `30 + 5 × cpu`    |
+| `compute` | cpu-heavy work          | `cpu`       | `4`                     | `["spot", "demand"]` | `30 + 5 × cpu`    |
+| `memory`  | memory-heavy work       | `mem`       | `32`                    | `["demand"]`         | `30 + mem / 2`    |
+| `gpu`     | gpu work                | `gpu`       | the provider's cheapest | `["spot", "demand"]` | `200`             |
 
 ### 7.2 Options
 
 Only `name` is required.
 
-| Option    | Type                           | Default                                              | Definition                                                                                  |
-| --------- | ------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `name`    | `name`                         | —                                                    | the kind's name                                                                             |
-| `cpu`     | `?uint`                        | per preset                                           | vCPUs; `general`, `compute`                                                                 |
-| `mem`     | `?uint`                        | per preset                                           | GB of memory; `memory`                                                                      |
-| `gpu`     | `?str`                         | per preset                                           | the GPU model: `"l4"`, `"a10"`, `"h100"`; `gpu`                                             |
-| `market`  | `?[market]`                    | per preset                                           |                                                                                             |
-| `arch`    | `?"arm"`, `?"x86"` or `?"any"` | `"any"`; with `image`, `"arm"` if sold, else `"x86"` | the CPU architecture; `"any"` is `arm`'s types, then `x86`'s                                |
-| `up`      | `?uint`                        | `0`                                                  | also try the next `up` sizes, after every type of the asked size; not `small`, not `gpu`    |
-| kind keys | —                              | —                                                    | `image`, `disk`, `script`, `risk`, `life`, `recovers`, `tags`: passed to the kind unchanged |
+| Option    | Type                           | Default                                              | Definition                                                                                   |
+| --------- | ------------------------------ | ---------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `name`    | `name`                         | —                                                    | the kind's name                                                                              |
+| `cpu`     | `?uint`                        | per preset                                           | vCPUs; `general`, `compute`                                                                  |
+| `mem`     | `?uint`                        | per preset                                           | GB of memory; `memory`                                                                       |
+| `gpu`     | `?str`                         | per preset                                           | the GPU model: `"l4"`, `"a10"`, `"h100"`; `gpu`                                              |
+| `market`  | `?[market]`                    | per preset                                           |                                                                                              |
+| `arch`    | `?"arm"`, `?"x86"` or `?"any"` | `"any"`; with `image`, `"arm"` if sold, else `"x86"` | the CPU architecture; `"any"` is `arm`'s types, then `x86`'s                                 |
+| `up`      | `?uint`                        | `0`                                                  | also try the next `up` sizes, after every type of the asked size; not `small`, not `gpu`     |
+| `disk`    | `?uint`                        | per preset; with `image`, the image's                | GB of the boot disk                                                                          |
+| kind keys | —                              | —                                                    | `image`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`: passed to the kind unchanged |
 
 ### 7.3 Rules
 
 - A preset MUST return a kind with one entry: this provider, `market` as given, `types` from the data file (§12).
 - A size not sold MUST round up to the next size that is.
+- Without `disk`, a preset MUST set it to its default disk (§7.1), worked out from the asked size, or the default size, and rounded up to a multiple of `10`: room for the provider's own image, and more as the machine grows. With `image` and without `disk`, it MUST leave `disk` out: the image's own size.
 - `arch: "any"` with `image` MUST be a refusal, `config`: an image fits one arch.
 - Each type MUST appear once, the first time it is reached.
 - An option the preset does not take (`mem` on `compute`) MUST be a refusal: `config`.
@@ -192,6 +196,7 @@ Only `name` is required.
 compute { name: "worker", cpu: 8 }
   →
 { name: "worker",
+  disk: 70,
   try: [{ provider: "aws", market: ["spot", "demand"], types: ["c8g.2xlarge", "c7g.2xlarge", "c6g.2xlarge"] }] }
 ```
 
@@ -305,6 +310,7 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 | `script` | `?str`        | a startup script, plain text; the provider encodes it |
 | `tags`   | `{str: str}`  | the rig tags and the kind's own, §13                  |
 | `extra`  | `?{str: any}` | the entry's `extra`, unchanged                        |
+| `ports`  | `[rule]`      | the kind's `ports`; none is `[]`                      |
 
 **answer**: exactly one of:
 
@@ -347,20 +353,22 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 
 ## 11. Rules
 
-| Call     | Rule                                                                                                                            |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `places` | MUST return only places sold now for the entry's markets and types, in any order                                                |
-| `create` | MUST make exactly one try: no second try, no other place                                                                        |
-| `create` | MUST put every tag of `spec.tags` on the machine as it is created, or throw; `spec.extra` MUST NOT change that, nor the one try |
-| `create` | MUST answer `busy` only when there is no room, with the code below; else MUST throw                                             |
-| `check`  | MUST throw when the provider cannot work: wrong keys, no access, an unknown region                                              |
-| `shape`  | MUST come from the provider's own data, never from a call to the cloud; a type it does not know is `null`                       |
-| `get`    | an unknown id MUST give `null`, not throw                                                                                       |
-| `list`   | MUST return every machine with all the given tags, in every status but `ended`, all pages                                       |
-| `end`    | an unknown or ended id MUST succeed, and still remove what that machine left                                                    |
-| `end`    | MUST also remove what the machine leaves: its port rules, its unattached disks                                                  |
-| `stop`   | on a `spot` machine MUST be a refusal: `unsupported`                                                                            |
-| status   | MUST map the provider's own statuses onto `status`; after a take-back, `ended`                                                  |
+| Call     | Rule                                                                                                                                    |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `places` | MUST return only places sold now for the entry's markets and types, in any order                                                        |
+| `create` | MUST make exactly one try: no second try, no other place                                                                                |
+| `create` | with `can.port`: MUST start the machine with every inbound port closed, inside its network too, but `spec.ports`, from its first moment |
+| `create` | MUST remove what it made for a try that is `busy` or throws; a failed removal MUST NOT change the try's answer                          |
+| `create` | MUST put every tag of `spec.tags` on the machine as it is created, or throw; `spec.extra` MUST NOT change that, nor the one try         |
+| `create` | MUST answer `busy` only when there is no room, with the code below; else MUST throw                                                     |
+| `check`  | MUST throw when the provider cannot work: wrong keys, no access, an unknown region                                                      |
+| `shape`  | MUST come from the provider's own data, never from a call to the cloud; a type it does not know is `null`                               |
+| `get`    | an unknown id MUST give `null`, not throw                                                                                               |
+| `list`   | MUST return every machine with all the given tags, in every status but `ended`, all pages                                               |
+| `end`    | an unknown or ended id MUST succeed, and still remove what that machine left                                                            |
+| `end`    | MUST also remove what the machine leaves: its port rules, its unattached disks                                                          |
+| `stop`   | on a `spot` machine MUST be a refusal: `unsupported`                                                                                    |
+| status   | MUST map the provider's own statuses onto `status`; after a take-back, `ended`                                                          |
 
 | `busy`    | No room                                  |
 | --------- | ---------------------------------------- |
@@ -421,7 +429,7 @@ for entry in kind.try:
                 busy zone     → next place
                 busy type     → next type
                 busy market   → next market
-                busy account  → next entry
+                busy account  → next entry; on a spot place, next market
                 throw         → pass the throw to the app
 return null
 ```
@@ -431,6 +439,7 @@ return null
 - Zones MUST be sorted by name, so every failover follows the same order.
 - The core MUST NOT try a place twice in one failover.
 - The core MUST emit `try` after every try.
+- On a `spot` place, `busy account` MUST move to the next market, as `busy market` does: every cloud keeps its spot quota apart, so `demand` may still have room.
 
 ## 15. Risk
 
@@ -580,11 +589,11 @@ What the app calls on the core. A lib MAY name them in its own style (`machine.c
 | `machine.start`  | `id: str`                            | —               | the provider's `start`                                                                                           |
 | `machine.stop`   | `id: str`                            | —               | the provider's `stop`                                                                                            |
 | `machine.reboot` | `id: str`                            | —               | the provider's `reboot`                                                                                          |
-| `disk.grow`      | `id: str`, `gb: uint`                | —               | the provider's                                                                                                   |
+| `disk.grow`      | `id: str`, `gb: uint`                | —               | the provider's, once the size is checked: a disk only grows                                                      |
 | `disk.get`       | `id: str`                            | `{ gb, ready }` | the provider's                                                                                                   |
 | `disk.wait`      | `id: str`, `?timeout: dur`           | `{ gb, ready }` | `disk.get` every `poll`, until `ready`                                                                           |
-| `port.open`      | `id: str`, `rule`                    | `rule`          | the provider's                                                                                                   |
-| `port.close`     | `id: str`, `rule: str`               | —               | the provider's                                                                                                   |
+| `port.open`      | `id: str`, `rule`                    | `rule`          | the provider's, once the rule is checked; an equal rule the machine has is given back as it is                   |
+| `port.close`     | `id: str`, `rule: str`               | —               | the provider's; a rule the machine does not have is done                                                         |
 | `port.list`      | `id: str`                            | `[rule]`        | the provider's                                                                                                   |
 
 - Every call but `open` and `on` MUST be a refusal before `open`, and after `close`: `closed`.
@@ -593,6 +602,10 @@ What the app calls on the core. A lib MAY name them in its own style (`machine.c
 - A kind name not in the config MUST be a refusal: `config`; so is a `status` that is not a `status`, and a `timeout` that is not a `dur`.
 - A wait whose machine leaves the store (a round found it lost) MUST end with that machine, `status: "ended"`.
 - A wait MUST check once before its first `poll`, and MUST be a refusal, `timeout`, when `timeout` (default `"10m"`) has passed since it began.
+- `disk.grow` MUST be a refusal, `config`, for a `gb` not above the disk's size now, as `disk.get` gives it.
+- `port.open` MUST be a refusal, `config`, for a rule that is not one: `port` and `to` from `1` to `65535`, `to` not below `port`, `proto` a `Proto`, `from` an IPv4 or IPv6 CIDR.
+- `port.open` MUST give back, without the provider's `port.open`, a rule of `port.list` with the same `port`, `to`, `proto` and `from`; an absent `to` is `port`, an absent `proto` is `tcp`.
+- `port.close` of a rule id `port.list` does not give MUST succeed, without the provider's `port.close`.
 - A machine the provider no longer has comes back from `machine.get` with `status: "ended"`. The round that follows finds it lost, §16.
 - The machine the app sees is the provider's `machine` (§10) with three more keys: `provider`, `kind` and `name`.
 

@@ -455,7 +455,122 @@
         },
         {
             "id": "failover/busy-account",
-            "description": "busy account tries the next entry",
+            "description": "busy account on a demand place tries the next entry",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        },
+                        {
+                            "name": "b",
+                            "can": {
+                                "spot": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["demand"],
+                                    "types": ["t1"]
+                                },
+                                {
+                                    "provider": "b",
+                                    "market": ["spot"],
+                                    "types": ["t3"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "zb"
+                            },
+                            {
+                                "market": "spot",
+                                "type": "t2",
+                                "zone": "za"
+                            },
+                            {
+                                "market": "demand",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "demand/t1/za": "busy account"
+                        }
+                    },
+                    "b": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t3",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "spot/t3/za": "ok"
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["w"],
+                    "expect": {
+                        "result": {
+                            "provider": "b"
+                        },
+                        "events": [
+                            {
+                                "event": "try",
+                                "kind": "w",
+                                "place": "a/demand/t1/za",
+                                "answer": "busy account"
+                            },
+                            {
+                                "event": "try",
+                                "kind": "w",
+                                "place": "b/spot/t3/za",
+                                "answer": "ok"
+                            },
+                            {
+                                "event": "machine:created"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "failover/busy-account-spot",
+            "description": "busy account on a spot place tries the entry's next market: a spot quota is its own",
             "given": {
                 "config": {
                     "rig": 1,
@@ -518,7 +633,8 @@
                             }
                         ],
                         "answers": {
-                            "spot/t1/za": "busy account"
+                            "spot/t1/za": "busy account",
+                            "demand/t1/za": "ok"
                         }
                     },
                     "b": {
@@ -529,9 +645,7 @@
                                 "zone": "za"
                             }
                         ],
-                        "answers": {
-                            "spot/t3/za": "ok"
-                        }
+                        "answers": {}
                     }
                 }
             },
@@ -545,7 +659,8 @@
                     "args": ["w"],
                     "expect": {
                         "result": {
-                            "provider": "b"
+                            "provider": "a",
+                            "market": "demand"
                         },
                         "events": [
                             {
@@ -557,7 +672,7 @@
                             {
                                 "event": "try",
                                 "kind": "w",
-                                "place": "b/spot/t3/za",
+                                "place": "a/demand/t1/za",
                                 "answer": "ok"
                             },
                             {
