@@ -57,32 +57,36 @@ The same keys as every rig provider's factory (spec §8.2); gcp's own go in `ext
 
 It calls Compute Engine's REST API, signed in with Google's own `google-auth-library`.
 
-| rig                       | Compute Engine                                                                                                                            |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `check`                   | reads the region: the keys, the project and the region work                                                                               |
-| `places`                  | the region's zones that list the entry's machine types                                                                                    |
-| `create`                  | one `instances.insert`, waited for; labelled with the tags; the id is its zone and name, `us-central1-a/app-w-0a1b2c3d`, in 63 characters |
-| `spot`                    | `provisioningModel: SPOT`, deleted on a take-back                                                                                         |
-| image                     | the kind's, or Ubuntu 24.04 (arm64 or amd64, by type) from Canonical's image family                                                       |
-| `get`, `list`             | `instances.get`, `instances.aggregatedList` in the region's zones, every page                                                             |
-| `start`, `stop`, `reboot` | `start`, `stop`, `reset`; stopping a spot machine is `unsupported`                                                                        |
-| `end`                     | the machine's firewall rules deleted, then the machine; a gone machine still loses its rules; the boot disk goes with the machine         |
-| `disk.grow`, `get`        | `disks.resize` on the boot disk; ready once it is `READY`                                                                                 |
-| `port.*`                  | firewall rules aimed at the machine's own network tag, its name                                                                           |
+| rig                       | Compute Engine                                                                                                                                                    |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check`                   | reads the region: the keys, the project and the region work                                                                                                       |
+| `places`                  | the region's zones that list the entry's machine types                                                                                                            |
+| `create`                  | one `instances.insert`, waited for; labelled with the tags; the id is its zone and name, `us-central1-a/app-w-0a1b2c3d`, in 63 characters                         |
+| `spot`                    | `provisioningModel: SPOT`, deleted on a take-back                                                                                                                 |
+| image                     | the kind's, or Ubuntu 24.04 (arm64 or amd64, by type) from Canonical's image family                                                                               |
+| `get`, `list`             | `instances.get`, `instances.aggregatedList` in the region's zones, every page                                                                                     |
+| `start`, `stop`, `reboot` | `start`, `stop`, `reset`; stopping a spot machine is `unsupported`                                                                                                |
+| `end`                     | the machine deleted, then its firewall rules, so it is never open without its deny-all; a gone machine still loses its rules; the boot disk goes with the machine |
+| `disk.grow`, `get`        | `disks.resize` on the boot disk; ready once it is `READY`                                                                                                         |
+| `port.*`                  | firewall rules aimed at the machine's own network tag, its name: its deny-all, the kind's `ports`, and the rules opened later                                     |
 
 Busy answers come from [`src/gcp.json`](src/gcp.json): no room in a zone (`ZONE_RESOURCE_POOL_EXHAUSTED`, `..._WITH_DETAILS`), or in the project (`QUOTA_EXCEEDED`, `quotaExceeded`). Any other error is thrown.
+
+### Ports at create
+
+A new machine is behind firewall rules of its own, made before it: a deny-all inbound (IPv4 and IPv6, priority `1000`, above the network's own rules), and the kind's `ports` above it (`900`). Every other inbound port is closed, inside the network too. `port.open` adds to them, and a failed try leaves nothing it made.
 
 ## Presets
 
 The same five presets as every rig provider (spec §7), made by the core's preset engine from [`src/gcp.json`](src/gcp.json), newest generation first.
 
-| Preset    | Size       | Default size | Default market                 | arm          | x86                                 |
-| --------- | ---------- | ------------ | ------------------------------ | ------------ | ----------------------------------- |
-| `small`   | —          | —            | `[Market.DEMAND]`              | `t2a`, `c4a` | `e2-small`, `e2-medium`             |
-| `general` | `cpu`      | `2`          | `[Market.DEMAND]`              | `c4a`, `t2a` | `n4`, `n2`, `e2`                    |
-| `compute` | `cpu`      | `4`          | `[Market.SPOT, Market.DEMAND]` | `c4a`        | `c3`, `n2`, `e2`                    |
-| `memory`  | `mem` (GB) | `32`         | `[Market.DEMAND]`              | `c4a`        | `n4`, `n2`, `e2`                    |
-| `gpu`     | `gpu`      | `l4`         | `[Market.SPOT, Market.DEMAND]` | —            | `g2` (L4), `a2` (A100), `a3` (H100) |
+| Preset    | Size       | Default size | Default market                 | Default disk (GB) | arm          | x86                                 |
+| --------- | ---------- | ------------ | ------------------------------ | ----------------- | ------------ | ----------------------------------- |
+| `small`   | —          | —            | `[Market.DEMAND]`              | `30`              | `t2a`, `c4a` | `e2-small`, `e2-medium`             |
+| `general` | `cpu`      | `2`          | `[Market.DEMAND]`              | `30 + 5 × cpu`    | `c4a`, `t2a` | `n4`, `n2`, `e2`                    |
+| `compute` | `cpu`      | `4`          | `[Market.SPOT, Market.DEMAND]` | `30 + 5 × cpu`    | `c4a`        | `c3`, `n2`, `e2`                    |
+| `memory`  | `mem` (GB) | `32`         | `[Market.DEMAND]`              | `30 + mem / 2`    | `c4a`        | `n4`, `n2`, `e2`                    |
+| `gpu`     | `gpu`      | `l4`         | `[Market.SPOT, Market.DEMAND]` | `200`             | —            | `g2` (L4), `a2` (A100), `a3` (H100) |
 
 Only `name` is required; every other option has a strong default.
 
@@ -91,8 +95,9 @@ Only `name` is required; every other option has a strong default.
 | `cpu`, `mem`, `gpu` | per preset                                         | the size, rounded up to the next one sold                              |
 | `arch`              | `PresetArch.ANY`: Axion and Ampere first, then x86 | `PresetArch.ARM`, `X86` or `ANY`; with your own `image`, one arch only |
 | `up`                | `0`                                                | also try the next `up` sizes, after every type of the asked size       |
+| `disk`              | per preset, from the asked size                    | GB of the boot disk                                                    |
 | `market`            | per preset                                         | in failover order                                                      |
-| kind keys           | —                                                  | `image`, `disk`, `script`, `risk`, `life`, `recovers`, `tags`          |
+| kind keys           | —                                                  | `image`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`         |
 
 ```ts
 gcp.presets.compute({ name: "worker" });
@@ -116,6 +121,8 @@ await gcp.shape("g2-standard-4"); // { cpu: 4, mem: 16, gpu: "l4", arch: Arch.X8
 ## Spot
 
 Spot VMs, with a 30-second warning before a take-back, seen from inside the machine. The core finds a take-back on its next round, ends the machine so nothing it held is left, and recovers it.
+
+A full spot quota is no room in spot, not in the account: the core tries the entry's demand machines next.
 
 ## Spec
 

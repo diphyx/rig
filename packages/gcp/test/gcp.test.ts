@@ -41,8 +41,17 @@ const REGION = {
     },
 };
 
+/* The machine's own firewall rules: made, listed, deleted. */
+const FIREWALLS: Record<string, Handler> = {
+    "POST projects/p/global/firewalls": DONE,
+    "GET projects/p/global/firewalls": () => {
+        return { items: [] };
+    },
+    "DELETE projects/p/global/firewalls/.*": DONE,
+};
+
 function gcp(routes: Record<string, Handler>) {
-    const { request, calls } = fake(routes);
+    const { request, calls } = fake({ ...routes, ...FIREWALLS, ...routes });
 
     return { provider: createGcp({ region: "us-central1", extra: { project: "p", request } }), calls };
 }
@@ -52,6 +61,7 @@ const PLACE = { market: Market.DEMAND, type: "c4a-standard-8", zone: "us-central
 const SPEC = {
     name: "app-w-0a1b2c3d",
     tags: { rig: "1", "rig-app": "app", "rig-kind": "w", "rig-name": "app-w-0a1b2c3d" },
+    ports: [],
 };
 
 describe("gcp: factory", () => {
@@ -143,6 +153,100 @@ describe("gcp: create", () => {
         });
 
         expect(bodies[0]).not.toHaveProperty("scheduling");
+    });
+
+    it("denies all inbound first, IPv4 and IPv6, opens only the kind's ports, then inserts the machine", async () => {
+        const { provider, calls } = gcp({
+            "POST projects/p/zones/us-central1-a/instances": DONE,
+        });
+
+        await provider.create(PLACE, { ...SPEC, ports: [{ port: 22, from: "1.2.3.4/32" }] });
+
+        const made = calls.filter((one) => {
+            return one.method === "POST";
+        });
+
+        expect(
+            made.map((one) => {
+                return one.body?.name ?? one.path;
+            }),
+        ).toEqual([
+            "app-w-0a1b2c3d-deny4",
+            "app-w-0a1b2c3d-deny6",
+            expect.stringMatching(/^app-w-0a1b2c3d-[0-9a-f]{8}$/),
+            "app-w-0a1b2c3d",
+        ]);
+
+        expect(made[0]!.body).toMatchObject({
+            priority: 1000,
+            denied: [{ IPProtocol: "all" }],
+            targetTags: ["app-w-0a1b2c3d"],
+        });
+
+        expect(made[2]!.body).toMatchObject({
+            priority: 900,
+            allowed: [{ IPProtocol: "tcp", ports: ["22"] }],
+            sourceRanges: ["1.2.3.4/32"],
+        });
+    });
+
+    it("keeps a long name's random end in its rules' names, so two machines of a kind never share one", async () => {
+        const { provider, calls } = gcp({
+            "POST projects/p/zones/us-central1-a/instances": DONE,
+        });
+
+        const name = `${"a".repeat(30)}-${"k".repeat(20)}-0a1b2c3d`;
+
+        await provider.create(PLACE, { ...SPEC, name });
+
+        expect(calls[0]!.body?.name).toBe(`${"a".repeat(30)}-${"k".repeat(14)}-0a1b2c3d-deny4`);
+    });
+
+    it("leaves nothing behind after a failed try: its rules are deleted", async () => {
+        const { provider, calls } = gcp({
+            "POST projects/p/zones/us-central1-a/instances": () => {
+                throw new GceError("ZONE_RESOURCE_POOL_EXHAUSTED", "");
+            },
+            "GET projects/p/global/firewalls": () => {
+                return { items: [{ name: "app-w-0a1b2c3d-deny4" }, { name: "app-w-0a1b2c3d-deny6" }] };
+            },
+        });
+
+        expect(await provider.create(PLACE, SPEC)).toMatchObject({ busy: "zone" });
+
+        expect(
+            calls
+                .filter((one) => {
+                    return one.method === "DELETE";
+                })
+                .map((one) => {
+                    return one.path;
+                }),
+        ).toEqual([
+            "projects/p/global/firewalls/app-w-0a1b2c3d-deny4",
+            "projects/p/global/firewalls/app-w-0a1b2c3d-deny6",
+        ]);
+    });
+
+    it("lists only the rules that open ports, never its deny-all", async () => {
+        const { provider } = gcp({
+            "GET projects/p/global/firewalls": () => {
+                return {
+                    items: [
+                        { name: "x-deny4", denied: [{ IPProtocol: "all" }], sourceRanges: ["0.0.0.0/0"] },
+                        {
+                            name: "x-aaaa",
+                            allowed: [{ IPProtocol: "tcp", ports: ["22"] }],
+                            sourceRanges: ["1.2.3.4/32"],
+                        },
+                    ],
+                };
+            },
+        });
+
+        expect(await provider.port!.list("us-central1-a/x")).toEqual([
+            { id: "x-aaaa", port: 22, proto: "tcp", from: "1.2.3.4/32" },
+        ]);
     });
 
     it("asks for a spot machine that is deleted on a take-back", async () => {
@@ -265,7 +369,7 @@ describe("gcp: machines", () => {
         expect(decodeURIComponent(listed)).not.toContain("rig-app");
     });
 
-    it("ends a gone machine with no delete, still deleting its firewall rules; a known one loses them first", async () => {
+    it("ends a gone machine with no delete, still deleting its firewall rules; a known one goes before its rules", async () => {
         const { provider, calls } = gcp({
             "GET projects/p/zones/us-central1-a/instances/app-w-1": () => {
                 return INSTANCE;
@@ -297,8 +401,8 @@ describe("gcp: machines", () => {
         await provider.end("us-central1-a/app-w-1");
 
         expect(deletes().slice(1)).toEqual([
-            "projects/p/global/firewalls/app-w-1-aaaa",
             "projects/p/zones/us-central1-a/instances/app-w-1",
+            "projects/p/global/firewalls/app-w-1-aaaa",
         ]);
     });
 
@@ -343,6 +447,44 @@ describe("gcp: shape and presets", () => {
 });
 
 describe("gcp: with the core", () => {
+    it("takes a full spot quota as no room in spot, and makes the machine on demand", async () => {
+        const { provider } = gcp({
+            ...REGION,
+            "GET projects/p/aggregated/machineTypes": () => {
+                return { items: { "zones/us-central1-a": { machineTypes: [{ name: "c4a-standard-8" }] } } };
+            },
+            "GET projects/p/aggregated/instances": () => {
+                return { items: {} };
+            },
+            "POST projects/p/zones/us-central1-a/instances": (body) => {
+                return body?.scheduling
+                    ? {
+                          status: "DONE",
+                          error: { errors: [{ code: "QUOTA_EXCEEDED", message: "Quota 'PREEMPTIBLE_CPUS' exceeded" }] },
+                      }
+                    : { status: "DONE" };
+            },
+        });
+
+        const rig = createRig({
+            rig: 1,
+            app: "app",
+            providers: [provider],
+            kinds: [
+                {
+                    name: "w",
+                    try: [{ provider: "gcp", market: [Market.SPOT, Market.DEMAND], types: ["c4a-standard-8"] }],
+                },
+            ],
+            store: mkdtempSync(join(tmpdir(), "rig-gcp-")),
+            extra: { rounds: false },
+        });
+
+        await rig.open();
+
+        expect(await rig.machine.create("w")).toMatchObject({ market: "demand" });
+    });
+
     it("checks at open, and creates a machine from a preset", async () => {
         const { provider, calls } = gcp({
             ...REGION,

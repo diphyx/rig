@@ -14,6 +14,8 @@ import {
     type Tags,
 } from "@diphyx/rig";
 
+import { tryit } from "radash";
+
 import { accountOf, KEYS, resolveAuth } from "./auth.js";
 import { checkConfig, type GcpConfig } from "./config.js";
 import { busyOf, PRESETS, RIG, toGcp } from "./data.js";
@@ -126,10 +128,13 @@ export function createGcp(config: GcpConfig): Gcp {
                 });
         },
 
-        /** §11: exactly one try, waited for; no room is `busy`, by the data file; anything else throws. */
+        /** §11: exactly one try, waited for, behind firewall rules of its own made first; no room is `busy`, by the data file; anything else throws. */
         async create(place: Place, spec: Spec): Promise<Answer> {
             const project = await gce.project();
             const instance = gceName(spec.name);
+            const id = idOf(place.zone, instance);
+
+            await ports.make(id, spec.ports);
 
             try {
                 await gce.wait(
@@ -144,8 +149,11 @@ export function createGcp(config: GcpConfig): Gcp {
                     ),
                 );
 
-                return { ok: { id: idOf(place.zone, instance) } };
+                return { ok: { id } };
             } catch (error) {
+                /* §11: a failed try leaves nothing it made. */
+                await tryit(ports.release)(id);
+
                 const busy = busyOf(codeOf(error));
 
                 if (busy) {
@@ -201,23 +209,21 @@ export function createGcp(config: GcpConfig): Gcp {
                 });
         },
 
-        /** §11: its firewall rules go first, then the machine; a gone one still loses its rules. The boot disk goes with it. */
+        /** §11: the machine, waited for, then its firewall rules, so it is never open without its deny-all; a gone one still loses its rules. The boot disk goes with it. */
         async end(id: string): Promise<void> {
             const { zone, name: instance } = partsOf(id);
 
-            await ports.release(id);
-
-            if (!(await instanceOf(id))) {
-                return;
-            }
-
-            try {
-                await gce.wait(await gce.call("DELETE", await base(zone, instance)));
-            } catch (error) {
-                if (codeOf(error) !== "notFound") {
-                    throw error;
+            if (await instanceOf(id)) {
+                try {
+                    await gce.wait(await gce.call("DELETE", await base(zone, instance)));
+                } catch (error) {
+                    if (codeOf(error) !== "notFound") {
+                        throw error;
+                    }
                 }
             }
+
+            await ports.release(id);
         },
 
         async reboot(id: string): Promise<void> {
