@@ -13,6 +13,7 @@ import {
 
 import {
     type Answer,
+    Arch,
     createPresets,
     Market,
     Reason,
@@ -32,7 +33,7 @@ import { sleep, tryit } from "radash";
 
 import { KEYS, resolveAuth } from "./auth.js";
 import { type AwsConfig, checkConfig } from "./config.js";
-import { busyOf, PRESETS, RIG, toAws } from "./data.js";
+import { busyOf, DISTROS, PRESETS, RIG, toAws } from "./data.js";
 import { createDisk } from "./disk.js";
 import { codeOf, createEc2 } from "./ec2.js";
 import { LIVE, toMachine } from "./machine.js";
@@ -43,12 +44,6 @@ export type Aws = Provider & { keys: string[]; presets: Presets };
 
 /* How long `end` waits for a machine to terminate, so its group can go: up to 5 minutes. */
 const TERMINATING = { every: 5000, tries: 60 };
-
-/* Ubuntu 24.04, by Canonical's public SSM parameter. */
-const UBUNTU = {
-    arm64: "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id",
-    x86_64: "resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id",
-};
 
 function awsTags(tags: Tags): { Key: string; Value: string }[] {
     return Object.entries(toAws(tags)).map(([Key, Value]) => {
@@ -80,9 +75,21 @@ export function createAws(config: AwsConfig): Aws {
         }
     }
 
+    /* §11: the image to boot: the entry's as it is, or the newest image of the kind's distro for the type's arch. */
+    async function imageOf(place: Place, spec: Spec): Promise<{ image: string; root: string }> {
+        if (spec.image !== undefined) {
+            return { image: spec.image, root: await ec2.root(spec.image) };
+        }
+
+        const arch = await ec2.arch(place.type);
+        const pointer = DISTROS.pointerOf(spec.distro!, arch === "arm64" ? Arch.ARM : Arch.X86);
+
+        return { image: `resolve:ssm:${pointer.ssm}`, root: pointer.root };
+    }
+
     /* §11: one try. `spec.extra` goes first, so the one try and the tags always win. */
     async function input(place: Place, spec: Spec, subnet: string, group: string): Promise<RunInstancesCommandInput> {
-        const image = spec.image ?? UBUNTU[await ec2.arch(place.type)];
+        const { image, root } = await imageOf(place, spec);
         const tags = awsTags({ Name: spec.name, ...spec.tags });
 
         return {
@@ -102,7 +109,7 @@ export function createAws(config: AwsConfig): Aws {
             ...(spec.disk !== undefined && {
                 BlockDeviceMappings: [
                     {
-                        DeviceName: await ec2.root(image),
+                        DeviceName: root,
                         Ebs: { VolumeSize: spec.disk, VolumeType: "gp3", DeleteOnTermination: true },
                     },
                 ],
@@ -114,7 +121,6 @@ export function createAws(config: AwsConfig): Aws {
                 },
             }),
             ...(config.identity && { IamInstanceProfile: { Name: config.identity } }),
-            ...(extra.key && { KeyName: extra.key }),
         };
     }
 
@@ -123,6 +129,7 @@ export function createAws(config: AwsConfig): Aws {
         name,
         rig: RIG,
         can: { spot: true, stop: true, disk: true, port: true },
+        distros: DISTROS.offers,
         keys: KEYS,
         presets: createPresets(name, PRESETS),
 

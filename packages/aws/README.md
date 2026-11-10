@@ -1,6 +1,6 @@
 # @diphyx/rig-aws
 
-The **aws** provider for [rig](../core): Amazon EC2, `spot` and `demand`, in one region.
+The **aws** provider for [rig](../core): Linux machines on Amazon EC2, `spot` and `demand`, in one region.
 
 **Status: draft.** Tested against a fake EC2 client.
 
@@ -49,7 +49,6 @@ The same keys as every rig provider's factory (spec §8.2); aws's own go in `ext
 | `auth`          | `{ from: AuthFrom.AUTO }`       | how it signs in: [Auth](#auth)                                        |
 | `identity`      | none                            | what its machines run as: an IAM instance profile's name              |
 | `extra.subnets` | the default VPC's, one per zone | the subnets to use, one per zone                                      |
-| `extra.key`     | none                            | an EC2 key pair for every machine                                     |
 | `extra.client`  | the SDK's client                | for tests: answers in place of EC2                                    |
 
 ## What It Does on EC2
@@ -62,7 +61,8 @@ It calls EC2 with the AWS SDK's `@aws-sdk/client-ec2`.
 | `places`                  | `DescribeInstanceTypeOfferings`, in the zones that have a subnet                                                                                              |
 | `create`                  | one `RunInstances`, tagged, and named with `Name`; IMDSv2 required                                                                                            |
 | `spot`                    | a one-time spot request, terminated on a take-back                                                                                                            |
-| image                     | the kind's, or Ubuntu 24.04 (arm64 or x86_64, by type) from Canonical's public SSM parameter                                                                  |
+| `distro`, `image`         | the kind's `distro`: its version's newest image for the type's arch; or the entry's `image`, an AMI id, as it is                                              |
+| `script`, `login`         | the first-boot script (spec §6.2) as `UserData`, run by cloud-init at first boot                                                                              |
 | `get`, `list`             | `DescribeInstances`, by id, or by tag in the region, every page                                                                                               |
 | `start`, `stop`, `reboot` | `StartInstances`, `StopInstances`, `RebootInstances`; stopping a spot machine is `unsupported`                                                                |
 | `end`                     | `TerminateInstances`, waited for, then the machine's security group deleted; groups left by machines gone earlier go too; the root disk goes with the machine |
@@ -71,9 +71,22 @@ It calls EC2 with the AWS SDK's `@aws-sdk/client-ec2`.
 
 Busy answers come from [`src/aws.json`](src/aws.json): no room in a zone (`InsufficientInstanceCapacity`, `Unsupported`, ...), in the spot market (`SpotMaxPriceTooLow`, ...), or in the account (`VcpuLimitExceeded`, ...). Any other error is thrown.
 
-### Ports at create
+### Ports
 
 A new machine runs in a security group of its own, made before it with only the kind's `ports`: every other inbound port is closed, inside the VPC too. `port.open` adds to them, and a failed try leaves nothing it made.
+
+### Distro
+
+Each version boots by its publisher's public SSM parameter, which EC2 resolves to the newest image:
+
+| Distro | Version | arm                                                                                  | x86                                                                                  |
+| ------ | ------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Ubuntu | `24.04` | `/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id` | `/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id` |
+| Ubuntu | `22.04` | `/aws/service/canonical/ubuntu/server/22.04/stable/current/arm64/hvm/ebs-gp2/ami-id` | `/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id` |
+| Debian | `13`    | `/aws/service/debian/release/13/latest/arm64`                                        | `/aws/service/debian/release/13/latest/amd64`                                        |
+| Debian | `12`    | `/aws/service/debian/release/12/latest/arm64`                                        | `/aws/service/debian/release/12/latest/amd64`                                        |
+
+The machine's `image` is the image it boots, by its AMI id.
 
 ## Presets
 
@@ -89,14 +102,15 @@ The same five presets as every rig provider (spec §7), made by the core's prese
 
 Only `name` is required; every other option has a strong default.
 
-| Option              | Default                                    | Is                                                                     |
-| ------------------- | ------------------------------------------ | ---------------------------------------------------------------------- |
-| `cpu`, `mem`, `gpu` | per preset                                 | the size, rounded up to the next one sold                              |
-| `arch`              | `PresetArch.ANY`: Graviton first, then x86 | `PresetArch.ARM`, `X86` or `ANY`; with your own `image`, one arch only |
-| `up`                | `0`                                        | also try the next `up` sizes, after every type of the asked size       |
-| `disk`              | per preset, from the asked size            | GB of the boot disk                                                    |
-| `market`            | per preset                                 | in failover order                                                      |
-| kind keys           | —                                          | `image`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`         |
+| Option              | Default                                                    | Is                                                                                           |
+| ------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `cpu`, `mem`, `gpu` | per preset                                                 | the size, rounded up to the next one sold                                                    |
+| `arch`              | `PresetArch.ANY`: Graviton first, then x86                 | `PresetArch.ARM`, `X86` or `ANY`; with your own `image`, one arch only; a `distro` fits both |
+| `up`                | `0`                                                        | also try the next `up` sizes, after every type of the asked size                             |
+| `image`             | —                                                          | this provider's image id: the entry's `image`, booted in place of `distro`                   |
+| `disk`              | per preset, from the asked size; with `image`, the image's | GB of the boot disk                                                                          |
+| `market`            | per preset                                                 | in failover order                                                                            |
+| kind keys           | —                                                          | `distro`, `login`, `script`, `risk`, `life`, `recovers`, `tags`, `ports`                     |
 
 ```ts
 aws.presets.compute({ name: "worker" });

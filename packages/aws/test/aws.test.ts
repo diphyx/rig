@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createRig, Market, PresetArch, Refusal } from "@diphyx/rig";
+import { createRig, Market, Distro, PresetArch, Refusal } from "@diphyx/rig";
 import { describe, expect, it } from "vitest";
 
 import { resolveAuth } from "../src/auth.js";
@@ -81,6 +81,7 @@ const SPEC = {
     name: "app-w-00000000",
     tags: { rig: "1", "rig-app": "app", "rig-kind": "w", "rig-name": "app-w-00000000" },
     ports: [],
+    distro: { name: Distro.UBUNTU, version: "24.04" },
 };
 
 describe("aws: factory", () => {
@@ -211,6 +212,30 @@ describe("aws: create", () => {
         });
 
         expect(inputs[0]).not.toHaveProperty("InstanceMarketOptions");
+    });
+
+    it("boots a distro's newest image: by its public SSM parameter, its root device from the data file", async () => {
+        const inputs: Record<string, unknown>[] = [];
+        const { client } = fake({ ...SUBNETS, ...GROUP, ...ARM, RunInstances: run(inputs) });
+
+        await createAws({ region: "us-east-1", extra: { client } }).create(PLACE, {
+            ...SPEC,
+            distro: { name: Distro.DEBIAN, version: "12" },
+            disk: 40,
+        });
+
+        expect(inputs[0]).toMatchObject({
+            ImageId: "resolve:ssm:/aws/service/debian/release/12/latest/arm64",
+            BlockDeviceMappings: [{ DeviceName: "/dev/xvda", Ebs: { VolumeSize: 40 } }],
+        });
+
+        await createAws({ region: "us-east-1", extra: { client } }).create(PLACE, {
+            ...SPEC,
+            image: "resolve:ssm:/aws/service/debian/release/12/latest/arm64",
+            disk: 40,
+        });
+
+        expect(inputs[1]).toMatchObject({ BlockDeviceMappings: [{ DeviceName: "/dev/xvda" }] });
     });
 
     it("makes the machine's own group first, with only the kind's ports, and runs the machine in it", async () => {

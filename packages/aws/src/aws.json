@@ -90,6 +90,52 @@
             }
         }
     },
+    "distros": {
+        "ubuntu": {
+            "24.04": {
+                "arm": {
+                    "ssm": "/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id",
+                    "root": "/dev/sda1"
+                },
+                "x86": {
+                    "ssm": "/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id",
+                    "root": "/dev/sda1"
+                }
+            },
+            "22.04": {
+                "arm": {
+                    "ssm": "/aws/service/canonical/ubuntu/server/22.04/stable/current/arm64/hvm/ebs-gp2/ami-id",
+                    "root": "/dev/sda1"
+                },
+                "x86": {
+                    "ssm": "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id",
+                    "root": "/dev/sda1"
+                }
+            }
+        },
+        "debian": {
+            "13": {
+                "arm": {
+                    "ssm": "/aws/service/debian/release/13/latest/arm64",
+                    "root": "/dev/xvda"
+                },
+                "x86": {
+                    "ssm": "/aws/service/debian/release/13/latest/amd64",
+                    "root": "/dev/xvda"
+                }
+            },
+            "12": {
+                "arm": {
+                    "ssm": "/aws/service/debian/release/12/latest/arm64",
+                    "root": "/dev/xvda"
+                },
+                "x86": {
+                    "ssm": "/aws/service/debian/release/12/latest/amd64",
+                    "root": "/dev/xvda"
+                }
+            }
+        }
+    },
     "shapes": {
         "memory": {
             "c": 2,

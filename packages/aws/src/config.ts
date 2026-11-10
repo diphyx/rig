@@ -19,13 +19,11 @@ export type AwsConfig = {
 export type AwsExtra = {
     /** One subnet per zone; absent, the default VPC's default subnets. */
     subnets?: string[];
-    /** An EC2 key pair for every machine. */
-    key?: string;
     /** For tests: anything with the EC2 client's `send`. */
     client?: Pick<EC2Client, "send">;
 };
 
-const EXTRA = ["subnets", "key", "client"];
+const EXTRA = ["subnets", "client"];
 
 /** §8.2: the standard keys and aws's own `extra` keys; `region` is required. */
 export function checkConfig(config: AwsConfig): void {

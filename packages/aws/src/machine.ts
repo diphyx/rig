@@ -37,6 +37,7 @@ export function toMachine(instance: Instance): ProviderMachine {
         market: instance.InstanceLifecycle === "spot" ? Market.SPOT : Market.DEMAND,
         type: instance.InstanceType ?? "",
         zone: instance.Placement?.AvailabilityZone ?? "",
+        ...(instance.ImageId && { image: instance.ImageId }),
         tags: fromAws(tagsOf(instance.Tags)),
         ...(Object.keys(ip).length > 0 && { ip }),
         created: instance.LaunchTime?.getTime() ?? 0,

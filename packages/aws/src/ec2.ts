@@ -9,6 +9,7 @@ import {
 
 import type { Keys } from "./auth.js";
 import type { AwsExtra } from "./config.js";
+import { ssmRootOf } from "./data.js";
 
 export type Arch = "arm64" | "x86_64";
 
@@ -77,10 +78,10 @@ export function createEc2(region: string, extra: AwsExtra, keys: Keys | null) {
             return arches.get(type)!;
         },
 
-        /** An image's root device, so a disk size lands on it; Canonical's images use `/dev/sda1`. */
+        /** An image's root device, so a disk size lands on it; an SSM parameter's, from the data file. */
         async root(image: string): Promise<string> {
             if (image.startsWith("resolve:ssm:")) {
-                return "/dev/sda1";
+                return ssmRootOf(image);
             }
 
             if (!roots.has(image)) {
