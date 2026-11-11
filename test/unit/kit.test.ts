@@ -7,7 +7,7 @@ const RIG = 1;
 
 type Kit = { rig: number; area: string; cases: { id: string }[] };
 
-const KIT = join(import.meta.dirname, "../spec/kit");
+const KIT = join(import.meta.dirname, "../../spec/kit");
 
 const kits = readdirSync(KIT)
     .filter((file) => {

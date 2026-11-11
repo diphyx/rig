@@ -21,3 +21,8 @@ coverage
 
 # Rig store
 .rig
+
+# E2E tests
+test/e2e/.keys
+test/e2e/.env
+test/e2e/.host

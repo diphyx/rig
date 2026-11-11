@@ -2,12 +2,12 @@ import { Arch, DISTROS, Distro, PresetArch, PresetName, type PresetTable, Reason
 import { isArray } from "radash";
 import { describe, expect, it } from "vitest";
 
-import aws from "../packages/aws/src/aws.json" with { type: "json" };
-import { createAws } from "../packages/aws/src/index.js";
-import azure from "../packages/azure/src/azure.json" with { type: "json" };
-import { createAzure } from "../packages/azure/src/index.js";
-import gcp from "../packages/gcp/src/gcp.json" with { type: "json" };
-import { createGcp } from "../packages/gcp/src/index.js";
+import aws from "../../packages/aws/src/aws.json" with { type: "json" };
+import { createAws } from "../../packages/aws/src/index.js";
+import azure from "../../packages/azure/src/azure.json" with { type: "json" };
+import { createAzure } from "../../packages/azure/src/index.js";
+import gcp from "../../packages/gcp/src/gcp.json" with { type: "json" };
+import { createGcp } from "../../packages/gcp/src/index.js";
 
 /* Every official provider, made with a transport that answers nothing: these checks never reach a cloud. */
 const nothing = async (): Promise<never> => {

@@ -137,12 +137,15 @@ At least one provider; workers only for job machines.
 | `packages/gcp`   | `@diphyx/rig-gcp`, draft                                                      |
 | `packages/azure` | `@diphyx/rig-azure`, draft                                                    |
 | `packages/grid`  | `@diphyx/rig-grid`, draft                                                     |
-| `test/`          | the same checks for every provider, and the kit's files                       |
+| `test/unit/`     | the same checks for every provider, and the kit's files                       |
+| `test/e2e/`      | real machines on aws and gcp, by the local packages: [`test/e2e/`](test/e2e)  |
 
 ```bash
 pnpm install
 pnpm run build   # every package
 pnpm run check   # types, lint, format, tests, the kit
+pnpm test:unit   # the tests, the kit
+pnpm test:e2e    # real machines, start to end: test/e2e/.env first
 ```
 
 ## License

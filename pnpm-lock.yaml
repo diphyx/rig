@@ -14,6 +14,15 @@ importers:
       '@diphyx/rig':
         specifier: workspace:^
         version: link:packages/core
+      '@diphyx/rig-aws':
+        specifier: workspace:^
+        version: link:packages/aws
+      '@diphyx/rig-azure':
+        specifier: workspace:^
+        version: link:packages/azure
+      '@diphyx/rig-gcp':
+        specifier: workspace:^
+        version: link:packages/gcp
       '@types/node':
         specifier: ^22.19.19
         version: 22.20.5
