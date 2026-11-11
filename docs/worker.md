@@ -1,6 +1,6 @@
 # Worker
 
-> Jobs on rig's machines: rig makes and replaces them, a worker runs the jobs
+> Jobs on RIG's machines: RIG makes and replaces them, a worker runs the jobs
 
 A **worker** is a plugin that runs jobs on machines, as a provider is one that makes them: `workers: [grid]`, as `providers: [aws]`. The official one is `@diphyx/rig-grid`, over [grid](https://github.com/diphyx/grid): the app runs grid's **hub**, in TypeScript, and each machine runs grid's own **node**, set up at its first boot.
 
@@ -15,7 +15,7 @@ A kind with a `worker` makes **job machines**: short-lived, often spot, made to 
 | without `worker` | live as long as the app wants them     | the app's own, on its machines                                 |
 | with `worker`    | job machines: short-lived, replaceable | a new machine: its `worker`, like its type, is fixed at create |
 
-rig reaches a job machine twice: its first-boot script, once, then the worker, which runs only what the machine was made for. To change what it runs, change the kind, or give one machine its own at its create: new machines get it, and the old ones end by `life`, `machine.end`, or a take-back.
+RIG reaches a job machine twice: its first-boot script, once, then the worker, which runs only what the machine was made for. To change what it runs, change the kind, or give one machine its own at its create: new machines get it, and the old ones end by `life`, `machine.end`, or a take-back.
 
 ## 2. Set Up
 
@@ -82,7 +82,7 @@ At its create, each machine gets its own grid key pair, and these lines, after i
 4. **`/etc/grid/node.toml`:** its tags, its cmds, its port, and the hub, by IP; with `signal`, the hub's `listen` port too.
 5. **a systemd unit,** `grid-node`, started.
 
-It also gets its node's `port`, open to the hub's IP only. rig's store keeps the public half of the key; the hub trusts it only from that machine's IP.
+It also gets its node's `port`, open to the hub's IP only. RIG's store keeps the public half of the key; the hub trusts it only from that machine's IP.
 
 ## 4. Jobs
 
@@ -158,7 +158,7 @@ A filter gives those with every key given.
 
 | Call                                         | Gives                                                                                                               |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `rig.machine.list({ kind?, status?, tag? })` | rig's machines; `tag`: a worker's tag                                                                               |
+| `rig.machine.list({ kind?, status?, tag? })` | RIG's machines; `tag`: a worker's tag                                                                               |
 | `grid.jobs({ tag?, state?, node? })`         | the hub's live jobs: `name`, `tag`, `state` (`waiting` or `running`), `node`, `step`, `tries`, `started`, `session` |
 | `grid.job(name)`                             | one live job; `null` once it ends                                                                                   |
 | `grid.nodes({ tag?, beating?, lost? })`      | its nodes: the machine's `name`, `ip`, `tags`, `beating`, `lost`, and the `jobs` it runs                            |
@@ -175,9 +175,9 @@ A node's name is its machine's name, so `rig.machine.list({ tag: "req-42" })`, `
 
 | Who  | Does                                                                                                     |
 | ---- | -------------------------------------------------------------------------------------------------------- |
-| rig  | replaces the machine, up to its kind's `recovers`                                                        |
+| RIG  | replaces the machine, up to its kind's `recovers`                                                        |
 | grid | runs the job again from the start, on any free node with its tag, up to `retries`                        |
-| rig  | when it stops replacing: tells the worker, `spent(tags)`; a job waiting for a tag no node has then fails |
+| RIG  | when it stops replacing: tells the worker, `spent(tags)`; a job waiting for a tag no node has then fails |
 
 A job keeps its own work: a take-back may come with little warning, or none. Save progress in the job's own steps, and resume from there.
 
@@ -187,7 +187,7 @@ A worker is an object with `slot: "worker"`, a `name`, `rig: 1` and the calls of
 
 | Call    | Does                                                                                          |
 | ------- | --------------------------------------------------------------------------------------------- |
-| `open`  | optional: what it finds out when rig opens, before any `setup`, like its own address          |
+| `open`  | optional: what it finds out when RIG opens, before any `setup`, like its own address          |
 | `check` | refuses a kind's `worker` whose own keys are not one                                          |
 | `setup` | for one machine, at its create: its first-boot lines, the ports it needs, what it knows it by |
 | `add`   | takes a machine, by its name, IPs, key and tags                                               |

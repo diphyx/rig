@@ -167,4 +167,4 @@ await rig.machine.create("builder", {
 });
 ```
 
-The options are checked at the call, as the kind's own are when rig opens, and kept with the machine: its replacement, when it is lost, gets the same. More in [Worker](worker.md).
+The options are checked at the call, as the kind's own are when RIG opens, and kept with the machine: its replacement, when it is lost, gets the same. More in [Worker](worker.md).

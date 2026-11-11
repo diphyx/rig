@@ -1,6 +1,6 @@
 # @diphyx/rig-grid
 
-The **grid** worker for [rig](../core): it runs jobs on rig's machines, over [grid](https://github.com/diphyx/grid) (`grid/2`). In grid's words, the app runs the **hub**, in TypeScript, and each machine runs grid's own **node**, set up at its first boot.
+The **grid** worker for [RIG](../core): it runs jobs on RIG's machines, over [grid](https://github.com/diphyx/grid) (`grid/2`). In grid's words, the app runs the **hub**, in TypeScript, and each machine runs grid's own **node**, set up at its first boot.
 
 **Status: draft.** Checked against grid's own vectors, and against a real `grid node`.
 
@@ -60,10 +60,10 @@ Every option has a default: `createGrid()` is a whole hub.
 
 | Option       | Default                                                                            | Is                                                                                        |
 | ------------ | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `ip`         | found when rig opens: the app host's public IP, or its own with `reach: "private"` | the hub's IP, as the machines see it: they accept the hub only from it                    |
+| `ip`         | found when RIG opens: the app host's public IP, or its own with `reach: "private"` | the hub's IP, as the machines see it: they accept the hub only from it                    |
 | `identity`   | `./.rig/grid/hub.key`, made on first use (`0600`), kept after                      | the hub's private key: a path to its file (`grid key new`), or the key itself, base64     |
 | `release`    | `RELEASE`: grid `2.0.0`, with its archives' SHA-256                                | the grid release nodes install: `version`, and each arch's archive's `sha256`             |
-| `name`       | `"grid"`                                                                           | its name in rig's `workers`                                                               |
+| `name`       | `"grid"`                                                                           | its name in RIG's `workers`                                                               |
 | `port`       | `9420`                                                                             | the port nodes listen on                                                                  |
 | `listen`     | none                                                                               | the port it listens on for nodes with `signal`; without it, no kind's worker has `signal` |
 | `reach`      | `"public"`                                                                         | which IPs it uses: the machines' it dials, and its own it gives them                      |
@@ -107,7 +107,7 @@ At its create, each machine gets its own grid key pair, and these first-boot lin
 4. **`/etc/grid/node.toml`:** its tags, its cmds, its port, and the hub, by IP; with `signal`, the hub's `listen` port too.
 5. **a systemd unit,** `grid-node`, started.
 
-It also gets the hub's port, open to the hub's IP only. The private key is in the machine's first-boot script, which the cloud keeps as its user data: anything that can read the machine's metadata can read it, and the hub trusts it only from that machine's IP. rig's store keeps the public half only.
+It also gets its node's `port`, open to the hub's IP only. The private key is in the machine's first-boot script, which the cloud keeps as its user data: anything that can read the machine's metadata can read it, and the hub trusts it only from that machine's IP. RIG's store keeps the public half only.
 
 ## Jobs
 
@@ -124,8 +124,8 @@ It also gets the hub's port, open to the hub's IP only. The private key is in th
 
 `options` has `signal` (an `AbortSignal` that kills it), `watch` (its log lines and events), `next` (more steps after one ends done), and `placed` (where it runs, for `grid.recover` after a restart).
 
-- **A machine is lost:** rig replaces it, up to its kind's `recovers`; the job starts over on any free node with its tag, up to its `retries`, the replacement too.
-- **No node comes:** when rig stops replacing a kind's machines, it tells the hub (`spent`), and a job no node can take fails.
+- **A machine is lost:** RIG replaces it, up to its kind's `recovers`; the job starts over on any free node with its tag, up to its `retries`, the replacement too.
+- **No node comes:** when RIG stops replacing a kind's machines, it tells the hub (`spent`), and a job no node can take fails.
 - **A job keeps its own work:** a take-back may come with little warning, or none. Save progress in the job's own steps, and resume from there.
 - **New cmds:** a new tag for them (`build-v2`) keeps jobs off machines made with the old ones; or give them to one machine at its create.
 
@@ -183,7 +183,7 @@ Each takes a filter: those with every key given.
 | `grid.on(JobEvent.*, ...)`  | its jobs: `PLACED` on a node, `RETRIED` after a lost one, `ENDED`           |
 
 - **In memory:** the hub's own, so after a restart `grid.jobs()` is empty; `placed` and `grid.recover` take back what ran.
-- **A node is its machine:** `node` and `nodes()`'s `name` are rig's machine names, as `rig.machine.list({ tag })` gives them.
+- **A node is its machine:** `node` and `nodes()`'s `name` are RIG's machine names, as `rig.machine.list({ tag })` gives them.
 
 ## Signal
 
@@ -191,4 +191,4 @@ With a kind's `worker.signal` and the hub's `listen`, each node also dials the h
 
 ## Spec
 
-The worker follows [rig generation 1](../../spec/SPEC.md), §22, and speaks [grid/2](https://github.com/diphyx/grid).
+The worker follows [RIG generation 1](../../spec/SPEC.md), §22, and speaks [grid/2](https://github.com/diphyx/grid).

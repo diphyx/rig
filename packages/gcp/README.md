@@ -1,6 +1,6 @@
 # @diphyx/rig-gcp
 
-The **gcp** provider for [rig](../core): Linux machines on Google Compute Engine, `spot` and `demand`, in one region.
+The **gcp** provider for [RIG](../core): Linux machines on Google Compute Engine, `spot` and `demand`, in one region.
 
 **Status: draft.** Tested against a fake Compute Engine.
 
@@ -32,7 +32,7 @@ const rig = createRig({
 
 ## Auth
 
-The same three ways as every rig provider (spec §8.1), as `AuthFrom`:
+The same three ways as every RIG provider (spec §8.1), as `AuthFrom`:
 
 ```ts
 createGcp(); // auto: env, the gcloud login, or the machine's service account
@@ -44,7 +44,7 @@ The key is a service-account key's JSON. A missing key is a refusal at once, nam
 
 ## Config
 
-The same keys as every rig provider's factory (spec §8.2); gcp's own go in `extra`, and any other key is a refusal.
+The same keys as every RIG provider's factory (spec §8.2); gcp's own go in `extra`, and any other key is a refusal.
 
 | Option          | Default                                                              | Is                                                                    |
 | --------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -61,11 +61,11 @@ The same keys as every rig provider's factory (spec §8.2); gcp's own go in `ext
 
 It calls Compute Engine's REST API, signed in with Google's own `google-auth-library`.
 
-| rig                       | Compute Engine                                                                                                                                                                                                                      |
+| RIG                       | Compute Engine                                                                                                                                                                                                                      |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `check`                   | reads the region: the keys, the project and the region work                                                                                                                                                                         |
 | `places`                  | the region's zones that list the entry's machine types                                                                                                                                                                              |
-| `create`                  | one `instances.insert`, waited for; labelled with the tags, the whole rig name kept on its metadata, as a label holds 63 characters; a failed try deletes what it made; the id is its zone and name, `us-central1-a/app-w-0a1b2c3d` |
+| `create`                  | one `instances.insert`, waited for; labelled with the tags, the whole RIG name kept on its metadata, as a label holds 63 characters; a failed try deletes what it made; the id is its zone and name, `us-central1-a/app-w-0a1b2c3d` |
 | `spot`                    | `provisioningModel: SPOT`, deleted on a take-back                                                                                                                                                                                   |
 | `distro`, `image`         | the kind's `distro`: its image family's newest image for the type's arch, kept on the machine's metadata as `rig-image`; or the entry's `image` as it is                                                                            |
 | `script`, `login`         | the first-boot script (spec §6.2) as the `startup-script` metadata, run by the guest agent at every boot; the script itself runs once                                                                                               |
@@ -96,7 +96,7 @@ The machine's `image` is the image it boots, by its `<project>/<image>`.
 
 ## Presets
 
-The same five presets as every rig provider (spec §7), made by the core's preset engine from [`src/gcp.json`](src/gcp.json), newest generation first.
+The same five presets as every RIG provider (spec §7), made by the core's preset engine from [`src/gcp.json`](src/gcp.json), newest generation first.
 
 | Preset    | Size       | Default size | Default market                 | Default disk (GB) | arm          | x86                                 |
 | --------- | ---------- | ------------ | ------------------------------ | ----------------- | ------------ | ----------------------------------- |
@@ -145,4 +145,4 @@ A full spot quota is no room in spot, not in the account: the core tries the ent
 
 ## Spec
 
-The provider follows [rig generation 1](../../spec/SPEC.md), Part 3.
+The provider follows [RIG generation 1](../../spec/SPEC.md), Part 3.

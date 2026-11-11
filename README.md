@@ -1,4 +1,4 @@
-# rig
+# RIG
 
 **Remote Instance Gateway**
 
@@ -9,7 +9,7 @@ Create Linux machines on any cloud, with failover.
 **Status: draft.** Spec, core and providers are written; none has run on a real cloud yet.
 
 > [!IMPORTANT]
-> **Linux only.** Every machine rig creates runs Linux: Ubuntu or Debian, or a Linux image of your own. Its first boot is a bash script, and its login is SSH.
+> **Linux only.** Every machine RIG creates runs Linux: Ubuntu or Debian, or a Linux image of your own. Its first boot is a bash script, and its login is SSH.
 
 ## 1. What It Does
 

@@ -1,8 +1,8 @@
-# rig kit, generation 1
+# RIG kit, generation 1
 
-The conformance suite for the rig spec. It is data: each file holds **cases** that a lib plays against its own core, with a **fake provider** in place of a cloud.
+The conformance suite for the RIG spec. It is data: each file holds **cases** that a lib plays against its own core, with a **fake provider** in place of a cloud.
 
-A core that passes every case MAY say it follows rig generation 1.
+A core that passes every case MAY say it follows RIG generation 1.
 
 ## 1. Files
 

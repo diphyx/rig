@@ -1,6 +1,6 @@
 # @diphyx/rig-azure
 
-The **azure** provider for [rig](../core): Linux machines on Azure Virtual Machines, `spot` and `demand`, in one region.
+The **azure** provider for [RIG](../core): Linux machines on Azure Virtual Machines, `spot` and `demand`, in one region.
 
 **Status: draft.** Tested against a fake Azure Resource Manager.
 
@@ -32,7 +32,7 @@ const rig = createRig({
 
 ## Auth
 
-The same three ways as every rig provider (spec §8.1), as `AuthFrom`:
+The same three ways as every RIG provider (spec §8.1), as `AuthFrom`:
 
 ```ts
 createAzure(); // auto: env, the az login, or a managed identity
@@ -44,7 +44,7 @@ The keys are a service principal's `tenant`, `id` and `secret`. A missing key is
 
 ## Config
 
-The same keys as every rig provider's factory (spec §8.2); azure's own go in `extra`, and any other key is a refusal.
+The same keys as every RIG provider's factory (spec §8.2); azure's own go in `extra`, and any other key is a refusal.
 
 | Option               | Default                                         | Is                                                                    |
 | -------------------- | ----------------------------------------------- | --------------------------------------------------------------------- |
@@ -54,14 +54,14 @@ The same keys as every rig provider's factory (spec §8.2); azure's own go in `e
 | `identity`           | none                                            | what its machines run as: a user-assigned identity's resource id      |
 | `extra.subscription` | `AZURE_SUBSCRIPTION_ID`                         | the subscription; one of the two is required                          |
 | `extra.group`        | `"rig"`, made on first use                      | the resource group its machines go in                                 |
-| `extra.subnet`       | a network of rig's own, made on first use       | a subnet's resource id                                                |
+| `extra.subnet`       | a network of RIG's own, made on first use       | a subnet's resource id                                                |
 | `extra.request`      | Azure Resource Manager's REST API               | for tests: answers in place of Azure                                  |
 
 ## What It Does on Azure
 
 It calls Azure Resource Manager's REST API, signed in with Azure's own `@azure/identity`.
 
-| rig                       | Azure                                                                                                                                                                                       |
+| RIG                       | Azure                                                                                                                                                                                       |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `check`                   | reads the subscription and its regions: the keys, the subscription and the region work                                                                                                      |
 | `places`                  | the region's resource SKUs: each size's zones, less those closed to the subscription; `eastus-1` is zone 1 of `eastus`, and a region with no zones is one place, `eastus`                   |
@@ -96,7 +96,7 @@ The machine's `image` is the image it boots, by its URN with its exact version.
 
 ## Presets
 
-The same five presets as every rig provider (spec §7), made by the core's preset engine from [`src/azure.json`](src/azure.json), newest generation first.
+The same five presets as every RIG provider (spec §7), made by the core's preset engine from [`src/azure.json`](src/azure.json), newest generation first.
 
 | Preset    | Size       | Default size | Default market                 | Default disk (GB) | arm                   | x86                                                               |
 | --------- | ---------- | ------------ | ------------------------------ | ----------------- | --------------------- | ----------------------------------------------------------------- |
@@ -145,4 +145,4 @@ A full spot quota is no room in spot, not in the account: the core tries the ent
 
 ## Spec
 
-The provider follows [rig generation 1](../../spec/SPEC.md), Part 3.
+The provider follows [RIG generation 1](../../spec/SPEC.md), Part 3.

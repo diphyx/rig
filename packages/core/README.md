@@ -1,11 +1,11 @@
 # @diphyx/rig
 
-The core of rig, **Remote Instance Gateway**: create Linux machines on any cloud, with failover.
+The core of RIG, **Remote Instance Gateway**: create Linux machines on any cloud, with failover.
 
 **Status: draft.** Passes the kit.
 
 > [!IMPORTANT]
-> **Linux only.** Every machine rig creates runs Linux: Ubuntu or Debian, or a Linux image of your own. Its first boot is a bash script, and its login is SSH.
+> **Linux only.** Every machine RIG creates runs Linux: Ubuntu or Debian, or a Linux image of your own. Its first boot is a bash script, and its login is SSH.
 
 ## Install
 
@@ -236,13 +236,13 @@ await rig.machine.create("builder", {
 ```
 
 - **Over the kind's:** each key given replaces the kind's; the rest is the kind's. Not `name`: the worker is the kind's.
-- **Checked at the call:** as the kind's `worker` is when rig opens; a bad one is a refusal, before any try.
+- **Checked at the call:** as the kind's `worker` is when RIG opens; a bad one is a refusal, before any try.
 - **Kept:** a lost machine's replacement gets the same `worker`.
 - **Its own tag:** a machine with its own cmds needs its own tag too, so only its jobs go to it.
 
 - **Fixed at create:** a job machine is reached at its first boot, then only through its worker. To change what it runs, change the kind: new machines get it, and the old ones end by `life`, `machine.end`, or a take-back. A short `life` suits job machines; a new tag (`build-v2`) keeps jobs off the old ones.
 - **Joining:** at create, the worker gives the machine's first-boot lines and the ports it needs. Once it has an IP, the core gives it to the worker, again when its IPs change, and after the core opens; once it is ended or lost, the core drops it. `machine.worker` shows its worker, key, tags, and the IPs the worker has.
-- **A machine is lost:** rig replaces it, up to `recovers`, and the worker runs its job again on any machine with its tags, the replacement too. When rig stops replacing it, it tells the worker (`spent`), so the job does not wait for a machine that will not come.
+- **A machine is lost:** RIG replaces it, up to `recovers`, and the worker runs its job again on any machine with its tags, the replacement too. When RIG stops replacing it, it tells the worker (`spent`), so the job does not wait for a machine that will not come.
 - **A lost store:** a job machine a round finds, with no key left in the store, is ended: `MACHINE_ENDED`, `reason: Why.FOUND`.
 - **A job keeps its own work:** a take-back may come with little warning, or none. Save progress in the job's own steps, and resume from there.
 
@@ -352,7 +352,7 @@ A worker is an object with the calls of spec §22.1, in the config's `workers`, 
 
 | Call    | Does                                                                                          |
 | ------- | --------------------------------------------------------------------------------------------- |
-| `open`  | optional: what it finds out when rig opens, before any `setup`, like its own address          |
+| `open`  | optional: what it finds out when RIG opens, before any `setup`, like its own address          |
 | `check` | refuses a kind's `worker` whose own keys are not one                                          |
 | `setup` | for one machine, at its create: its first-boot lines, the ports it needs, what it knows it by |
 | `add`   | takes a machine, by its name, IPs, key and tags                                               |
@@ -361,4 +361,4 @@ A worker is an object with the calls of spec §22.1, in the config's `workers`, 
 
 ## Spec
 
-The core follows [rig generation 1](../../spec/SPEC.md), proven by [the kit](../../spec/kit).
+The core follows [RIG generation 1](../../spec/SPEC.md), proven by [the kit](../../spec/kit).

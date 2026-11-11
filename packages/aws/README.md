@@ -1,6 +1,6 @@
 # @diphyx/rig-aws
 
-The **aws** provider for [rig](../core): Linux machines on Amazon EC2, `spot` and `demand`, in one region.
+The **aws** provider for [RIG](../core): Linux machines on Amazon EC2, `spot` and `demand`, in one region.
 
 **Status: draft.** Tested against a fake EC2 client.
 
@@ -31,7 +31,7 @@ const rig = createRig({
 
 ## Auth
 
-The same three ways as every rig provider (spec §8.1), as `AuthFrom`:
+The same three ways as every RIG provider (spec §8.1), as `AuthFrom`:
 
 ```ts
 createAws(); // auto: env, `~/.aws`, or the instance role
@@ -43,7 +43,7 @@ The keys are an access key's `id` and `secret`, and a `token` for a session. A m
 
 ## Config
 
-The same keys as every rig provider's factory (spec §8.2); aws's own go in `extra`, and any other key is a refusal.
+The same keys as every RIG provider's factory (spec §8.2); aws's own go in `extra`, and any other key is a refusal.
 
 | Option          | Default                                              | Is                                                                    |
 | --------------- | ---------------------------------------------------- | --------------------------------------------------------------------- |
@@ -58,7 +58,7 @@ The same keys as every rig provider's factory (spec §8.2); aws's own go in `ext
 
 It calls EC2 with the AWS SDK's `@aws-sdk/client-ec2`.
 
-| rig                       | EC2                                                                                                                                                                |
+| RIG                       | EC2                                                                                                                                                                |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `check`                   | `DescribeAvailabilityZones`: the keys and the region work                                                                                                          |
 | `places`                  | `DescribeInstanceTypeOfferings`, in the zones that have a subnet, every page                                                                                       |
@@ -95,7 +95,7 @@ The machine's `image` is the image it boots, by its AMI id.
 
 ## Presets
 
-The same five presets as every rig provider (spec §7), made by the core's preset engine from [`src/aws.json`](src/aws.json), newest generation first.
+The same five presets as every RIG provider (spec §7), made by the core's preset engine from [`src/aws.json`](src/aws.json), newest generation first.
 
 | Preset    | Size       | Default size | Default market                 | Default disk (GB) | arm                                 | x86                                                           |
 | --------- | ---------- | ------------ | ------------------------------ | ----------------- | ----------------------------------- | ------------------------------------------------------------- |
@@ -144,4 +144,4 @@ A full spot quota is no room in spot, not in the account: the core tries the ent
 
 ## Spec
 
-The provider follows [rig generation 1](../../spec/SPEC.md), Part 3.
+The provider follows [RIG generation 1](../../spec/SPEC.md), Part 3.

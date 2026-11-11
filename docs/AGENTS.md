@@ -1,8 +1,8 @@
 # Agents
 
-> Single-file, end-to-end reference for AI coding agents setting up or using rig. Reading this once gives the full model: core, providers, kinds, presets, failover, risk, rounds, workers, grid, calls, events, refusals, and the kit.
+> Single-file, end-to-end reference for AI coding agents setting up or using RIG. Reading this once gives the full model: core, providers, kinds, presets, failover, risk, rounds, workers, grid, calls, events, refusals, and the kit.
 
-- **Name:** rig, short for Remote Instance Gateway
+- **Name:** RIG, short for Remote Instance Gateway
 - **Packages:** `@diphyx/rig` (the core), `@diphyx/rig-aws`, `@diphyx/rig-gcp`, `@diphyx/rig-azure` (providers), `@diphyx/rig-grid` (the grid worker); TypeScript, ESM, Node.js
 - **Install:** `pnpm add @diphyx/rig @diphyx/rig-aws`; the core and at least one provider
 - **Spec:** `rig/1`, exact in `spec/SPEC.md`; the kit, as data, in `spec/kit/`
@@ -13,7 +13,7 @@
 
 ## 1. Mental Model
 
-rig creates Linux machines on cloud providers with failover. A **kind** is a named recipe: its `try` list says where its machines may go, in order; its other keys say what each machine is. `machine.create(kind)` tries the kind's **places** (provider, market, type, zone) in order, one `create` each, and stops at the first that has room. Each round, the core lists its machines: one the cloud took back is **lost**, and the core **recovers** it with a new failover.
+RIG creates Linux machines on cloud providers with failover. A **kind** is a named recipe: its `try` list says where its machines may go, in order; its other keys say what each machine is. `machine.create(kind)` tries the kind's **places** (provider, market, type, zone) in order, one `create` each, and stops at the first that has room. Each round, the core lists its machines: one the cloud took back is **lost**, and the core **recovers** it with a new failover.
 
 ```
 app → core → provider.create(place) → busy → next place → ... → machine
@@ -278,11 +278,11 @@ createRig({
 - **Jobs:** `grid.run({ name?, tag, push?, steps, pull?, retries? }, { signal?, watch?, next?, placed? })` → `{ name, state: "done" | "failed" | "stopped", message, node, steps, pushed, files }`. Push `{ from, to?, share? }`; step `{ cmd, args?, env? }`; pull `{ path, into, fresh?, keep? }`.
 - **Sessions:** `grid.session({ tag, name?, share?, signal?, watch?, placed? })` → `push`, `exec`, `pull`, `close()` (the outcome). No retries; after a kill, only `pull` and `close`.
 - **Views:** `grid.jobs({ tag?, state?, node? })`, `grid.job(name)`, `grid.nodes({ tag?, beating?, lost? })`, `grid.kill(name)`, `grid.watch(name, handler)`, `grid.on(JobEvent.PLACED | RETRIED | ENDED, handler)`.
-- **Lost:** rig replaces the machine (`recovers`); grid reruns the job from the start on any node with its tag (`retries`). A job keeps its own work: save progress in its own steps.
+- **Lost:** RIG replaces the machine (`recovers`); grid reruns the job from the start on any node with its tag (`retries`). A job keeps its own work: save progress in its own steps.
 
 ## 12. Kit
 
-`spec/kit/*.json` are cases, as data: a runner plays each against a core with fake providers and fake workers, and matches results, events, the store and the fakes. `packages/core/test/kit.test.ts` runs them; `pnpm run check` runs types, lint, format, tests and the kit. A core that passes every case may say it follows rig generation 1.
+`spec/kit/*.json` are cases, as data: a runner plays each against a core with fake providers and fake workers, and matches results, events, the store and the fakes. `packages/core/test/kit.test.ts` runs them; `pnpm run check` runs types, lint, format, tests and the kit. A core that passes every case may say it follows RIG generation 1.
 
 ## 13. Common Mistakes
 

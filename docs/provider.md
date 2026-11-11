@@ -93,7 +93,7 @@ What is not code is data, `src/<name>.json`, so providers for one cloud agree in
 | `distros` | each distro version's pointer to its newest image, per arch     |
 | `presets` | each preset's types, per arch and size, newest generation first |
 | `shapes`  | what `shape` reads: a type's vCPUs, memory, GPU and arch        |
-| `tags`    | rig's tag names the cloud cannot hold, each to one it can       |
+| `tags`    | RIG's tag names the cloud cannot hold, each to one it can       |
 
 ## 5. Your Own
 
@@ -114,6 +114,6 @@ The core gives it the helpers the official ones use:
 | `createDistroTable` | its `distros`, and each version's pointer to its newest image           |
 | `checkFactory`      | the check of its factory's config                                       |
 | `regionOf`          | its region: the one given, else its cloud's env var's, else its default |
-| `createTagMap`      | its tag names, both ways, for a cloud that cannot hold rig's            |
+| `createTagMap`      | its tag names, both ways, for a cloud that cannot hold RIG's            |
 
 The kit, `spec/kit/`, plays the core against a fake provider; `test/` in the repo runs the same checks on every provider.
