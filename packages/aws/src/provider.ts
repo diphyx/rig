@@ -28,6 +28,7 @@ import {
     type Shape,
     Refusal,
     type Spec,
+    Status,
     type Tags,
 } from "@diphyx/rig";
 
@@ -55,6 +56,9 @@ function missing(error: unknown): boolean {
     );
 }
 
+/* How long EC2 may answer a new instance's id as not found, as its calls catch up: it is `pending` till then. */
+const NEW = 5 * 60_000;
+
 /* How long `end` waits for a machine to terminate, so its group can go: up to 5 minutes. */
 const TERMINATING = { every: 5000, tries: 60 };
 
@@ -74,6 +78,9 @@ export function createAws(config: AwsConfig = {}): Aws {
     const ec2 = createEc2(region, extra, resolveAuth(name, config.auth));
     const ports = createPorts(ec2);
 
+    /* The instances this provider made, as `RunInstances` gave them, and when. */
+    const made = new Map<string, { instance: Instance; at: number }>();
+
     /* Terminated, and waited for: its group is held until then; one held longer is left for a sweep. */
     async function terminate(id: string): Promise<void> {
         await ec2.send(new TerminateInstancesCommand({ InstanceIds: [id] }));
@@ -87,6 +94,22 @@ export function createAws(config: AwsConfig = {}): Aws {
 
             await sleep(TERMINATING.every);
         }
+    }
+
+    /* An instance as rig sees it: running in a subnet that gives public IPs, it is `pending` until it has its own. */
+    async function machineOf(instance: Instance): Promise<ProviderMachine> {
+        const machine = toMachine(instance);
+
+        if (machine.status !== Status.RUNNING || instance.PublicIpAddress || !instance.SubnetId) {
+            return machine;
+        }
+
+        const [, subnets] = await tryit(ec2.subnets)();
+        const subnet = [...(subnets?.values() ?? [])].find((one) => {
+            return one.subnet === instance.SubnetId;
+        });
+
+        return subnet?.public ? { ...machine, status: Status.PENDING } : machine;
     }
 
     /* §11: the image to boot: the entry's as it is, or the newest image of the kind's distro for the type's arch. */
@@ -209,7 +232,10 @@ export function createAws(config: AwsConfig = {}): Aws {
                     new RunInstancesCommand(await input(place, spec, subnet, group)),
                 );
 
-                const id = answer.Instances![0]!.InstanceId!;
+                const instance = answer.Instances![0]!;
+                const id = instance.InstanceId!;
+
+                made.set(id, { instance, at: Date.now() });
 
                 /* So `end` finds the group even once the machine is gone. */
                 await tryit(ports.own)(group, id);
@@ -234,11 +260,17 @@ export function createAws(config: AwsConfig = {}): Aws {
             }
         },
 
-        /** §11: an unknown id is `null`. */
+        /** §11: an unknown id is `null`; one it made a moment ago, that EC2 has yet to find, is `pending`. */
         async get(id: string): Promise<ProviderMachine | null> {
             const instance = await ec2.instance(id);
 
-            return instance ? toMachine(instance) : null;
+            if (instance) {
+                return await machineOf(instance);
+            }
+
+            const fresh = made.get(id);
+
+            return fresh && Date.now() - fresh.at < NEW ? toMachine(fresh.instance) : null;
         },
 
         /** §11: every machine with all the tags, in every status but `ended`, every page. */
@@ -261,7 +293,7 @@ export function createAws(config: AwsConfig = {}): Aws {
 
                 for (const reservation of answer.Reservations ?? []) {
                     for (const instance of reservation.Instances ?? []) {
-                        machines.push(toMachine(instance));
+                        machines.push(await machineOf(instance));
                     }
                 }
 
@@ -275,6 +307,8 @@ export function createAws(config: AwsConfig = {}): Aws {
         async end(id: string): Promise<void> {
             const instance = await ec2.instance(id);
             const group = await ports.groupOf(id);
+
+            made.delete(id);
 
             if (instance && instance.State?.Name !== "terminated") {
                 await terminate(id);

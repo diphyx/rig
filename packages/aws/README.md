@@ -58,19 +58,19 @@ The same keys as every RIG provider's factory (spec §8.2); aws's own go in `ext
 
 It calls EC2 with the AWS SDK's `@aws-sdk/client-ec2`.
 
-| RIG                       | EC2                                                                                                                                                                |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `check`                   | `DescribeAvailabilityZones`: the keys and the region work                                                                                                          |
-| `places`                  | `DescribeInstanceTypeOfferings`, in the zones that have a subnet, every page                                                                                       |
-| `create`                  | one `RunInstances`, tagged, and named with `Name`; IMDSv2 required; the root disk always goes with the machine; a region without the distro's image is busy `type` |
-| `spot`                    | a one-time spot request, terminated on a take-back                                                                                                                 |
-| `distro`, `image`         | the kind's `distro`: its version's newest image for the type's arch; or the entry's `image`, an AMI id, as it is                                                   |
-| `script`, `login`         | the first-boot script (spec §6.2) as `UserData`, run by cloud-init at first boot                                                                                   |
-| `get`, `list`             | `DescribeInstances`, by id, or by tag in the region, every page                                                                                                    |
-| `start`, `stop`, `reboot` | `StartInstances`, `StopInstances`, `RebootInstances`; stopping a spot machine is `unsupported`                                                                     |
-| `end`                     | `TerminateInstances`, waited for, then the machine's security group deleted; groups left by machines gone earlier go too; the root disk goes with the machine      |
-| `disk.grow`, `get`        | `ModifyVolume` on the root volume; ready once the change is past `modifying`                                                                                       |
-| `port.*`                  | a security group of the machine's own, made before it with the kind's `ports`                                                                                      |
+| RIG                       | EC2                                                                                                                                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `check`                   | `DescribeAvailabilityZones`: the keys and the region work                                                                                                                                  |
+| `places`                  | `DescribeInstanceTypeOfferings`, in the zones that have a subnet, every page                                                                                                               |
+| `create`                  | one `RunInstances`, tagged, and named with `Name`; IMDSv2 required; the root disk always goes with the machine; a region without the distro's image is busy `type`                         |
+| `spot`                    | a one-time spot request, terminated on a take-back                                                                                                                                         |
+| `distro`, `image`         | the kind's `distro`: its version's newest image for the type's arch; or the entry's `image`, an AMI id, as it is                                                                           |
+| `script`, `login`         | the first-boot script (spec §6.2) as `UserData`, run by cloud-init at first boot                                                                                                           |
+| `get`, `list`             | `DescribeInstances`, by id, or by tag in the region, every page; `pending` until running with its public IP, in a subnet that gives one, and while EC2 has yet to find a machine just made |
+| `start`, `stop`, `reboot` | `StartInstances`, `StopInstances`, `RebootInstances`; stopping a spot machine is `unsupported`                                                                                             |
+| `end`                     | `TerminateInstances`, waited for, then the machine's security group deleted; groups left by machines gone earlier go too; the root disk goes with the machine                              |
+| `disk.grow`, `get`        | `ModifyVolume` on the root volume; ready once the change is past `modifying`                                                                                                               |
+| `port.*`                  | a security group of the machine's own, named its rig name, made before it with the kind's `ports`                                                                                          |
 
 Its keys need the EC2 calls above, and `ec2:CreateTags` on security groups, so `end` finds a machine's group once the machine is gone.
 

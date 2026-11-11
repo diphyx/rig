@@ -14,7 +14,8 @@ import { ssmRootOf } from "./data.js";
 export type Arch = "arm64" | "x86_64";
 
 /** A zone's subnet, and the VPC it is in. */
-export type Subnet = { subnet: string; vpc: string };
+/** A subnet rig places machines in; `public` when it gives each machine a public IP. */
+export type Subnet = { subnet: string; vpc: string; public: boolean };
 
 /** An AWS error's code. */
 export function codeOf(error: unknown): string {
@@ -42,7 +43,14 @@ export function createEc2(region: string, extra: AwsExtra, keys: Keys | null) {
 
         /** zone → its subnet and VPC: the given subnets, or the default VPC's; found once. */
         subnets(): Promise<Map<string, Subnet>> {
-            subnets ??= send<{ Subnets?: { SubnetId?: string; AvailabilityZone?: string; VpcId?: string }[] }>(
+            subnets ??= send<{
+                Subnets?: {
+                    SubnetId?: string;
+                    AvailabilityZone?: string;
+                    VpcId?: string;
+                    MapPublicIpOnLaunch?: boolean;
+                }[];
+            }>(
                 new DescribeSubnetsCommand(
                     extra.subnets
                         ? { SubnetIds: extra.subnets }
@@ -51,7 +59,14 @@ export function createEc2(region: string, extra: AwsExtra, keys: Keys | null) {
             ).then((answer) => {
                 return new Map(
                     (answer.Subnets ?? []).map((subnet) => {
-                        return [subnet.AvailabilityZone!, { subnet: subnet.SubnetId!, vpc: subnet.VpcId! }];
+                        return [
+                            subnet.AvailabilityZone!,
+                            {
+                                subnet: subnet.SubnetId!,
+                                vpc: subnet.VpcId!,
+                                public: subnet.MapPublicIpOnLaunch === true,
+                            },
+                        ];
                     }),
                 );
             });

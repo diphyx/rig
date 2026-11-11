@@ -218,6 +218,25 @@ describe("aws: create", () => {
         expect(inputs[0]).not.toHaveProperty("InstanceMarketOptions");
     });
 
+    it("answers a machine it just made, that EC2 has yet to find, as pending; any other unknown id as null", async () => {
+        const { client } = fake({
+            ...SUBNETS,
+            ...GROUP,
+            ...ARM,
+            RunInstances: run(),
+            DescribeInstances: () => {
+                return fail("InvalidInstanceID.NotFound");
+            },
+        });
+
+        const aws = createAws({ region: "us-east-1", extra: { client } });
+
+        await aws.create(PLACE, SPEC);
+
+        expect(await aws.get("i-1")).toMatchObject({ id: "i-1", status: "pending" });
+        expect(await aws.get("i-other")).toBeNull();
+    });
+
     it("boots a distro's newest image: by its public SSM parameter, its root device from the data file", async () => {
         const inputs: Record<string, unknown>[] = [];
         const { client } = fake({ ...SUBNETS, ...GROUP, ...ARM, RunInstances: run(inputs) });
@@ -302,7 +321,7 @@ describe("aws: create", () => {
                 return one.command === "CreateSecurityGroup";
             })!.input,
         ).toMatchObject({
-            GroupName: `rig-${SPEC.name}`,
+            GroupName: SPEC.name,
             VpcId: "vpc-1",
         });
 
@@ -415,7 +434,8 @@ describe("aws: calls", () => {
         State: { Name: "running" },
         RootDeviceName: "/dev/sda1",
         BlockDeviceMappings: [{ DeviceName: "/dev/sda1", Ebs: { VolumeId: "vol-1" } }],
-        SecurityGroups: [{ GroupId: "sg-own", GroupName: "rig-app-w-1" }],
+        Tags: [{ Key: "rig-name", Value: "app-w-1" }],
+        SecurityGroups: [{ GroupId: "sg-own", GroupName: "app-w-1" }],
     };
 
     it("starts, reboots, grows the root disk and reads it back; closes a rule by its id", async () => {
@@ -511,6 +531,57 @@ describe("aws: machines", () => {
         expect(await provider.get("i-gone")).toBeNull();
     });
 
+    it("is pending while running with no public IP yet, in a subnet that gives one", async () => {
+        const ip: Record<string, string> = {};
+        const { client } = fake({
+            DescribeSubnets: () => {
+                return {
+                    Subnets: [
+                        {
+                            SubnetId: "subnet-a",
+                            AvailabilityZone: "us-east-1a",
+                            VpcId: "vpc-1",
+                            MapPublicIpOnLaunch: true,
+                        },
+                        { SubnetId: "subnet-b", AvailabilityZone: "us-east-1b", VpcId: "vpc-1" },
+                    ],
+                };
+            },
+            DescribeInstances: (input) => {
+                const id = (input.InstanceIds as string[])[0]!;
+
+                return {
+                    Reservations: [
+                        {
+                            Instances: [
+                                {
+                                    InstanceId: id,
+                                    State: { Name: "running" },
+                                    SubnetId: id === "i-private" ? "subnet-b" : "subnet-a",
+                                    PrivateIpAddress: "10.0.0.1",
+                                    ...(ip[id] && { PublicIpAddress: ip[id] }),
+                                },
+                            ],
+                        },
+                    ],
+                };
+            },
+        });
+
+        const provider = createAws({ region: "us-east-1", extra: { client } });
+
+        expect((await provider.get("i-1"))!.status).toBe("pending");
+
+        ip["i-1"] = "3.0.0.1";
+
+        expect(await provider.get("i-1")).toMatchObject({
+            status: "running",
+            ip: { public: "3.0.0.1", private: "10.0.0.1" },
+        });
+
+        expect((await provider.get("i-private"))!.status).toBe("running");
+    });
+
     it("lists by every tag, every page, never terminated", async () => {
         const { client, sent } = fake({
             DescribeInstances: (input) => {
@@ -559,7 +630,8 @@ describe("aws: machines", () => {
                                 {
                                     InstanceId: "i-1",
                                     State: { Name: state },
-                                    SecurityGroups: [{ GroupId: "sg-own", GroupName: "rig-app-w-1" }],
+                                    Tags: [{ Key: "rig-name", Value: "app-w-1" }],
+                                    SecurityGroups: [{ GroupId: "sg-own", GroupName: "app-w-1" }],
                                 },
                             ],
                         },
@@ -758,6 +830,8 @@ describe("aws: ports", () => {
                             Instances: [
                                 {
                                     InstanceId: "i-1",
+                                    /* A group as rig 1.0 named it. */
+                                    Tags: [{ Key: "rig-name", Value: "app-w-1" }],
                                     SecurityGroups: [{ GroupId: "sg-rig", GroupName: "rig-app-w-1" }],
                                 },
                             ],
