@@ -70,7 +70,7 @@ export function createAws(config: AwsConfig = {}): Aws {
 
     const name = config.name ?? "aws";
     const extra = config.extra ?? {};
-    const region = regionOf(config.region, REGION.env, REGION.default);
+    const region = regionOf(config.region, REGION.env, REGION.default, name);
     const ec2 = createEc2(region, extra, resolveAuth(name, config.auth));
     const ports = createPorts(ec2);
 

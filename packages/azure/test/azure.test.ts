@@ -6,6 +6,7 @@ import { createRig, Market, Distro, Reason, type Refusal } from "@diphyx/rig";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { resolveAuth } from "../src/auth.js";
+import { subscriptionOf } from "../src/config.js";
 import { AuthFrom, createAzure } from "../src/index.js";
 
 type Answer = { status: number; body: unknown; headers: Record<string, string> };
@@ -91,6 +92,8 @@ const SPEC = {
 
 beforeEach(() => {
     delete process.env.AZURE_SUBSCRIPTION_ID;
+    delete process.env.RIG_AZURE_SUBSCRIPTION;
+    delete process.env.RIG_AZURE_EU_SUBSCRIPTION;
 });
 
 describe("azure: factory", () => {
@@ -104,6 +107,21 @@ describe("azure: factory", () => {
         expect(() => {
             return createAzure({ region: "eastus" });
         }).toThrow(/subscription is required/);
+    });
+
+    it("takes the subscription given, else RIG_<NAME>_SUBSCRIPTION's, else AZURE_SUBSCRIPTION_ID's", () => {
+        process.env.AZURE_SUBSCRIPTION_ID = "cloud";
+        expect(subscriptionOf({}, "azure")).toBe("cloud");
+
+        process.env.RIG_AZURE_SUBSCRIPTION = "own";
+        expect(subscriptionOf({}, "azure")).toBe("own");
+        expect(subscriptionOf({ extra: { subscription: "given" } }, "azure")).toBe("given");
+
+        process.env.RIG_AZURE_EU_SUBSCRIPTION = "eu";
+        expect(subscriptionOf({}, "azure-eu")).toBe("eu");
+
+        process.env.RIG_AZURE_SUBSCRIPTION = "";
+        expect(subscriptionOf({}, "azure")).toBe("cloud");
     });
 
     it("reads RIG_AZURE_<KEY> for a service principal", () => {

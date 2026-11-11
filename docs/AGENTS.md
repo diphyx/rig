@@ -234,11 +234,11 @@ A `Refusal` has `reason` and `message`; code reads only `reason`:
 createAws({ region: "us-east-1", name: "aws", auth: { from: AuthFrom.AUTO }, identity, extra });
 ```
 
-| Provider | Region default                                                       | Auth keys (`AuthFrom.ENV`: `RIG_<NAME>_<KEY>`) | Ports                          |
-| -------- | -------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------ |
-| aws      | `AWS_REGION`, `AWS_DEFAULT_REGION`, else `us-east-1`                 | `id`, `secret`, `token?`                       | its own security group         |
-| gcp      | `CLOUDSDK_COMPUTE_REGION`, `GOOGLE_CLOUD_REGION`, else `us-central1` | `key` (service account JSON)                   | firewall rules at its tag      |
-| azure    | `AZURE_LOCATION`, `AZURE_REGION`, else `eastus`                      | `tenant`, `id`, `secret`                       | its own network security group |
+| Provider | Region default                                                                         | Auth keys (`AuthFrom.ENV`: `RIG_<NAME>_<KEY>`) | Ports                          |
+| -------- | -------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------ |
+| aws      | `RIG_AWS_REGION`, `AWS_REGION`, `AWS_DEFAULT_REGION`, else `us-east-1`                 | `id`, `secret`, `token?`                       | its own security group         |
+| gcp      | `RIG_GCP_REGION`, `CLOUDSDK_COMPUTE_REGION`, `GOOGLE_CLOUD_REGION`, else `us-central1` | `key` (service account JSON)                   | firewall rules at its tag      |
+| azure    | `RIG_AZURE_REGION`, `AZURE_LOCATION`, `AZURE_REGION`, else `eastus`                    | `tenant`, `id`, `secret`                       | its own network security group |
 
 - `auth`: `{ from: AuthFrom.AUTO }` (the default: env, CLI login, machine identity), `{ from: AuthFrom.ENV, prefix? }`, `{ from: AuthFrom.KEYS, keys }`.
 - Two regions are two providers, with two names.

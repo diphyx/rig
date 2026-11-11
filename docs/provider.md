@@ -21,13 +21,13 @@ const east = createAws({ region: "us-east-1", name: "aws-east" });
 const west = createAws({ region: "us-west-2", name: "aws-west" }); // two regions are two providers
 ```
 
-| Key        | Default                                 | Is                                                  |
-| ---------- | --------------------------------------- | --------------------------------------------------- |
-| `region`   | the cloud's env var's, else its default | where its machines go                               |
-| `name`     | the cloud's own: `"aws"`                | its name in the config, as entries name it          |
-| `auth`     | `{ from: AuthFrom.AUTO }`               | how it signs in, below                              |
-| `identity` | none                                    | what its machines run as: a role, a service account |
-| `extra`    | —                                       | the provider's own: subnets, a project, a group     |
+| Key        | Default                                                           | Is                                                  |
+| ---------- | ----------------------------------------------------------------- | --------------------------------------------------- |
+| `region`   | `RIG_<NAME>_REGION`, else the cloud's env var's, else its default | where its machines go                               |
+| `name`     | the cloud's own: `"aws"`                                          | its name in the config, as entries name it          |
+| `auth`     | `{ from: AuthFrom.AUTO }`                                         | how it signs in, below                              |
+| `identity` | none                                                              | what its machines run as: a role, a service account |
+| `extra`    | —                                                                 | the provider's own: subnets, a project, a group     |
 
 Any other key is a refusal, naming it.
 
@@ -108,12 +108,12 @@ A provider is an object with the keys of the spec, §8 (`slot`, `name`, `rig`, `
 
 The core gives it the helpers the official ones use:
 
-| Helper              | Makes                                                                   |
-| ------------------- | ----------------------------------------------------------------------- |
-| `createPresets`     | the five presets, from its type table                                   |
-| `createDistroTable` | its `distros`, and each version's pointer to its newest image           |
-| `checkFactory`      | the check of its factory's config                                       |
-| `regionOf`          | its region: the one given, else its cloud's env var's, else its default |
-| `createTagMap`      | its tag names, both ways, for a cloud that cannot hold RIG's            |
+| Helper              | Makes                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------- |
+| `createPresets`     | the five presets, from its type table                                                             |
+| `createDistroTable` | its `distros`, and each version's pointer to its newest image                                     |
+| `checkFactory`      | the check of its factory's config                                                                 |
+| `regionOf`          | its region: the one given, else `RIG_<NAME>_REGION`, else its cloud's env var's, else its default |
+| `createTagMap`      | its tag names, both ways, for a cloud that cannot hold RIG's                                      |
 
 The kit, `spec/kit/`, plays the core against a fake provider; `test/` in the repo runs the same checks on every provider.

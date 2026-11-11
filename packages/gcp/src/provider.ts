@@ -35,9 +35,8 @@ export type Gcp = Provider & { keys: string[]; presets: Presets };
 export function createGcp(config: GcpConfig = {}): Gcp {
     checkConfig(config);
 
-    const region = regionOf(config.region, REGION.env, REGION.default);
-
     const name = config.name ?? "gcp";
+    const region = regionOf(config.region, REGION.env, REGION.default, name);
     const extra = config.extra ?? {};
     const keys = resolveAuth(name, config.auth);
     const gce = createGce(keys && accountOf(name, keys), extra.project, extra.request);

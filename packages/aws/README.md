@@ -16,7 +16,7 @@ pnpm add @diphyx/rig @diphyx/rig-aws
 import { createRig } from "@diphyx/rig";
 import { createAws } from "@diphyx/rig-aws";
 
-const aws = createAws(); // its region: AWS_REGION, else us-east-1
+const aws = createAws(); // its region: RIG_AWS_REGION, AWS_REGION, else us-east-1
 
 const rig = createRig({
     rig: 1,
@@ -45,14 +45,14 @@ The keys are an access key's `id` and `secret`, and a `token` for a session. A m
 
 The same keys as every RIG provider's factory (spec §8.2); aws's own go in `extra`, and any other key is a refusal.
 
-| Option          | Default                                              | Is                                                                    |
-| --------------- | ---------------------------------------------------- | --------------------------------------------------------------------- |
-| `region`        | `AWS_REGION`, `AWS_DEFAULT_REGION`, else `us-east-1` | the AWS region                                                        |
-| `name`          | `"aws"`                                              | its name in the config; two regions are two providers, with two names |
-| `auth`          | `{ from: AuthFrom.AUTO }`                            | how it signs in: [Auth](#auth)                                        |
-| `identity`      | none                                                 | what its machines run as: an IAM instance profile's name              |
-| `extra.subnets` | the default VPC's, one per zone                      | the subnets to use, one per zone                                      |
-| `extra.client`  | the SDK's client                                     | for tests: answers in place of EC2                                    |
+| Option          | Default                                                                | Is                                                                    |
+| --------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `region`        | `RIG_AWS_REGION`, `AWS_REGION`, `AWS_DEFAULT_REGION`, else `us-east-1` | the AWS region                                                        |
+| `name`          | `"aws"`                                                                | its name in the config; two regions are two providers, with two names |
+| `auth`          | `{ from: AuthFrom.AUTO }`                                              | how it signs in: [Auth](#auth)                                        |
+| `identity`      | none                                                                   | what its machines run as: an IAM instance profile's name              |
+| `extra.subnets` | the default VPC's, one per zone                                        | the subnets to use, one per zone                                      |
+| `extra.client`  | the SDK's client                                                       | for tests: answers in place of EC2                                    |
 
 ## What It Does on EC2
 

@@ -337,15 +337,16 @@ Every provider takes the same `auth` option, so the app signs in the same way on
 
 A provider is made by a **factory**: one call that takes the provider's config and gives the plugin. Every provider's factory takes the same config, so changing cloud only changes `extra`.
 
-| Key        | Type          | Default                                        | Definition                                                                                                     |
-| ---------- | ------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `region`   | `?str`        | the cloud's env var's, else its default region | where its machines go, by the provider's own name for it; each provider's README names its env var and default |
-| `name`     | `?name`       | the cloud's own                                | its name in the config, §8; two regions are two providers                                                      |
-| `auth`     | `?auth`       | `{ from: "auto" }`                             | how it signs in, §8.1                                                                                          |
-| `identity` | `?str`        | none                                           | what its machines run as: a role, a service account                                                            |
-| `extra`    | `?{str: any}` | —                                              | the provider's own settings, as the provider defines them                                                      |
+| Key        | Type          | Default                                                                  | Definition                                                                                                     |
+| ---------- | ------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `region`   | `?str`        | `RIG_<NAME>_REGION`, else the cloud's env var's, else its default region | where its machines go, by the provider's own name for it; each provider's README names its env var and default |
+| `name`     | `?name`       | the cloud's own                                                          | its name in the config, §8; two regions are two providers                                                      |
+| `auth`     | `?auth`       | `{ from: "auto" }`                                                       | how it signs in, §8.1                                                                                          |
+| `identity` | `?str`        | none                                                                     | what its machines run as: a role, a service account                                                            |
+| `extra`    | `?{str: any}` | —                                                                        | the provider's own settings, as the provider defines them                                                      |
 
 - A factory MUST refuse, `config`, a key outside this table: anything of the provider's own goes in `extra`.
+- With no `region`, a factory MUST read `RIG_<NAME>_REGION` first, `<NAME>` as in §8.1: provider `aws-east` → `RIG_AWS_EAST_REGION`; then the data file's `region` (§12).
 - It gives the plugin of §8, with `keys` (§8.1), `presets` (§7) and, if it has one, `shape` (§9).
 - A lib SHOULD name its factories alike, and the core's with them: in TypeScript, `createRig` and `createAws`, `createGcp`.
 
@@ -483,7 +484,7 @@ A provider MUST keep what is not code in a data file (Appendix A), so that provi
 | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `rig`     | the generation                                                                                                                                                                                                              |
 | `name`    | the provider's name                                                                                                                                                                                                         |
-| `region`  | where its region comes from when the factory gets none (§8.2): `{ env: [str], default: str }`, the first env var set, else `default`                                                                                        |
+| `region`  | where its region comes from when the factory gets none and `RIG_<NAME>_REGION` is unset (§8.2): `{ env: [str], default: str }`, the first env var set, else `default`                                                       |
 | `busy`    | the provider's error code → `busy`; a code not listed MUST throw                                                                                                                                                            |
 | `tags`    | tag names the provider cannot hold → names it can: `{ "rig-app": "rig_app" }`; the provider MUST map them both ways, so the core only sees its own names                                                                    |
 | `presets` | preset → arch → size → types; `small` has no size: arch → types                                                                                                                                                             |

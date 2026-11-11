@@ -39,7 +39,7 @@ The TypeScript API: the core, and a provider per cloud.
 import { createRig, Distro, Event, Status } from "@diphyx/rig";
 import { createAws } from "@diphyx/rig-aws";
 
-const aws = createAws(); // its region: AWS_REGION, else us-east-1
+const aws = createAws(); // its region: RIG_AWS_REGION, AWS_REGION, else us-east-1
 
 const rig = createRig({
     rig: 1,

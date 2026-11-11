@@ -19,7 +19,7 @@ import { createRig } from "@diphyx/rig";
 import { createAws } from "@diphyx/rig-aws";
 import { createGrid } from "@diphyx/rig-grid";
 
-const aws = createAws(); // its region: AWS_REGION, else us-east-1
+const aws = createAws(); // its region: RIG_AWS_REGION, AWS_REGION, else us-east-1
 
 const grid = createGrid(); // its IP found, its key made, its grid release built in
 

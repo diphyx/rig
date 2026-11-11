@@ -16,7 +16,7 @@ pnpm add @diphyx/rig @diphyx/rig-gcp
 import { createRig } from "@diphyx/rig";
 import { createGcp } from "@diphyx/rig-gcp";
 
-// its region: CLOUDSDK_COMPUTE_REGION, else us-central1; its project: the key's
+// its region: RIG_GCP_REGION, CLOUDSDK_COMPUTE_REGION, else us-central1; its project: the key's
 const gcp = createGcp();
 
 const rig = createRig({
@@ -46,16 +46,16 @@ The key is a service-account key's JSON. A missing key is a refusal at once, nam
 
 The same keys as every RIG provider's factory (spec §8.2); gcp's own go in `extra`, and any other key is a refusal.
 
-| Option          | Default                                                              | Is                                                                    |
-| --------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `region`        | `CLOUDSDK_COMPUTE_REGION`, `GOOGLE_CLOUD_REGION`, else `us-central1` | the Compute Engine region                                             |
-| `name`          | `"gcp"`                                                              | its name in the config; two regions are two providers, with two names |
-| `auth`          | `{ from: AuthFrom.AUTO }`                                            | how it signs in: [Auth](#auth)                                        |
-| `identity`      | none                                                                 | what its machines run as: a service account's email                   |
-| `extra.project` | the key's, or the one Google's sign-in gives                         | the project                                                           |
-| `extra.network` | `global/networks/default`                                            | the VPC network                                                       |
-| `extra.subnet`  | the network's own, in the region                                     | a subnet: `regions/us-central1/subnetworks/main`                      |
-| `extra.request` | Compute Engine's REST API                                            | for tests: answers in place of Compute Engine                         |
+| Option          | Default                                                                                | Is                                                                    |
+| --------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `region`        | `RIG_GCP_REGION`, `CLOUDSDK_COMPUTE_REGION`, `GOOGLE_CLOUD_REGION`, else `us-central1` | the Compute Engine region                                             |
+| `name`          | `"gcp"`                                                                                | its name in the config; two regions are two providers, with two names |
+| `auth`          | `{ from: AuthFrom.AUTO }`                                                              | how it signs in: [Auth](#auth)                                        |
+| `identity`      | none                                                                                   | what its machines run as: a service account's email                   |
+| `extra.project` | the key's, or the one Google's sign-in gives                                           | the project                                                           |
+| `extra.network` | `global/networks/default`                                                              | the VPC network                                                       |
+| `extra.subnet`  | the network's own, in the region                                                       | a subnet: `regions/us-central1/subnetworks/main`                      |
+| `extra.request` | Compute Engine's REST API                                                              | for tests: answers in place of Compute Engine                         |
 
 ## What It Does on Compute Engine
 

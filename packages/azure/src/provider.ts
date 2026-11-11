@@ -54,10 +54,10 @@ function newerFirst(a: string, b: string): number {
 export function createAzure(config: AzureConfig = {}): Azure {
     checkConfig(config);
 
-    const subscription = subscriptionOf(config);
     const name = config.name ?? "azure";
+    const subscription = subscriptionOf(config, name);
     const extra = config.extra ?? {};
-    const region = regionOf(config.region, REGION.env, REGION.default);
+    const region = regionOf(config.region, REGION.env, REGION.default, name);
     const arm = createArm(resolveAuth(name, config.auth), extra.request);
     const path = paths(subscription, extra.group ?? "rig");
     const network = createNetwork(arm, path, region, extra.subnet);
