@@ -72,5 +72,10 @@ jobs:
             # core first, so the slots never point at a version npm lacks
             - run: |
                   for t in pack/diphyx-rig-[0-9]*.tgz pack/diphyx-rig-[a-z]*.tgz; do
+                      id=$(tar -xOzf "$t" package/package.json | node -p 'const p = JSON.parse(require("fs").readFileSync(0)); p.name + "@" + p.version')
+                      if npm view "$id" version >/dev/null 2>&1; then
+                          echo "$id is on npm already, skipped"
+                          continue
+                      fi
                       npm publish "./$t" --ignore-scripts --access public ${{ inputs.dry_run && '--dry-run' || '' }}
                   done
