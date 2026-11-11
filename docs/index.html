@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>rig · Remote Instance Gateway</title>
+        <meta
+            name="description"
+            content="rig, Remote Instance Gateway: create Linux machines on aws, gcp and azure from one TypeScript API: the next place when one is busy, lost spot machines replaced, jobs run on them with grid"
+        />
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css" />
+        <style>
+            :root {
+                --theme-color: #42b883;
+            }
+            .sidebar-nav > ul > li > a {
+                font-weight: 500;
+            }
+            .sidebar-nav > ul > li.active > a {
+                font-weight: 700;
+            }
+            .markdown-section code {
+                border-radius: 4px;
+            }
+            .markdown-section pre {
+                border-radius: 8px;
+            }
+            .sidebar-toggle {
+                display: none;
+            }
+            .sidebar {
+                padding-top: 0;
+            }
+            .sidebar > h1.app-name {
+                margin: 0 0 20px;
+                padding: 20px 15px 20px;
+                text-align: left;
+                border-bottom: 1px solid #eee;
+            }
+            .sidebar > h1.app-name a {
+                display: block;
+                text-decoration: none;
+            }
+            .brand-name {
+                display: block;
+                font-size: 2.2rem;
+                font-weight: 800;
+                line-height: 1;
+                color: var(--theme-color);
+            }
+            .brand-tag b {
+                font-weight: 800;
+            }
+            .brand-tag {
+                display: block;
+                white-space: nowrap;
+                margin-top: 10px;
+                font-size: 0.9rem;
+                font-weight: 500;
+                line-height: 1.4;
+                color: #34495e;
+            }
+            .markdown-section {
+                max-width: 860px;
+            }
+            .markdown-section table {
+                display: table;
+                width: 100%;
+            }
+            .markdown-section blockquote {
+                border-left-color: var(--theme-color);
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app"></div>
+        <script>
+            window.$docsify = {
+                name: '<span class="brand-name">rig</span><span class="brand-tag"><b>R</b>emote <b>I</b>nstance <b>G</b>ateway</span>',
+                nameLink: "#/",
+                autoHeader: true,
+                loadSidebar: true,
+                subMaxLevel: 1,
+                auto2top: true,
+                relativePath: true,
+                plugins: [
+                    function (hook) {
+                        hook.doneEach(function () {
+                            var heading = document.querySelector(".markdown-section h1");
+                            var page = heading ? heading.textContent.trim() : "";
+                            document.title = page && page !== "rig" ? page + " · rig" : "rig · Remote Instance Gateway";
+
+                            // mark the page's link active, also on section links (?id=)
+                            var path = location.hash.split("?")[0] || "#/";
+                            document.querySelectorAll(".sidebar-nav li").forEach(function (item) {
+                                var link = item.querySelector(":scope > a");
+                                var href = link ? link.getAttribute("href").split("?")[0] : null;
+                                item.classList.toggle("active", href === path);
+                            });
+
+                            // the animations (_media/*.svg) play from their start when each comes into
+                            // view: a fresh URL gives a fresh image, whose clock starts at 0 (a cached
+                            // one would carry on where it was)
+                            var seen = new IntersectionObserver(
+                                function (entries) {
+                                    entries.forEach(function (entry) {
+                                        if (!entry.isIntersecting) return;
+                                        var img = entry.target;
+                                        seen.unobserve(img);
+                                        img.src = img.getAttribute("src").split("?")[0] + "?t=" + Date.now();
+                                    });
+                                },
+                                { threshold: 0.3 },
+                            );
+                            document
+                                .querySelectorAll('.markdown-section img[src*="_media/"][src$=".svg"]')
+                                .forEach(function (img) {
+                                    seen.observe(img);
+                                });
+                        });
+                    },
+                ],
+            };
+        </script>
+        <script src="https://cdn.jsdelivr.net/npm/docsify@4"></script>
+        <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-typescript.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+    </body>
+</html>

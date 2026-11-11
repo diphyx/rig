@@ -4,6 +4,8 @@
 
 Create Linux machines on any cloud, with failover.
 
+**Docs: [diphyx.github.io/rig](https://diphyx.github.io/rig/)** · [Overview](docs/README.md) · [Get Started](docs/start.md) · [Kind](docs/kind.md) · [Failover](docs/failover.md) · [Provider](docs/provider.md) · [Worker](docs/worker.md) · [Versions](docs/versions.md) · [Agents](docs/AGENTS.md)
+
 **Status: draft.** Spec, core and providers are written; none has run on a real cloud yet.
 
 > [!IMPORTANT]
@@ -125,16 +127,17 @@ At least one provider; workers only for job machines.
 
 ## 4. Develop
 
-| Path             | Is                                                      |
-| ---------------- | ------------------------------------------------------- |
-| `spec/SPEC.md`   | the contract                                            |
-| `spec/kit/`      | the conformance suite, as data                          |
-| `packages/core`  | `@diphyx/rig`, passes the kit                           |
-| `packages/aws`   | `@diphyx/rig-aws`, draft                                |
-| `packages/gcp`   | `@diphyx/rig-gcp`, draft                                |
-| `packages/azure` | `@diphyx/rig-azure`, draft                              |
-| `packages/grid`  | `@diphyx/rig-grid`, draft                               |
-| `test/`          | the same checks for every provider, and the kit's files |
+| Path             | Is                                                                            |
+| ---------------- | ----------------------------------------------------------------------------- |
+| `spec/SPEC.md`   | the contract                                                                  |
+| `spec/kit/`      | the conformance suite, as data                                                |
+| `docs/`          | the site for GitHub Pages: Markdown pages, rendered by Docsify in the browser |
+| `packages/core`  | `@diphyx/rig`, passes the kit                                                 |
+| `packages/aws`   | `@diphyx/rig-aws`, draft                                                      |
+| `packages/gcp`   | `@diphyx/rig-gcp`, draft                                                      |
+| `packages/azure` | `@diphyx/rig-azure`, draft                                                    |
+| `packages/grid`  | `@diphyx/rig-grid`, draft                                                     |
+| `test/`          | the same checks for every provider, and the kit's files                       |
 
 ```bash
 pnpm install
