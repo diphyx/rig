@@ -1,0 +1,76 @@
+name: Publish
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'Dry Run' || 'Publish' }}
+
+on:
+    release:
+        types: [released]
+    workflow_dispatch:
+        inputs:
+            dry_run:
+                description: "Run without publishing to npm"
+                type: boolean
+                default: false
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: pnpm/action-setup@v6
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - run: pnpm install --frozen-lockfile
+            - name: Release matches versions
+              if: github.event_name == 'release'
+              run: |
+                  tag="${GITHUB_REF_NAME#v}"
+                  for p in packages/*/package.json; do
+                      v=$(node -p "require('./$p').version")
+                      if [ "$v" != "$tag" ]; then
+                          echo "::error file=$p::version $v, release $tag"
+                          exit 1
+                      fi
+                  done
+            - run: pnpm run build
+            - run: pnpm -r --filter "./packages/*" exec pnpm pack --pack-destination "$GITHUB_WORKSPACE/pack"
+            - uses: actions/upload-artifact@v7
+              with:
+                  name: pack
+                  path: pack/
+
+    check:
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: pnpm/action-setup@v6
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm run check
+
+    publish:
+        needs: check
+        runs-on: ubuntu-latest
+        permissions:
+            id-token: write
+            contents: read
+        steps:
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: "22"
+                  registry-url: "https://registry.npmjs.org"
+            - run: npm install -g npm@latest
+            - uses: actions/download-artifact@v8
+              with:
+                  name: pack
+                  path: pack/
+            # core first, so the slots never point at a version npm lacks
+            - run: |
+                  for t in pack/diphyx-rig-[0-9]*.tgz pack/diphyx-rig-[a-z]*.tgz; do
+                      npm publish "$t" --ignore-scripts --access public ${{ inputs.dry_run && '--dry-run' || '' }}
+                  done
