@@ -3,15 +3,27 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>rig · Remote Instance Gateway</title>
+        <title>RIG · Remote Instance Gateway</title>
         <meta
             name="description"
-            content="rig, Remote Instance Gateway: create Linux machines on aws, gcp and azure from one TypeScript API: the next place when one is busy, lost spot machines replaced, jobs run on them with grid"
+            content="RIG, Remote Instance Gateway: create Linux machines on aws, gcp and azure from one TypeScript API: the next place when one is busy, lost spot machines replaced, jobs run on them with grid"
         />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://diphyx.github.io/rig/" />
+        <meta property="og:title" content="RIG · Remote Instance Gateway" />
+        <meta
+            property="og:description"
+            content="Create Linux machines on any cloud, and get one even when the cloud has no room"
+        />
+        <meta property="og:image" content="https://diphyx.github.io/rig/_media/og.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content="https://diphyx.github.io/rig/_media/og.png" />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css" />
         <style>
             :root {
-                --theme-color: #42b883;
+                --theme-color: #0ea5e9;
             }
             .sidebar-nav > ul > li > a {
                 font-weight: 500;
@@ -76,7 +88,7 @@
         <div id="app"></div>
         <script>
             window.$docsify = {
-                name: '<span class="brand-name">rig</span><span class="brand-tag"><b>R</b>emote <b>I</b>nstance <b>G</b>ateway</span>',
+                name: '<span class="brand-name">RIG</span><span class="brand-tag"><b>R</b>emote <b>I</b>nstance <b>G</b>ateway</span>',
                 nameLink: "#/",
                 autoHeader: true,
                 loadSidebar: true,
@@ -88,7 +100,7 @@
                         hook.doneEach(function () {
                             var heading = document.querySelector(".markdown-section h1");
                             var page = heading ? heading.textContent.trim() : "";
-                            document.title = page && page !== "rig" ? page + " · rig" : "rig · Remote Instance Gateway";
+                            document.title = page && page !== "RIG" ? page + " · RIG" : "RIG · Remote Instance Gateway";
 
                             // mark the page's link active, also on section links (?id=)
                             var path = location.hash.split("?")[0] || "#/";
