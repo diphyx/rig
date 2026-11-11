@@ -1,5 +1,7 @@
 # rig
 
+**Remote Instance Gateway**
+
 Create Linux machines on any cloud, with failover.
 
 **Status: draft.** Spec, core and providers are written; none has run on a real cloud yet.
