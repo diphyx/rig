@@ -10,6 +10,13 @@ import type { GridCall, GridConnection } from "./wire.js";
 /* A pull that arrived whole but cannot be laid down here (a full disk, a refused entry): sending it again won't help. */
 export class GridUnpacked extends Error {}
 
+/* A push the node took whole and gives another sha256 for: its bytes changed on the way; a resend may fix it. */
+export class GridMismatch extends Error {
+    constructor() {
+        super("push: sha256 differs");
+    }
+}
+
 export class GridHalted extends Error {
     constructor() {
         super("killed");
@@ -66,7 +73,7 @@ export async function pushTar(
         const ok = await started.reply();
 
         if (asBuffer(ok.sha256)?.toString("hex") !== options.sum) {
-            throw new Error("push: sha256 differs");
+            throw new GridMismatch();
         }
 
         if (isHad) {

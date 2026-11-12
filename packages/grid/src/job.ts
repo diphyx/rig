@@ -4,7 +4,7 @@ import path from "node:path";
 import { isNumber, isObject, isString, sleep, tryit } from "radash";
 
 import { spacePath } from "./share.js";
-import { GridHalted, GridUnpacked, pullTar, pushTar } from "./transfer.js";
+import { GridHalted, GridMismatch, GridUnpacked, pullTar, pushTar } from "./transfer.js";
 import { GridReject } from "./wire.js";
 
 import type { NodeLink } from "./nodes.js";
@@ -16,6 +16,9 @@ import type { GridCall, GridConnection } from "./wire.js";
 const RETRY_EVERY_MS = 2000;
 const CALL_RETRY_MS = 1000;
 const KILL_WAIT_MS = 15_000;
+
+/* How many times a push is sent while the node gives another sha256. */
+const PUSH_TRIES = 3;
 
 export type StepState = "idle" | "running" | "done" | "failed" | "stopped";
 
@@ -142,7 +145,8 @@ async function onNode<T>(link: NodeLink, run: (connection: GridConnection) => Pr
             problem instanceof GridReject ||
             problem instanceof GridHalted ||
             problem instanceof GridFailure ||
-            problem instanceof GridUnpacked;
+            problem instanceof GridUnpacked ||
+            problem instanceof GridMismatch;
 
         if (isFinal) {
             throw problem;
@@ -324,14 +328,16 @@ export class Attempt implements GridJobFiles {
         /* The push id: the tar's sha256, its first 16 bytes. */
         const id = push.share ? sum.slice(0, 32) : undefined;
 
-        const how = await onNode(this.link, (connection) => {
-            return pushTar(connection, {
-                job: this.nodeJob,
-                to: push.to,
-                file,
-                sum,
-                id,
-                signal: this.options.signal,
+        const how = await this.pushChecked(() => {
+            return onNode(this.link, (connection) => {
+                return pushTar(connection, {
+                    job: this.nodeJob,
+                    to: push.to,
+                    file,
+                    sum,
+                    id,
+                    signal: this.options.signal,
+                });
             });
         });
 
@@ -340,6 +346,25 @@ export class Attempt implements GridJobFiles {
         }
 
         return { to: spacePath(push.to), how };
+    }
+
+    /* A push, checked by its sha256: sent again while the node gives another, up to `PUSH_TRIES`; then the job fails, saying so. */
+    private async pushChecked(send: () => Promise<PushHow>, tries = 1): Promise<PushHow> {
+        const [problem, how] = await tryit(send)();
+
+        if (!problem) {
+            return how;
+        }
+
+        if (!(problem instanceof GridMismatch)) {
+            throw problem;
+        }
+
+        if (tries === PUSH_TRIES) {
+            throw new GridFailure(`${problem.message}, ${PUSH_TRIES} times`);
+        }
+
+        return this.pushChecked(send, tries + 1);
     }
 
     /** One step: its cmd run, then its end; a kill stops it. */
