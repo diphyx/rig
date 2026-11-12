@@ -2,7 +2,7 @@
 
 > From nothing to a first machine: install, sign in, a kind, open, create, SSH in
 
-You need Node.js 22 or newer, and an account on one cloud. Below it is aws; gcp and azure are the same, with their own provider.
+You need Node.js 22 or newer, and an account on one cloud, set up as its guide says: [AWS](aws.md), [GCP](gcp.md) or [Azure](azure.md). Below it is aws; gcp and azure are the same, with their own provider.
 
 ## 1. Install
 
@@ -37,7 +37,7 @@ const aws = createAws();
 | gcp      | env, the gcloud login, or the service account | `RIG_GCP_REGION`, `CLOUDSDK_COMPUTE_REGION`, `GOOGLE_CLOUD_REGION`, else `us-central1` |
 | azure    | env, the az login, or a managed identity      | `RIG_AZURE_REGION`, `AZURE_LOCATION`, `AZURE_REGION`, else `eastus`                    |
 
-Keys of its own, from env vars or passed in: [Provider](provider.md).
+Keys of its own, what they may do, and the network: [AWS](aws.md), [GCP](gcp.md), [Azure](azure.md).
 
 ## 3. A Kind
 
@@ -137,3 +137,4 @@ Open again later, and the core picks its machines up from its store.
 - Several clouds in one kind, risk limits, your own kind: [Kind](kind.md).
 - What the core does when there is no room, or a machine is lost: [Failover](failover.md).
 - Jobs on short-lived machines, with grid: [Worker](worker.md).
+- Each cloud's setup, and grid's: [AWS](aws.md), [GCP](gcp.md), [Azure](azure.md), [grid](grid.md).
