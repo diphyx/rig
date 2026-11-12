@@ -244,6 +244,7 @@ createAws({ region: "us-east-1", name: "aws", auth: { from: AuthFrom.AUTO }, ide
 - Two regions are two providers, with two names.
 - A provider's own keys go in `extra`; any other key is a refusal.
 - `can`: `spot`, `stop`, `disk`, `port`; a call it does not enable is `UNSUPPORTED`.
+- Each cloud's setup: its keys, the permissions they need, its network, its limits: `docs/aws.md`, `docs/gcp.md`, `docs/azure.md`.
 
 ## 11. Workers and grid
 
@@ -279,6 +280,7 @@ createRig({
 - **Sessions:** `grid.session({ tag, name?, share?, signal?, watch?, placed? })` → `push`, `exec`, `pull`, `close()` (the outcome). No retries; after a kill, only `pull` and `close`.
 - **Views:** `grid.jobs({ tag?, state?, node? })`, `grid.job(name)`, `grid.nodes({ tag?, beating?, lost? })`, `grid.kill(name)`, `grid.watch(name, handler)`, `grid.on(JobEvent.PLACED | RETRIED | ENDED, handler)`.
 - **Lost:** RIG replaces the machine (`recovers`); grid reruns the job from the start on any node with its tag (`retries`). A job keeps its own work: save progress in its own steps.
+- **Setup:** where the hub runs, its `ip`, key, ports and release: `docs/grid.md`.
 
 ## 12. Kit
 
@@ -294,3 +296,5 @@ createRig({
 - A per-machine `worker` with cmds of its own but the kind's tag: jobs for the kind may land on it.
 - Losing `./.rig`: the core finds its machines again by tag, but a job machine whose key is gone is ended.
 - `signal` on a kind's worker without `createGrid({ listen })`: refused at open.
+- A hub `ip` other than the one it dials from, as the machines see it: each node lets in that IP only, so jobs wait. From a laptop or a VPN, run the hub in the cloud.
+- SSH `ports` from the IP an HTTP proxy shows: SSH leaves by its own route; use that IP.

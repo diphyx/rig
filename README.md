@@ -4,9 +4,7 @@
 
 Create Linux machines on any cloud, with failover.
 
-**Docs: [diphyx.github.io/rig](https://diphyx.github.io/rig/)** · [Overview](docs/README.md) · [Get Started](docs/start.md) · [Kind](docs/kind.md) · [Failover](docs/failover.md) · [Provider](docs/provider.md) · [Worker](docs/worker.md) · [Versions](docs/versions.md) · [Agents](docs/AGENTS.md)
-
-**Status: draft.** Spec, core and providers are written; none has run on a real cloud yet.
+**Docs: [diphyx.github.io/rig](https://diphyx.github.io/rig/)** · [Overview](docs/README.md) · [Get Started](docs/start.md) · [Kind](docs/kind.md) · [Failover](docs/failover.md) · [Provider](docs/provider.md) ([AWS](docs/aws.md), [GCP](docs/gcp.md), [Azure](docs/azure.md)) · [Worker](docs/worker.md) ([grid](docs/grid.md)) · [Versions](docs/versions.md) · [Agents](docs/AGENTS.md)
 
 > [!IMPORTANT]
 > **Linux only.** Every machine RIG creates runs Linux: Ubuntu or Debian, or a Linux image of your own. Its first boot is a bash script, and its login is SSH.
@@ -133,10 +131,10 @@ At least one provider; workers only for job machines.
 | `spec/kit/`      | the conformance suite, as data                                                |
 | `docs/`          | the site for GitHub Pages: Markdown pages, rendered by Docsify in the browser |
 | `packages/core`  | `@diphyx/rig`, passes the kit                                                 |
-| `packages/aws`   | `@diphyx/rig-aws`, draft                                                      |
-| `packages/gcp`   | `@diphyx/rig-gcp`, draft                                                      |
+| `packages/aws`   | `@diphyx/rig-aws`                                                             |
+| `packages/gcp`   | `@diphyx/rig-gcp`                                                             |
 | `packages/azure` | `@diphyx/rig-azure`, draft                                                    |
-| `packages/grid`  | `@diphyx/rig-grid`, draft                                                     |
+| `packages/grid`  | `@diphyx/rig-grid`                                                            |
 | `test/unit/`     | the same checks for every provider and worker; the kit's files, by its schema |
 | `test/e2e/`      | real machines on aws and gcp, by the local packages: [`test/e2e/`](test/e2e)  |
 

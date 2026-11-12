@@ -2,8 +2,6 @@
 
 The core of RIG, **Remote Instance Gateway**: create Linux machines on any cloud, with failover.
 
-**Status: draft.** Passes the kit.
-
 > [!IMPORTANT]
 > **Linux only.** Every machine RIG creates runs Linux: Ubuntu or Debian, or a Linux image of your own. Its first boot is a bash script, and its login is SSH.
 

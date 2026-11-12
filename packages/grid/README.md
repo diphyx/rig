@@ -2,9 +2,9 @@
 
 The **grid** worker for [RIG](../core): it runs jobs on RIG's machines, over [grid](https://github.com/diphyx/grid) (`grid/2`). In grid's words, the app runs the **hub**, in TypeScript, and each machine runs grid's own **node**, set up at its first boot.
 
-**Status: draft.** Checked against grid's own vectors, and against a real `grid node`.
-
 Its machines are **job machines**: short-lived, often spot, replaced at will. A machine's cmds are fixed at its create, like its type: to change them, change the kind, and new machines get them.
+
+**Setup guide: [grid](https://diphyx.github.io/rig/#/grid)**
 
 ## Install
 

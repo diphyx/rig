@@ -4,11 +4,13 @@
 
 A provider makes one `create` per try, at the place the core asks for, and answers `ok` or `busy`. It never fails over on its own: that is the core's. Three are official, each its own package:
 
-| Provider | Package                                                                       | Cloud                  | Spot warning before a take-back |
-| -------- | ----------------------------------------------------------------------------- | ---------------------- | ------------------------------- |
-| `aws`    | [`@diphyx/rig-aws`](https://github.com/diphyx/rig/tree/HEAD/packages/aws)     | Amazon EC2             | 2 minutes                       |
-| `gcp`    | [`@diphyx/rig-gcp`](https://github.com/diphyx/rig/tree/HEAD/packages/gcp)     | Google Compute Engine  | 30 seconds                      |
-| `azure`  | [`@diphyx/rig-azure`](https://github.com/diphyx/rig/tree/HEAD/packages/azure) | Azure Virtual Machines | 30 seconds                      |
+| Provider | Package                                                                       | Cloud                  | Setup             | Spot warning before a take-back |
+| -------- | ----------------------------------------------------------------------------- | ---------------------- | ----------------- | ------------------------------- |
+| `aws`    | [`@diphyx/rig-aws`](https://github.com/diphyx/rig/tree/HEAD/packages/aws)     | Amazon EC2             | [AWS](aws.md)     | 2 minutes                       |
+| `gcp`    | [`@diphyx/rig-gcp`](https://github.com/diphyx/rig/tree/HEAD/packages/gcp)     | Google Compute Engine  | [GCP](gcp.md)     | 30 seconds                      |
+| `azure`  | [`@diphyx/rig-azure`](https://github.com/diphyx/rig/tree/HEAD/packages/azure) | Azure Virtual Machines | [Azure](azure.md) | 30 seconds                      |
+
+Each cloud's setup guide: its keys, what they may do, its network, its limits, a first check, and what to do when it goes wrong.
 
 ## 1. Config
 
@@ -116,4 +118,4 @@ The core gives it the helpers the official ones use:
 | `regionOf`          | its region: the one given, else `RIG_<NAME>_REGION`, else its cloud's env var's, else its default |
 | `createTagMap`      | its tag names, both ways, for a cloud that cannot hold RIG's                                      |
 
-The kit, `spec/kit/`, plays the core against a fake provider; `test/` in the repo runs the same checks on every provider.
+The kit, `spec/kit/`, plays the core against a fake provider; `test/unit/` in the repo runs the same checks on every provider.

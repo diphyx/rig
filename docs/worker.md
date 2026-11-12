@@ -63,14 +63,7 @@ await rig.machine.create("builder"); // its node joins the hub once the machine 
 | `cmds`       | grid's: the only cmds its node runs, `exec` and `timeout`; a job adds `args`, `env` |
 | `signal`     | grid's: the node also dials the hub, with heartbeats; needs the hub's `listen`      |
 
-| `createGrid` option | Default                                                   | Is                                         |
-| ------------------- | --------------------------------------------------------- | ------------------------------------------ |
-| `ip`                | the app host's public IP; its own with `reach: "private"` | the hub's IP, as the machines see it       |
-| `identity`          | `./.rig/grid/hub.key`, made on first use                  | the hub's private key: keep it safe        |
-| `release`           | the grid release this package was checked against         | what nodes install, checked by its SHA-256 |
-| `port`              | `9420`                                                    | the port nodes listen on                   |
-| `listen`            | none                                                      | the port the hub listens on, for `signal`  |
-| `reach`             | `"public"`                                                | which IPs it dials, and gives its machines |
+Where the hub runs, the IP its machines trust, its key, ports and release: [grid](grid.md).
 
 ## 3. First Boot
 
