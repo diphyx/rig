@@ -8,7 +8,7 @@ import { tryit } from "radash";
 import { createRig, Distro, Status, type Machine } from "@diphyx/rig";
 
 import { fail, log, ok } from "./lib/log.ts";
-import { makeProvider } from "./lib/clouds.ts";
+import { LISTEN, makeProvider } from "./lib/clouds.ts";
 import { bootOf, ssh, sshKey, sshStream } from "./lib/ssh.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -38,7 +38,11 @@ const rig = createRig({
             disk: 30,
             login: { keys: [sshKey()] },
             script: SCRIPT,
-            ports: [{ port: 22, from: "0.0.0.0/0" }],
+            ports: [
+                { port: 22, from: "0.0.0.0/0" },
+                /* The grid hubs' ports, for nodes' heartbeats: from any IP, as the nodes' are known later; a hub lets in only the nodes it knows. */
+                { port: Math.min(...Object.values(LISTEN)), to: Math.max(...Object.values(LISTEN)), from: "0.0.0.0/0" },
+            ],
             life: "6h",
         }),
     ],

@@ -18,6 +18,7 @@
         "@diphyx/rig-aws": "workspace:^",
         "@diphyx/rig-azure": "workspace:^",
         "@diphyx/rig-gcp": "workspace:^",
+        "@diphyx/rig-grid": "workspace:^",
         "@types/node": "^22.19.19",
         "eslint": "^9.39.4",
         "prettier": "^3.8.3",

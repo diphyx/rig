@@ -23,6 +23,9 @@ importers:
       '@diphyx/rig-gcp':
         specifier: workspace:^
         version: link:packages/gcp
+      '@diphyx/rig-grid':
+        specifier: workspace:^
+        version: link:packages/grid
       '@types/node':
         specifier: ^22.19.19
         version: 22.20.5

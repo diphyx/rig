@@ -1,6 +1,6 @@
 # E2E tests
 
-Real machines on real clouds, made by the local packages: each run builds the workspace first, and imports `@diphyx/rig`, `@diphyx/rig-aws`, `@diphyx/rig-gcp` and `@diphyx/rig-azure` from it, not from npm. The stages run on a host: one small AWS machine made by rig, whose SSH reaches every machine they make.
+Real machines on real clouds, made by the local packages: each run builds the workspace first, and imports `@diphyx/rig`, `@diphyx/rig-aws`, `@diphyx/rig-gcp`, `@diphyx/rig-azure` and `@diphyx/rig-grid` from it, not from npm. The stages run on a host: one small AWS machine made by rig, whose SSH reaches every machine they make.
 
 ```bash
 cp test/e2e/.env.sample test/e2e/.env   # then fill it in
@@ -10,15 +10,16 @@ pnpm test:e2e machine failover          # the same, these stages only
 
 About 6 minutes for all, on AWS and GCP; the host is ended after, pass or fail.
 
-| Stage      | Makes                                                                                                       | Cost  |
-| ---------- | ----------------------------------------------------------------------------------------------------------- | ----- |
-| `check`    | nothing: sign-in, `check`, places of each preset, spot ones with their risk                                 | free  |
-| `machine`  | one small demand machine: first boot, SSH, script, ports, stop, start, end; a disk grow and a reboot, asked | cents |
-| `failover` | a type no zone sells, then a spot machine, which refuses to stop; then the first cloud → the second         | cents |
-| `recover`  | a machine ended behind the core's back, recovered; the store lost, the machine adopted                      | cents |
-| `sweep`    | ends every machine tagged `rig-app: rig-e2e`                                                                | —     |
+| Stage      | Makes                                                                                                                                                   | Cost  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `check`    | nothing: sign-in, `check`, places of each preset, spot ones with their risk                                                                             | free  |
+| `machine`  | one small demand machine: first boot, SSH, script, ports, stop, start, end; a disk grow and a reboot, asked                                             | cents |
+| `failover` | a type no zone sells, then a spot machine, which refuses to stop; then the first cloud → the second                                                     | cents |
+| `recover`  | a machine ended behind the core's back, recovered; the store lost, the machine adopted                                                                  | cents |
+| `grid`     | a job machine: its grid node set up at first boot; a job pushed, run and pulled by the hub on the host; the node's beats back to the hub, with `signal` | cents |
+| `sweep`    | ends every machine tagged `rig-app: rig-e2e`                                                                                                            | —     |
 
-`all` is `check`, then `machine`, `failover` and `recover`. `check` and `sweep` run first, each alone; the stages that make machines then run at once, on every cloud at once, each on a store and a kind of its own, each line named by its stage. Each stage ends what it made. A run ends with each stage's result and time. A call whose end takes long, a disk grow, a reboot, holds once the cloud takes it with no error; the stage goes on 5 seconds later.
+`all` is `check`, then `machine`, `failover`, `recover` and `grid`. `check` and `sweep` run first, each alone; the stages that make machines then run at once, on every cloud at once, each on a store and a kind of its own, each line named by its stage. Each stage ends what it made. A run ends with each stage's result and time. A call whose end takes long, a disk grow, a reboot, holds once the cloud takes it with no error; the stage goes on 5 seconds later.
 
 ## Steps
 
@@ -32,7 +33,7 @@ pnpm test:e2e run sweep          # after a failed stage: every rig-e2e machine e
 pnpm test:e2e down               # the host ended
 ```
 
-The host: named `rig-e2e-host-<id>`, app `rig`, so `sweep` leaves it; port 22 open, the key only; a life of 6 hours. `pnpm test:e2e:run <stage>...` runs the stages where it is called, the host's own way.
+The host: named `rig-e2e-host-<id>`, app `rig`, so `sweep` leaves it; port 22 open, the key only; 9421–9423 open, each cloud's grid hub's, for its nodes' beats; a life of 6 hours. `pnpm test:e2e:run <stage>...` runs the stages where it is called, the host's own way.
 
 ## Layout
 

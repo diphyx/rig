@@ -19,6 +19,9 @@ export const TYPES: Record<string, { none: string; small: string; spot: string }
     azure: { none: "Standard_X9_nothing", small: "Standard_B2s", spot: "Standard_D2as_v5" },
 };
 
+/** Per cloud: the port its stage's grid hub listens on, for its nodes' heartbeats; the host lets them all in. */
+export const LISTEN: Record<string, number> = { aws: 9421, gcp: 9422, azure: 9423 };
+
 /** The tags of every machine the tests make, as the core gives them to a provider's `list`. */
 export const TAGS = { rig: "1", "rig-app": APP };
 
