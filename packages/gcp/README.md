@@ -2,7 +2,7 @@
 
 The **gcp** provider for [RIG](../core): Linux machines on Google Compute Engine, `spot` and `demand`, in one region.
 
-**Status: draft.** Tested against a fake Compute Engine.
+**Setup guide: [GCP](https://diphyx.github.io/rig/#/gcp)**
 
 ## Install
 

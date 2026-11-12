@@ -2,7 +2,7 @@
 
 The **aws** provider for [RIG](../core): Linux machines on Amazon EC2, `spot` and `demand`, in one region.
 
-**Status: draft.** Tested against a fake EC2 client.
+**Setup guide: [AWS](https://diphyx.github.io/rig/#/aws)**
 
 ## Install
 

@@ -2,7 +2,9 @@
 
 The **azure** provider for [RIG](../core): Linux machines on Azure Virtual Machines, `spot` and `demand`, in one region.
 
-**Status: draft.** Tested against a fake Azure Resource Manager.
+**Status: draft.**
+
+**Setup guide: [Azure](https://diphyx.github.io/rig/#/azure)**
 
 ## Install
 
