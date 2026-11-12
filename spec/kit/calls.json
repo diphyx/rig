@@ -5987,9 +5987,7 @@
                                 "zone": "za"
                             }
                         ],
-                        "answers": {
-                            "demand/t1/za": []
-                        }
+                        "answers": {}
                     }
                 }
             },
@@ -6060,9 +6058,7 @@
                                 "zone": "za"
                             }
                         ],
-                        "answers": {
-                            "demand/t1/za": []
-                        }
+                        "answers": {}
                     }
                 }
             },
@@ -6134,9 +6130,7 @@
                                 "zone": "za"
                             }
                         ],
-                        "answers": {
-                            "demand/t1/za": []
-                        }
+                        "answers": {}
                     }
                 }
             },
@@ -6207,9 +6201,7 @@
                                 "zone": "za"
                             }
                         ],
-                        "answers": {
-                            "demand/t1/za": []
-                        }
+                        "answers": {}
                     }
                 }
             },
@@ -6280,9 +6272,7 @@
                                 "zone": "za"
                             }
                         ],
-                        "answers": {
-                            "demand/t1/za": []
-                        }
+                        "answers": {}
                     }
                 }
             },
