@@ -172,7 +172,8 @@ export function createPorts(ec2: Ec2) {
                     return {
                         id: one.SecurityGroupRuleId!,
                         port: one.FromPort ?? 0,
-                        ...(one.ToPort !== one.FromPort && { to: one.ToPort ?? 0 }),
+                        /* A range, when its end is given and is another port. */
+                        ...(one.ToPort !== undefined && one.ToPort !== one.FromPort && { to: one.ToPort }),
                         protocol: one.IpProtocol === Protocol.UDP ? Protocol.UDP : Protocol.TCP,
                         from: one.CidrIpv4 ?? one.CidrIpv6 ?? "",
                     };
