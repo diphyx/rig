@@ -1,6 +1,5 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { isIP } from "node:net";
 import path from "node:path";
 
@@ -9,28 +8,8 @@ import { sleep } from "radash";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { createGrid, JobEvent, RELEASE as RELEASE_DEFAULT } from "../src/index.js";
-import { keypairOf } from "../src/noise.js";
 import { dialGrid } from "../src/wire.js";
-
-/* A hub key pair, raw and base64, as `grid key new` writes it. */
-function keys() {
-    const pair = keypairOf(
-        Buffer.from(
-            Array.from({ length: 32 }, () => {
-                return Math.floor(Math.random() * 256);
-            }),
-        ),
-    );
-
-    return { pair, private: pair.private.toString("base64"), public: pair.public.toString("base64") };
-}
-
-const RELEASE = { version: "2.0.0", sha256: { arm: "a".repeat(64), x86: "b".repeat(64) } };
-
-/* A free port, from the OS. */
-function freePort(): number {
-    return 20_000 + Math.floor(Math.random() * 20_000);
-}
+import { freePort, keys, RELEASE, tempFolder } from "./helpers.js";
 
 describe("grid: the hub plugin", () => {
     it("is a worker that rig opens with a kind of job machines", async () => {
@@ -82,7 +61,7 @@ describe("grid: the hub plugin", () => {
                     worker: { tags: ["build"], cmds: { make: { exec: ["make"] } } },
                 },
             ],
-            store: mkdtempSync(path.join(tmpdir(), "rig-grid-")),
+            store: tempFolder("rig-grid-"),
             extra: { rounds: false },
         });
 
@@ -97,7 +76,7 @@ describe("grid: the hub plugin", () => {
         const hub = keys();
         const grid = createGrid({ ip: "203.0.113.9", identity: hub.private, release: RELEASE, listen: 9500 });
 
-        await grid.open();
+        await grid.open!();
         const worker = { tags: ["build"], cmds: { make: { exec: ["make", "-j8"], timeout: "1h" } }, signal: true };
         const { script, ports, key } = grid.setup({ name: "app-builder-0a1b2c3d", tags: ["build"], worker });
 
@@ -146,7 +125,7 @@ describe("grid: the hub plugin", () => {
     it("has a default for all but its key: the package's own grid release, and the app host's IP", async () => {
         const grid = createGrid({ identity: keys().private, reach: "private" });
 
-        await grid.open();
+        await grid.open!();
 
         const { script } = grid.setup({
             name: "app-b-1",
@@ -163,7 +142,7 @@ describe("grid: the hub plugin", () => {
     it("fails a waiting job once its tag is spent, and takes jobs again when a node with it comes", async () => {
         const grid = createGrid({ ip: "127.0.0.1", identity: keys().private, release: RELEASE });
 
-        await grid.open();
+        await grid.open!();
 
         await grid.spent(["build"]);
 
@@ -185,14 +164,20 @@ describe("grid: the hub plugin", () => {
     });
 
     it("lists its waiting jobs and nodes with filters, kills a job by its name, and tells each end", async () => {
-        const grid = createGrid({ ip: "127.0.0.1", identity: keys().private, release: RELEASE, port: freePort() });
+        const grid = createGrid({
+            ip: "127.0.0.1",
+            identity: keys().private,
+            release: RELEASE,
+            port: await freePort(),
+        });
+
         const ends: string[] = [];
 
         grid.on(JobEvent.ENDED, ({ job, outcome }) => {
             ends.push(`${job.name}:${outcome?.state ?? "closed"}`);
         });
 
-        await grid.open();
+        await grid.open!();
 
         /* A node nothing answers at: the job waits for it. */
         await grid.add({ name: "m1", ip: { public: "127.0.0.1" }, key: keys().public, tags: ["build"] });
@@ -239,7 +224,7 @@ describe("grid: the hub plugin", () => {
     it("updates a node it knows in place, counts a dropped one as lost, and tries a port that would not bind again", async () => {
         const grid = createGrid({ ip: "127.0.0.1", identity: keys().private, release: RELEASE });
 
-        await grid.open();
+        await grid.open!();
         const key = keys().public;
 
         await grid.add({ name: "m1", ip: { public: "127.0.0.1" }, key, tags: ["build"] });
@@ -252,13 +237,13 @@ describe("grid: the hub plugin", () => {
         expect(grid.nodes()).toEqual([]);
         await grid.close();
 
-        const port = freePort();
+        const port = await freePort();
         const taken = createGrid({ ip: "127.0.0.1", identity: keys().private, release: RELEASE, listen: port });
 
-        await taken.open();
+        await taken.open!();
         const busy = createGrid({ ip: "127.0.0.1", identity: keys().private, release: RELEASE, listen: port });
 
-        await busy.open();
+        await busy.open!();
 
         await taken.add({ name: "m1", ip: { public: "127.0.0.1" }, key, tags: ["build"] });
         await expect(busy.add({ name: "m2", ip: { public: "127.0.0.1" }, key, tags: ["build"] })).rejects.toThrow();
@@ -276,10 +261,10 @@ describe("grid: the hub plugin", () => {
         const hub = keys();
         const node = keys();
         const stranger = keys();
-        const listen = freePort();
+        const listen = await freePort();
         const grid = createGrid({ ip: "127.0.0.1", identity: hub.private, release: RELEASE, listen });
 
-        await grid.open();
+        await grid.open!();
 
         await grid.add({ name: "m1", ip: { public: "127.0.0.1" }, key: node.public, tags: ["build"] });
 
@@ -309,7 +294,7 @@ const hasGrid = ((): boolean => {
 })();
 
 describe.skipIf(!hasGrid)("grid: with grid's own node", () => {
-    const folder = mkdtempSync(path.join(tmpdir(), "rig-grid-node-"));
+    const folder = tempFolder("rig-grid-node-");
     const nodes: ChildProcess[] = [];
 
     afterAll(() => {
@@ -322,7 +307,7 @@ describe.skipIf(!hasGrid)("grid: with grid's own node", () => {
 
     it("runs a job on a real grid node, and pulls what it wrote", async () => {
         const hub = keys();
-        const port = freePort();
+        const port = await freePort();
 
         execFileSync("grid", ["key", "new", path.join(folder, "node")]);
         writeFileSync(path.join(folder, "hub.pub"), `${hub.public}\n`);
@@ -361,7 +346,7 @@ describe.skipIf(!hasGrid)("grid: with grid's own node", () => {
 
         const grid = createGrid({ ip: "127.0.0.1", identity: hub.private, release: RELEASE, port });
 
-        await grid.open();
+        await grid.open!();
         const key = readFileSync(path.join(folder, "node.pub"), "utf8").trim();
         const into = path.join(folder, "pulled");
 
@@ -377,7 +362,7 @@ describe.skipIf(!hasGrid)("grid: with grid's own node", () => {
 
     it("runs a session on a real grid node: push, exec, pull, each the app's own call", async () => {
         const hub = keys();
-        const port = freePort();
+        const port = await freePort();
         const base = path.join(folder, "session");
 
         execFileSync("mkdir", ["-p", path.join(base, "src")]);
@@ -427,7 +412,7 @@ describe.skipIf(!hasGrid)("grid: with grid's own node", () => {
             placed.push(`${job.name}@${job.node ?? ""}`);
         });
 
-        await grid.open();
+        await grid.open!();
         const key = readFileSync(path.join(base, "node.pub"), "utf8").trim();
         const into = path.join(base, "pulled");
 
@@ -486,8 +471,8 @@ describe.skipIf(!hasGrid)("grid: with grid's own node", () => {
 
     it("hears a real grid node with signal beat into its listener", async () => {
         const hub = keys();
-        const port = freePort();
-        const listen = freePort();
+        const port = await freePort();
+        const listen = await freePort();
         const base = path.join(folder, "signal");
 
         execFileSync("mkdir", ["-p", base]);
@@ -522,7 +507,7 @@ describe.skipIf(!hasGrid)("grid: with grid's own node", () => {
 
         const grid = createGrid({ ip: "127.0.0.1", identity: hub.private, release: RELEASE, port, listen });
 
-        await grid.open();
+        await grid.open!();
         const key = readFileSync(path.join(base, "node.pub"), "utf8").trim();
 
         await grid.add({ name: "m1", ip: { public: "127.0.0.1" }, key, tags: ["build"] });
