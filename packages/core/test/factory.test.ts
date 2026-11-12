@@ -52,6 +52,24 @@ describe("factory", () => {
             process.env.RIG_TEST_REGION = before;
         }
     });
+
+    it("takes RIG_<NAME>_REGION before the cloud's env var's, by the provider's name", () => {
+        const before = process.env.RIG_AWS_EAST_REGION;
+
+        process.env.RIG_AWS_EAST_REGION = "own-1";
+        expect(regionOf(undefined, [], "home-1", "aws-east")).toBe("own-1");
+        expect(regionOf("given-1", [], "home-1", "aws-east")).toBe("given-1");
+        expect(regionOf(undefined, [], "home-1", "aws-west")).toBe("home-1");
+
+        process.env.RIG_AWS_EAST_REGION = "";
+        expect(regionOf(undefined, [], "home-1", "aws-east")).toBe("home-1");
+
+        if (before === undefined) {
+            delete process.env.RIG_AWS_EAST_REGION;
+        } else {
+            process.env.RIG_AWS_EAST_REGION = before;
+        }
+    });
 });
 
 describe("tag map", () => {

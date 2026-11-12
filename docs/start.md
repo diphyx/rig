@@ -27,15 +27,15 @@ A provider signs in with what the environment already has: the cloud's env vars,
 ```ts
 import { createAws } from "@diphyx/rig-aws";
 
-// its region: AWS_REGION, else us-east-1
+// its region: RIG_AWS_REGION, AWS_REGION, else us-east-1
 const aws = createAws();
 ```
 
-| Provider | Signs in with, by default                     | Its region, by default                                               |
-| -------- | --------------------------------------------- | -------------------------------------------------------------------- |
-| aws      | env, `~/.aws`, or the instance role           | `AWS_REGION`, `AWS_DEFAULT_REGION`, else `us-east-1`                 |
-| gcp      | env, the gcloud login, or the service account | `CLOUDSDK_COMPUTE_REGION`, `GOOGLE_CLOUD_REGION`, else `us-central1` |
-| azure    | env, the az login, or a managed identity      | `AZURE_LOCATION`, `AZURE_REGION`, else `eastus`                      |
+| Provider | Signs in with, by default                     | Its region, by default                                                                 |
+| -------- | --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| aws      | env, `~/.aws`, or the instance role           | `RIG_AWS_REGION`, `AWS_REGION`, `AWS_DEFAULT_REGION`, else `us-east-1`                 |
+| gcp      | env, the gcloud login, or the service account | `RIG_GCP_REGION`, `CLOUDSDK_COMPUTE_REGION`, `GOOGLE_CLOUD_REGION`, else `us-central1` |
+| azure    | env, the az login, or a managed identity      | `RIG_AZURE_REGION`, `AZURE_LOCATION`, `AZURE_REGION`, else `eastus`                    |
 
 Keys of its own, from env vars or passed in: [Provider](provider.md).
 

@@ -16,7 +16,7 @@ pnpm add @diphyx/rig @diphyx/rig-azure
 import { createRig } from "@diphyx/rig";
 import { createAzure } from "@diphyx/rig-azure";
 
-// its region: AZURE_LOCATION, else eastus; its subscription: AZURE_SUBSCRIPTION_ID
+// its region: RIG_AZURE_REGION, AZURE_LOCATION, else eastus; its subscription: RIG_AZURE_SUBSCRIPTION, AZURE_SUBSCRIPTION_ID
 const azure = createAzure();
 
 const rig = createRig({
@@ -46,16 +46,16 @@ The keys are a service principal's `tenant`, `id` and `secret`. A missing key is
 
 The same keys as every RIG provider's factory (spec §8.2); azure's own go in `extra`, and any other key is a refusal.
 
-| Option               | Default                                         | Is                                                                    |
-| -------------------- | ----------------------------------------------- | --------------------------------------------------------------------- |
-| `region`             | `AZURE_LOCATION`, `AZURE_REGION`, else `eastus` | the Azure region                                                      |
-| `name`               | `"azure"`                                       | its name in the config; two regions are two providers, with two names |
-| `auth`               | `{ from: AuthFrom.AUTO }`                       | how it signs in: [Auth](#auth)                                        |
-| `identity`           | none                                            | what its machines run as: a user-assigned identity's resource id      |
-| `extra.subscription` | `AZURE_SUBSCRIPTION_ID`                         | the subscription; one of the two is required                          |
-| `extra.group`        | `"rig"`, made on first use                      | the resource group its machines go in                                 |
-| `extra.subnet`       | a network of RIG's own, made on first use       | a subnet's resource id                                                |
-| `extra.request`      | Azure Resource Manager's REST API               | for tests: answers in place of Azure                                  |
+| Option               | Default                                                             | Is                                                                    |
+| -------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `region`             | `RIG_AZURE_REGION`, `AZURE_LOCATION`, `AZURE_REGION`, else `eastus` | the Azure region                                                      |
+| `name`               | `"azure"`                                                           | its name in the config; two regions are two providers, with two names |
+| `auth`               | `{ from: AuthFrom.AUTO }`                                           | how it signs in: [Auth](#auth)                                        |
+| `identity`           | none                                                                | what its machines run as: a user-assigned identity's resource id      |
+| `extra.subscription` | `RIG_AZURE_SUBSCRIPTION`, `AZURE_SUBSCRIPTION_ID`                   | the subscription; one of them is required                             |
+| `extra.group`        | `"rig"`, made on first use                                          | the resource group its machines go in                                 |
+| `extra.subnet`       | a network of RIG's own, made on first use                           | a subnet's resource id                                                |
+| `extra.request`      | Azure Resource Manager's REST API                                   | for tests: answers in place of Azure                                  |
 
 ## What It Does on Azure
 

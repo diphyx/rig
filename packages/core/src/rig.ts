@@ -1,4 +1,4 @@
-import { sleep } from "radash";
+import { isString, sleep } from "radash";
 
 import { State } from "./enums.js";
 import { calls } from "./calls.js";
@@ -23,7 +23,8 @@ export function createRig(config: RigConfig) {
             (async (ms: number): Promise<void> => {
                 await sleep(ms);
             }),
-        store: new Store(config.store ?? "./.rig"),
+        /* The store, from a str; any other is refused at `open` (§16). */
+        store: new Store(isString(config.store) ? config.store : "./.rig"),
         providers: new Map(),
         kinds: new Map(),
         state: State.NEW,

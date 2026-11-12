@@ -1,6 +1,6 @@
 {
     "name": "@diphyx/rig-gcp",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "The gcp provider for rig: Compute Engine, spot and demand",
     "keywords": [
         "rig",

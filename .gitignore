@@ -21,3 +21,14 @@ coverage
 
 # Rig store
 .rig
+
+# E2E tests
+test/e2e/.keys
+test/e2e/.env
+test/e2e/.host
+
+# Coverage
+.coverage
+
+# graphify's graph of the code
+graphify-out

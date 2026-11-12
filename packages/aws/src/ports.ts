@@ -20,8 +20,8 @@ const GROUP = "rig-machine";
 const MADE = "rig-made";
 const INSTANCE = "rig-instance";
 
-/* The start of its name; the rest is the machine's rig name. */
-const PREFIX = "rig-";
+/* The start of a group's name as rig 1.0 made it: `rig-<its rig name>`. */
+const OLD = "rig-";
 
 /* A group younger than this may be a try still running: `sweep` leaves it. */
 const YOUNG = 10 * 60_000;
@@ -52,11 +52,12 @@ function permissionOf(rule: Rule): IpPermission {
 
 /** A machine's ports: a security group of its own, made before it, with nothing open but the kind's ports. */
 export function createPorts(ec2: Ec2) {
-    /* The machine's own group: the one it runs in, named `rig-<its rig name>`; once it is gone, by its tag. */
+    /* The machine's own group: the one it runs in, named its rig name, or `rig-<its rig name>` by rig 1.0; once it is gone, by its tag. */
     async function groupOf(id: string): Promise<string | null> {
         const instance = await ec2.instance(id);
+        const name = tagsOf(instance?.Tags)["rig-name"];
         const own = instance?.SecurityGroups?.find((group) => {
-            return group.GroupName?.startsWith(PREFIX);
+            return name !== undefined && (group.GroupName === name || group.GroupName === `${OLD}${name}`);
         });
 
         if (own?.GroupId) {
@@ -102,7 +103,7 @@ export function createPorts(ec2: Ec2) {
         async make(name: string, vpc: string, rules: Rule[]): Promise<string> {
             const made = await ec2.send<{ GroupId?: string }>(
                 new CreateSecurityGroupCommand({
-                    GroupName: `${PREFIX}${name}`,
+                    GroupName: name,
                     Description: `rig: the ports of ${name}`,
                     VpcId: vpc,
                     TagSpecifications: [
@@ -171,7 +172,8 @@ export function createPorts(ec2: Ec2) {
                     return {
                         id: one.SecurityGroupRuleId!,
                         port: one.FromPort ?? 0,
-                        ...(one.ToPort !== one.FromPort && { to: one.ToPort ?? 0 }),
+                        /* A range, when its end is given and is another port. */
+                        ...(one.ToPort !== undefined && one.ToPort !== one.FromPort && { to: one.ToPort }),
                         protocol: one.IpProtocol === Protocol.UDP ? Protocol.UDP : Protocol.TCP,
                         from: one.CidrIpv4 ?? one.CidrIpv6 ?? "",
                     };

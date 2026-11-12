@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 
 import { Protocol, type Rule } from "@diphyx/rig";
-import { tryit } from "radash";
+import { all, tryit } from "radash";
 
 import { codeOf, type Gce } from "./gce.js";
 import { partsOf } from "./machine.js";
@@ -28,6 +28,15 @@ function baseOf(id: string): string {
     const { name } = partsOf(id);
 
     return name.length <= 54 ? name : `${name.slice(0, 45)}${name.slice(-9)}`;
+}
+
+/* Calls at once, each run to its end; the first error thrown as it is, so its code still reads. */
+async function together(calls: Promise<unknown>[]): Promise<void> {
+    try {
+        await all(calls);
+    } catch (error) {
+        throw (error as AggregateError).errors?.[0] ?? error;
+    }
 }
 
 /** A machine's ports: firewall rules aimed at its own network tag, which is its name; all inbound denied but those. */
@@ -89,31 +98,34 @@ export function createPorts(gce: Gce, network: string) {
         return { ...rule, id: firewall };
     }
 
-    /* Every rule of the machine, deleted, so none outlives it. */
+    /* Every rule of the machine, deleted at once, so none outlives it. */
     async function release(id: string): Promise<void> {
-        for (const one of await rules(id)) {
-            await remove(one.name ?? "");
-        }
+        await together(
+            (await rules(id)).map((one) => {
+                return remove(one.name ?? "");
+            }),
+        );
     }
 
     return {
         open,
         release,
 
-        /** §11: before the machine: all inbound denied, IPv4 and IPv6, but the kind's rules; a failed one leaves nothing. */
+        /** §11: before the machine, all at once: all inbound denied, IPv4 and IPv6, but the kind's rules; a failed one leaves nothing. */
         async make(id: string, kept: Rule[]): Promise<void> {
             try {
-                for (const { suffix, range } of DENIES) {
-                    await insert(id, `${baseOf(id)}-${suffix}`, {
-                        priority: DENY,
-                        denied: [{ IPProtocol: "all" }],
-                        sourceRanges: [range],
-                    });
-                }
-
-                for (const rule of kept) {
-                    await open(id, rule);
-                }
+                await together([
+                    ...DENIES.map(({ suffix, range }) => {
+                        return insert(id, `${baseOf(id)}-${suffix}`, {
+                            priority: DENY,
+                            denied: [{ IPProtocol: "all" }],
+                            sourceRanges: [range],
+                        });
+                    }),
+                    ...kept.map((rule) => {
+                        return open(id, rule);
+                    }),
+                ]);
             } catch (error) {
                 await tryit(release)(id);
 

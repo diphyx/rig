@@ -33,11 +33,16 @@ export function checkFactory(cloud: string, config: object, extra: string[]): vo
     }
 }
 
-/** §8.2: a factory's region: the one given, else the cloud's own env var's, else the cloud's default region. */
-export function regionOf(given: string | undefined, env: string[], fallback: string): string {
+/**
+ * §8.2: a factory's region: the one given, else `RIG_<NAME>_REGION`'s with the provider's `name`, else the cloud's
+ * own env var's, else the cloud's default region.
+ */
+export function regionOf(given: string | undefined, env: string[], fallback: string, name?: string): string {
+    const own = name === undefined ? [] : [`RIG_${name.toUpperCase().replaceAll("-", "_")}_REGION`];
+
     return (
         given ??
-        env
+        [...own, ...env]
             .map((name) => {
                 return process.env[name];
             })

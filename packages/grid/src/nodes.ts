@@ -118,10 +118,15 @@ export class NodeLink {
         this.failingSince = Date.now();
     }
 
-    /** The same machine, with a new IP, key or tags: a call after it dials the new one. */
+    /** The same machine, with a new IP, key, tags or share hint: a call after it dials the new one. */
     update(entry: GridNodeEntry) {
         const isMoved =
             entry.ip !== this.entry.ip || entry.port !== this.entry.port || !entry.trust.equals(this.entry.trust);
+
+        /* A new hint, from the config; the same one keeps what the node said since. */
+        if (entry.share !== this.entry.share) {
+            this.isSharing = entry.share;
+        }
 
         this.entry = entry;
 

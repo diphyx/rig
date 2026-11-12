@@ -9,6 +9,8 @@ import { decodeCbor, encodeCbor } from "../src/cbor.js";
 import { Initiator, keypairOf, Responder, type Transport } from "../src/noise.js";
 import { shareProblem } from "../src/share.js";
 import { TarStore } from "../src/tars.js";
+import { frameOf } from "./fake-node.js";
+import { hex } from "./helpers.js";
 
 type Vectors = {
     prologue: string;
@@ -21,21 +23,13 @@ type Vectors = {
 
 const vectors = JSON.parse(readFileSync(new URL("./fixtures/grid-vectors.json", import.meta.url), "utf8")) as Vectors;
 
-const hex = (value: string): Buffer => {
-    return Buffer.from(value, "hex");
-};
-
 const base64 = (value: string): Buffer => {
     return Buffer.from(value, "base64");
 };
 
 /* A payload as it goes on the wire: `| u16 big-endian length | payload |`, in hex. */
 function framed(payload: Buffer): string {
-    const head = Buffer.alloc(2);
-
-    head.writeUInt16BE(payload.length);
-
-    return Buffer.concat([head, payload]).toString("hex");
+    return frameOf(payload).toString("hex");
 }
 
 function sides() {

@@ -1,6 +1,6 @@
 {
     "name": "@diphyx/rig-aws",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "The aws provider for rig: EC2, spot and demand",
     "keywords": [
         "rig",

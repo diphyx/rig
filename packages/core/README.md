@@ -21,7 +21,7 @@ The core and at least one provider: [aws](../aws), [gcp](../gcp), [azure](../azu
 import { createRig, Distro, Event, Status } from "@diphyx/rig";
 import { createAws } from "@diphyx/rig-aws";
 
-const aws = createAws(); // its region: AWS_REGION, else us-east-1
+const aws = createAws(); // its region: RIG_AWS_REGION, AWS_REGION, else us-east-1
 
 const rig = createRig({
     rig: 1,
@@ -192,7 +192,7 @@ import { createRig } from "@diphyx/rig";
 import { createAws } from "@diphyx/rig-aws";
 import { createGrid } from "@diphyx/rig-grid";
 
-const aws = createAws(); // its region: AWS_REGION, else us-east-1
+const aws = createAws(); // its region: RIG_AWS_REGION, AWS_REGION, else us-east-1
 const grid = createGrid(); // every option has a default; its README has them
 
 const rig = createRig({
@@ -338,13 +338,13 @@ Every fixed set of values in the spec is an enum; each value is the spec's own s
 
 A provider is an object with the calls of spec §9, made by a factory that takes the same config as the official ones (spec §8.2); `can` names what it supports. The core gives it the helpers the official ones use:
 
-| Helper              | Makes                                                                   |
-| ------------------- | ----------------------------------------------------------------------- |
-| `createPresets`     | the five presets, from its type table                                   |
-| `createDistroTable` | its `distros`, and each version's pointer to its newest image           |
-| `checkFactory`      | the check of its factory's config                                       |
-| `regionOf`          | its region: the one given, else its cloud's env var's, else its default |
-| `createTagMap`      | its tag names, both ways                                                |
+| Helper              | Makes                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------- |
+| `createPresets`     | the five presets, from its type table                                                             |
+| `createDistroTable` | its `distros`, and each version's pointer to its newest image                                     |
+| `checkFactory`      | the check of its factory's config                                                                 |
+| `regionOf`          | its region: the one given, else `RIG_<NAME>_REGION`, else its cloud's env var's, else its default |
+| `createTagMap`      | its tag names, both ways                                                                          |
 
 ## Your Own Worker
 

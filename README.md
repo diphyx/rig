@@ -39,7 +39,7 @@ The TypeScript API: the core, and a provider per cloud.
 import { createRig, Distro, Event, Status } from "@diphyx/rig";
 import { createAws } from "@diphyx/rig-aws";
 
-const aws = createAws(); // its region: AWS_REGION, else us-east-1
+const aws = createAws(); // its region: RIG_AWS_REGION, AWS_REGION, else us-east-1
 
 const rig = createRig({
     rig: 1,
@@ -137,12 +137,15 @@ At least one provider; workers only for job machines.
 | `packages/gcp`   | `@diphyx/rig-gcp`, draft                                                      |
 | `packages/azure` | `@diphyx/rig-azure`, draft                                                    |
 | `packages/grid`  | `@diphyx/rig-grid`, draft                                                     |
-| `test/`          | the same checks for every provider, and the kit's files                       |
+| `test/unit/`     | the same checks for every provider and worker; the kit's files, by its schema |
+| `test/e2e/`      | real machines on aws and gcp, by the local packages: [`test/e2e/`](test/e2e)  |
 
 ```bash
 pnpm install
 pnpm run build   # every package
 pnpm run check   # types, lint, format, tests, the kit
+pnpm test:unit   # the tests, the kit
+pnpm test:e2e    # real machines, start to end: test/e2e/.env first
 ```
 
 ## License

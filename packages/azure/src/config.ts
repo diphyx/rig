@@ -1,4 +1,5 @@
 import { checkFactory, Reason, Refusal } from "@diphyx/rig";
+import { isString } from "radash";
 
 import type { Request } from "./arm.js";
 import type { Auth } from "./auth.js";
@@ -19,7 +20,7 @@ export type AzureConfig = {
 
 /** The azure provider's own settings, under `extra` (spec §8.2). */
 export type AzureExtra = {
-    /** The subscription; absent, `AZURE_SUBSCRIPTION_ID`. */
+    /** The subscription; absent, `RIG_<NAME>_SUBSCRIPTION`'s, else `AZURE_SUBSCRIPTION_ID`'s. */
     subscription?: string;
     /** The resource group its machines go in; `"rig"`, made on first use. */
     group?: string;
@@ -36,14 +37,20 @@ export function checkConfig(config: AzureConfig): void {
     checkFactory("azure", config, EXTRA);
 }
 
-/** The subscription: `extra.subscription`, or `AZURE_SUBSCRIPTION_ID`; none is a refusal. */
-export function subscriptionOf(config: AzureConfig): string {
-    const subscription = config.extra?.subscription ?? process.env.AZURE_SUBSCRIPTION_ID;
+/** The subscription: `extra.subscription`, else `RIG_<NAME>_SUBSCRIPTION`'s, else `AZURE_SUBSCRIPTION_ID`'s; none is a refusal. */
+export function subscriptionOf(config: AzureConfig, name: string): string {
+    const own = `RIG_${name.toUpperCase().replaceAll("-", "_")}_SUBSCRIPTION`;
+
+    const subscription =
+        config.extra?.subscription ??
+        [process.env[own], process.env.AZURE_SUBSCRIPTION_ID].find((value) => {
+            return isString(value) && value !== "";
+        });
 
     if (!subscription) {
         throw new Refusal(
             Reason.CONFIG,
-            "azure: a subscription is required: extra.subscription, or AZURE_SUBSCRIPTION_ID",
+            `azure: a subscription is required: extra.subscription, ${own}, or AZURE_SUBSCRIPTION_ID`,
         );
     }
 
