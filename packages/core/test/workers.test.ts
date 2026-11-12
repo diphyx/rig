@@ -4,7 +4,17 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { createRig, DISTROS, Market, type Provider, type ProviderMachine, Slot, Status } from "../src/index.js";
+import {
+    createRig,
+    DISTROS,
+    Market,
+    type Provider,
+    type ProviderMachine,
+    type RigConfig,
+    Slot,
+    Status,
+    type Worker,
+} from "../src/index.js";
 
 /* A provider whose machines run at once, with a private IP; and a worker that keeps what it is asked. */
 function world() {
@@ -61,7 +71,7 @@ function world() {
         },
     };
 
-    const worker = {
+    const worker: Worker = {
         slot: Slot.WORKER,
         name: "w",
         rig: 1,
@@ -84,7 +94,7 @@ describe("workers", () => {
         const { provider, worker, adds } = world();
         const store = mkdtempSync(join(tmpdir(), "rig-workers-"));
 
-        const config = (tags: string[]) => {
+        const config = (tags: string[]): RigConfig => {
             return {
                 rig: 1,
                 app: "app",
