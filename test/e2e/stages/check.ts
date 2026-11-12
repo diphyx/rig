@@ -12,7 +12,7 @@ export function run(): Promise<boolean> {
             provider.presets.compute({ name: "compute", life: "1h" }),
         ];
 
-        return stage(`${cloud}: check and places`, kinds, async (rig) => {
+        return stage(`${cloud}: check and places`, { kinds }, async (rig) => {
             for (const kind of kinds) {
                 const places = await rig.place.list(kind.name);
 

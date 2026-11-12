@@ -28,7 +28,7 @@ export function run(): Promise<boolean> {
             }),
         ];
 
-        return stage(`${cloud}: one machine`, kinds, async (rig) => {
+        return stage(`${cloud}: one machine`, { kinds }, async (rig) => {
             const made = await rig.machine.create(kind);
 
             if (!made) {

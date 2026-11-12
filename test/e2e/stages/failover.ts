@@ -21,7 +21,7 @@ function within(cloud: string): Promise<boolean> {
         },
     ];
 
-    return stage(`${cloud}: failover in one cloud`, kinds, async (rig) => {
+    return stage(`${cloud}: failover in one cloud`, { kinds }, async (rig) => {
         const places = await rig.place.list(kind);
 
         ok(
@@ -67,7 +67,7 @@ function across(first: string, second: string): Promise<boolean> {
         },
     ];
 
-    return stage(`${first} → ${second}: failover across clouds`, kinds, async (rig) => {
+    return stage(`${first} → ${second}: failover across clouds`, { kinds }, async (rig) => {
         const made = await rig.machine.create("cross");
 
         ok(made?.provider === second, `landed on ${made?.provider}: ${made?.id}`);

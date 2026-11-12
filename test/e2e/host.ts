@@ -136,5 +136,5 @@ const [error] = await tryit(ACTIONS[action!]!)(rest);
 await rig.close();
 
 if (error) {
-    fail(error.message);
+    throw error;
 }

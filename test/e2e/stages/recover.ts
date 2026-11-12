@@ -22,7 +22,7 @@ export function run(): Promise<boolean> {
             },
         ];
 
-        return stage(name, kinds, async (rig) => {
+        return stage(name, { kinds }, async (rig) => {
             const made = await rig.machine.create(kind);
 
             if (!made) {
@@ -46,7 +46,7 @@ export function run(): Promise<boolean> {
             /* The store is gone: a new core on an empty store finds the new machine by its tags and adopts it. */
             await rig.close();
 
-            const again = coreOf(name, kinds);
+            const again = coreOf(name, { kinds });
 
             try {
                 await again.open();

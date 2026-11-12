@@ -45,11 +45,16 @@ export function sshKey(): string {
     return readFileSync(`${KEY}.pub`, "utf8").trim();
 }
 
-/** The public IP of the machine the run is on, the one SSH leaves from: the only one its machines' port 22 lets in. */
+/* This machine's IP, once asked. */
+let mine: string | null = null;
+
+/** The public IP of the machine the run is on, the one SSH leaves from: the only one its machines' ports let in; asked once. */
 export function myIp(): string {
-    return execFileSync("curl", ["-fsS", "--noproxy", "*", "https://checkip.amazonaws.com"], {
+    mine ??= execFileSync("curl", ["-fsS", "--noproxy", "*", "https://checkip.amazonaws.com"], {
         encoding: "utf8",
     }).trim();
+
+    return mine;
 }
 
 /** A command on the machine over SSH, tried until it answers; its output. Other stages run on meanwhile. */

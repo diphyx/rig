@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { all, tryit } from "radash";
 
-import { createRig, Event, type Kind, type Rig } from "@diphyx/rig";
+import { createRig, Event, type Kind, type Rig, type Worker } from "@diphyx/rig";
 
 import { log, scoped } from "./log.ts";
 import { APP, providersOf } from "./clouds.ts";
@@ -39,13 +39,16 @@ export async function everyOf<T>(items: T[], body: (item: T) => Promise<boolean>
 /** Every stage done, in the order each ended: its name, pass or fail, its time. */
 export const DONE: { name: string; passed: boolean; seconds: number }[] = [];
 
+/** What a stage's core runs: its kinds, and its workers, if any. */
+export type Setup = { kinds: Kind[]; workers?: Worker[] };
+
 /** A core on the stage's own store, emptied; rounds only by `rig.round()`, every event logged. */
-export function coreOf(name: string, kinds: Kind[]): Rig {
+export function coreOf(name: string, { kinds, workers = [] }: Setup): Rig {
     const store = join(STORES, name.replace(/[^a-z0-9]+/g, "-"));
 
     rmSync(store, { recursive: true, force: true });
 
-    const rig = createRig({ rig: 1, app: APP, providers: providersOf(), kinds, every: "0", store });
+    const rig = createRig({ rig: 1, app: APP, providers: providersOf(), workers, kinds, every: "0", store });
 
     rig.on(Event.TRY, ({ place, answer }) => {
         log("try", `${place.provider}/${place.market}/${place.type}/${place.zone}`, JSON.stringify(answer));
@@ -65,9 +68,9 @@ export function coreOf(name: string, kinds: Kind[]): Rig {
 }
 
 /** A stage on a core of its own; after it, pass or fail, every machine its store holds is ended and the core closed. */
-export function stage(name: string, kinds: Kind[], body: (rig: Rig) => Promise<void>): Promise<boolean> {
+export function stage(name: string, setup: Setup, body: (rig: Rig) => Promise<void>): Promise<boolean> {
     return scoped(name, async () => {
-        const rig = coreOf(name, kinds);
+        const rig = coreOf(name, setup);
         const started = Date.now();
 
         log("started");
