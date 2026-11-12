@@ -137,7 +137,7 @@ At least one provider; workers only for job machines.
 | `packages/gcp`   | `@diphyx/rig-gcp`, draft                                                      |
 | `packages/azure` | `@diphyx/rig-azure`, draft                                                    |
 | `packages/grid`  | `@diphyx/rig-grid`, draft                                                     |
-| `test/unit/`     | the same checks for every provider, and the kit's files                       |
+| `test/unit/`     | the same checks for every provider and worker; the kit's files, by its schema |
 | `test/e2e/`      | real machines on aws and gcp, by the local packages: [`test/e2e/`](test/e2e)  |
 
 ```bash
