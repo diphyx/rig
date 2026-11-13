@@ -1,6 +1,6 @@
 {
     "name": "@diphyx/rig",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "rig, Remote Instance Gateway: create machines on any cloud, with failover",
     "keywords": [
         "rig",
