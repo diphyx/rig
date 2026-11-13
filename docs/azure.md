@@ -1,6 +1,6 @@
 # Azure
 
-> Set up an Azure subscription for `@diphyx/rig-azure`: its service principal, its role, its network, and a first check
+> Set up an Azure subscription for `@diphyx/rig-azure`: its role, its service principal, its network, and a first check
 
 The azure provider makes Azure Virtual Machines in one region, on-demand and spot. Its package: [`@diphyx/rig-azure`](https://github.com/diphyx/rig/tree/HEAD/packages/azure).
 
@@ -20,38 +20,7 @@ az provider register --namespace Microsoft.Compute
 az provider register --namespace Microsoft.Network
 ```
 
-## 2. Its Keys
-
-The provider signs in the way Azure's libraries do by default: env vars, the `az login`, or the machine's managed identity. Where `az account get-access-token` works, `createAzure()` works.
-
-For keys of its own, a service principal with a secret:
-
-```bash
-az ad sp create-for-rbac --name rig --role Contributor --scopes /subscriptions/<subscription-id>
-```
-
-Its answer has the three keys: `tenant`, `appId` (the id), and `password` (the secret):
-
-```bash
-export RIG_AZURE_TENANT=<tenant>
-export RIG_AZURE_ID=<appId>
-export RIG_AZURE_SECRET=<password>
-export RIG_AZURE_SUBSCRIPTION=<subscription-id>
-```
-
-```ts
-import { AuthFrom, createAzure } from "@diphyx/rig-azure";
-
-const azure = createAzure({ auth: { from: AuthFrom.ENV } });
-```
-
-| Way             | Its keys                                               |
-| --------------- | ------------------------------------------------------ |
-| `AuthFrom.AUTO` | Azure's own: env, the az login, the managed identity   |
-| `AuthFrom.ENV`  | `RIG_AZURE_TENANT`, `RIG_AZURE_ID`, `RIG_AZURE_SECRET` |
-| `AuthFrom.KEYS` | `{ tenant, id, secret }`, passed in                    |
-
-## 3. What They May Do
+## 2. What It May Do
 
 | Scope                                       | Role          | When                                                       |
 | ------------------------------------------- | ------------- | ---------------------------------------------------------- |
@@ -60,7 +29,52 @@ const azure = createAzure({ auth: { from: AuthFrom.ENV } });
 
 In its group, the provider makes and deletes: virtual machines, their disks, network interfaces, public IPs and network security groups, and one virtual network of its own, kept.
 
-When a kind's machines run as a user-assigned identity (`identity`), the principal also needs `Managed Identity Operator` on it.
+When a kind's machines run as a user-assigned identity (`identity`), the provider also needs `Managed Identity Operator` on it. A subscription's owner has every role already.
+
+## 3. Its Keys
+
+The provider signs in one of three ways, its `auth`. Every way reads the subscription from [1](#1-the-subscription).
+
+| Way                          | Where                             | It reads                                                          |
+| ---------------------------- | --------------------------------- | ----------------------------------------------------------------- |
+| `AuthFrom.AUTO`, the default | your computer; an Azure machine   | Azure's own: `AZURE_*` env vars, the az login, a managed identity |
+| `AuthFrom.ENV`               | a server or a CI job              | `RIG_AZURE_TENANT`, `RIG_AZURE_ID`, `RIG_AZURE_SECRET`            |
+| `AuthFrom.KEYS`              | an app with its own secrets store | `{ tenant, id, secret }`, passed in                               |
+
+```ts
+import { AuthFrom, createAzure } from "@diphyx/rig-azure";
+
+createAzure(); // AUTO
+createAzure({ auth: { from: AuthFrom.ENV } });
+createAzure({ auth: { from: AuthFrom.KEYS, keys: { tenant, id, secret } } });
+```
+
+**On your computer, `AUTO`.** Sign the az CLI in as an account with the role above:
+
+```bash
+az login
+az account set --subscription <subscription-id>
+az account get-access-token # a token here: createAzure() signs in the same way
+```
+
+**On an Azure machine, `AUTO`.** Give the machine a managed identity with the role above. A user-assigned one is named by `AZURE_CLIENT_ID=<its client id>`.
+
+**Keys of its own, `ENV` or `KEYS`.** A service principal with a secret, made with its role in one step:
+
+```bash
+az ad sp create-for-rbac --name rig --role Contributor --scopes /subscriptions/<subscription-id>
+```
+
+Its answer has the three keys: `tenant`, `appId` (the id), and `password` (the secret, shown once):
+
+```bash
+export RIG_AZURE_TENANT=<tenant>
+export RIG_AZURE_ID=<appId>
+export RIG_AZURE_SECRET=<password>
+export RIG_AZURE_SUBSCRIPTION=<subscription-id>
+```
+
+**Env names** follow the provider's `name`: `RIG_<NAME>_TENANT`, upper-cased, `-` as `_`. A provider named `azure-eu` reads `RIG_AZURE_EU_TENANT` and `RIG_AZURE_EU_SUBSCRIPTION`; `{ from: AuthFrom.ENV, prefix: "MY_AZURE" }` reads `MY_AZURE_TENANT`.
 
 ## 4. Its Network
 
