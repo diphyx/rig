@@ -1,0 +1,5 @@
+[version]
+preset = "javascript"
+
+[publish]
+workflow = "publish.yml tag={tag}"

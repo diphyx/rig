@@ -1,11 +1,13 @@
 name: Publish
-run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'Dry Run' || 'Publish' }}
+run-name: ${{ inputs.dry_run && 'Dry Run' || 'Publish' }} ${{ inputs.tag }}
 
 on:
-    release:
-        types: [released]
     workflow_dispatch:
         inputs:
+            tag:
+                description: "Tag to publish: packages/<name>/v1.2.3 for one package, v1.2.3 for every package"
+                type: string
+                required: true
             dry_run:
                 description: "Run without publishing to npm"
                 type: boolean
@@ -16,25 +18,40 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6
+              with:
+                  ref: ${{ inputs.tag }}
             - uses: pnpm/action-setup@v6
             - uses: actions/setup-node@v6
               with:
                   node-version: "22"
                   cache: "pnpm"
             - run: pnpm install --frozen-lockfile
-            - name: Release matches versions
-              if: github.event_name == 'release'
+            # shipo tags: "v1.2.3" is every package, "packages/aws/v1.2.3" is aws alone
+            - name: Pick packages
+              id: pick
+              env:
+                  TAG: ${{ inputs.tag }}
               run: |
-                  tag="${GITHUB_REF_NAME#v}"
-                  for p in packages/*/package.json; do
-                      v=$(node -p "require('./$p').version")
-                      if [ "$v" != "$tag" ]; then
-                          echo "::error file=$p::version $v, release $tag"
+                  case "$TAG" in
+                      packages/*/*) dir="${TAG%/*}" ;;
+                      *) dir="packages/*" ;;
+                  esac
+                  version="${TAG##*/}"
+                  version="${version#v}"
+                  for d in $dir; do
+                      if [ ! -f "$d/package.json" ]; then
+                          echo "::error::no package at $d"
+                          exit 1
+                      fi
+                      v=$(node -p "require('./$d/package.json').version")
+                      if [ "$v" != "$version" ]; then
+                          echo "::error file=$d/package.json::version $v, tag $TAG"
                           exit 1
                       fi
                   done
+                  echo "filter=./$dir" >> "$GITHUB_OUTPUT"
             - run: pnpm run build
-            - run: pnpm -r --filter "./packages/*" exec pnpm pack --pack-destination "$GITHUB_WORKSPACE/pack"
+            - run: pnpm -r --filter "${{ steps.pick.outputs.filter }}" exec pnpm pack --pack-destination "$GITHUB_WORKSPACE/pack"
             - uses: actions/upload-artifact@v7
               with:
                   name: pack
@@ -45,6 +62,8 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6
+              with:
+                  ref: ${{ inputs.tag }}
             - uses: pnpm/action-setup@v6
             - uses: actions/setup-node@v6
               with:
@@ -71,6 +90,7 @@ jobs:
                   path: pack/
             # core first, so the slots never point at a version npm lacks
             - run: |
+                  shopt -s nullglob
                   for t in pack/diphyx-rig-[0-9]*.tgz pack/diphyx-rig-[a-z]*.tgz; do
                       id=$(tar -xOzf "$t" package/package.json | node -p 'const p = JSON.parse(require("fs").readFileSync(0)); p.name + "@" + p.version')
                       if npm view "$id" version >/dev/null 2>&1; then
