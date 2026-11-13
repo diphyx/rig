@@ -635,6 +635,97 @@
             ]
         },
         {
+            "id": "rounds/end-during",
+            "description": "a machine the app ends while a round lists is ended, not lost: no recover",
+            "given": {
+                "config": {
+                    "rig": 1,
+                    "app": "app",
+                    "providers": [
+                        {
+                            "name": "a",
+                            "can": {
+                                "spot": true,
+                                "stop": true
+                            }
+                        }
+                    ],
+                    "kinds": [
+                        {
+                            "name": "w",
+                            "try": [
+                                {
+                                    "provider": "a",
+                                    "market": ["spot"],
+                                    "types": ["t1"]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "fake": {
+                    "a": {
+                        "places": [
+                            {
+                                "market": "spot",
+                                "type": "t1",
+                                "zone": "za"
+                            }
+                        ],
+                        "answers": {
+                            "spot/t1/za": "ok"
+                        }
+                    }
+                }
+            },
+            "steps": [
+                {
+                    "do": "open"
+                },
+                {
+                    "do": "call",
+                    "call": "machine.create",
+                    "args": ["w"]
+                },
+                {
+                    "do": "round",
+                    "during": {
+                        "call": "machine.end",
+                        "args": ["m1"]
+                    },
+                    "expect": {
+                        "events": [
+                            {
+                                "event": "machine:ended",
+                                "machine": {
+                                    "id": "m1"
+                                }
+                            }
+                        ],
+                        "fake": {
+                            "a": {
+                                "ends": ["m1"],
+                                "machines": [
+                                    {
+                                        "id": "m1",
+                                        "status": "ended"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "do": "call",
+                    "call": "machine.list",
+                    "args": [],
+                    "expect": {
+                        "result": []
+                    }
+                }
+            ]
+        },
+        {
             "id": "rounds/found",
             "description": "on open, a machine of this app is adopted",
             "given": {

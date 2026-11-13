@@ -20,6 +20,10 @@ export type Context = {
     shapes: Map<string, Shape | null>;
     /** The round running now, if one is. */
     running: Promise<void> | null;
+    /** Machines the core is ending now: a second end waits for the first; `asked` when the app asked for one. */
+    ending: Map<Known, { done: Promise<void>; asked: boolean }>;
+    /** `<provider>/<id>` of each machine the core ended since this round began: a stale list does not find it again. */
+    gone: Set<string>;
     emit<E extends keyof Events>(event: E, data: Events[E]): void;
 };
 

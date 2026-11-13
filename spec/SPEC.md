@@ -605,6 +605,7 @@ takeback = 100 × (lost + p × 2) ÷ (months + 2)                 2 machine-mont
 
 - One round MUST run at a time; a round asked for while one runs is that round.
 - A round MUST judge only the machines the store held before it listed: a machine made meanwhile is never lost in it.
+- A machine the app ends while a round runs is ended once: the round MUST NOT judge it, find it again, or end it again. A lost machine the app ends before its recover MUST NOT be recovered.
 
 | Seen                                                         | Is                       | The core MUST                                                                                  |
 | ------------------------------------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------- |

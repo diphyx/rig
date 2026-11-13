@@ -86,11 +86,13 @@ In `config.providers`, each provider is written as data:
 | ----------- | -------------- | --------------------------------------------------- |
 | `open`      | —              | calls `open`                                        |
 | `close`     | —              | calls `close`                                       |
-| `round`     | —              | calls `round`                                       |
+| `round`     | `during`?      | calls `round`                                       |
 | `call`      | `call`, `args` | calls that app call: `"machine.create"`, `["w"]`    |
 | `take-back` | `id`           | the fake makes that machine `ended`, as a take-back |
 | `clock`     | `by`           | moves the clock forward by a `dur`: `"3h"`          |
 | `ip`        | `id`, `ip`     | the fake gives that machine these IPs from now on   |
+
+With `during`: `{ "call": "machine.end", "args": ["m1"] }`, the runner makes that app call while the round's first `list` is in flight: once the call is done, that `list` gives its answer. The step's events are the call's, then the round's.
 
 The runner MUST register a handler with `on` for every event before the first step, and collect the events of each step.
 

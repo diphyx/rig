@@ -206,11 +206,20 @@ export async function addWorker(context: Context, known: Known): Promise<void> {
     const { key, tags } = known.worker;
     const [error] = await tryit(plugin.add)({ name: known.name, ip, key, tags });
 
-    /* A worker that fails is asked again next round; the round goes on. */
-    if (!error) {
-        known.worker = { ...known.worker, ip: { ...ip } };
-        context.store.save();
+    if (error) {
+        /* A worker that fails is asked again next round; the round goes on. */
+        return;
     }
+
+    /* Ended while the worker took it: its end found nothing to drop, so the worker forgets it here. */
+    if (!context.store.machines.includes(known)) {
+        await tryit(plugin.drop)(known.name);
+
+        return;
+    }
+
+    known.worker = { ...known.worker, ip: { ...ip } };
+    context.store.save();
 }
 
 /** §22.2: the worker forgets a machine that is gone; one that fails does not keep it in the store. */

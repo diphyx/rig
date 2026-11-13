@@ -39,8 +39,12 @@ type Step = {
     id?: string;
     by?: string;
     ip?: { public?: string; private?: string };
+    during?: { call: string; args: unknown[] };
     expect?: Expect;
 };
+
+/* README §4 `during`: the app's call, run by the fake's next `list` before it answers. */
+type Hold = { list: (() => unknown) | null };
 
 type Expect = {
     result?: unknown;
@@ -110,6 +114,7 @@ function fakes(
     data: Record<string, Fake>,
     clock: () => number,
     stray: string[],
+    hold: Hold,
 ): {
     providers: Provider[];
     machines: Map<string, ProviderMachine[]>;
@@ -241,6 +246,11 @@ function fakes(
                 return structuredClone(machine);
             },
             async list(tags: Tags) {
+                const during = hold.list;
+
+                hold.list = null;
+                await during?.();
+
                 return structuredClone(
                     own.filter((machine) => {
                         return (
@@ -336,14 +346,35 @@ function short(event: Event, data: Record<string, unknown>): Record<string, unkn
     };
 }
 
-async function act(rig: Rig, step: Step, time: { now: number }, machines: Map<string, ProviderMachine[]>) {
+function call(rig: Rig, { call, args }: { call: string; args: unknown[] }): unknown {
+    const [group, name] = call.split(".") as [string, string];
+    const target = (rig as unknown as Record<string, Record<string, (...args: unknown[]) => unknown>>)[group]!;
+
+    return target[name]!(...args);
+}
+
+async function act(rig: Rig, step: Step, time: { now: number }, machines: Map<string, ProviderMachine[]>, hold: Hold) {
     switch (step.do) {
         case "open":
             return rig.open();
         case "close":
             return rig.close();
-        case "round":
-            return rig.round();
+        case "round": {
+            const { during } = step;
+
+            if (during) {
+                hold.list = () => {
+                    return call(rig, during);
+                };
+            }
+
+            /* A round that never lists leaves no call for a later step. */
+            try {
+                return await rig.round();
+            } finally {
+                hold.list = null;
+            }
+        }
         case "take-back":
             for (const own of machines.values()) {
                 for (const machine of own) {
@@ -368,12 +399,8 @@ async function act(rig: Rig, step: Step, time: { now: number }, machines: Map<st
             }
 
             return;
-        default: {
-            const [group, name] = step.call!.split(".") as [string, string];
-            const target = (rig as unknown as Record<string, Record<string, (...args: unknown[]) => unknown>>)[group]!;
-
-            return target[name]!(...step.args!);
-        }
+        default:
+            return call(rig, { call: step.call!, args: step.args! });
     }
 }
 
@@ -385,7 +412,8 @@ async function play(one: Case): Promise<void> {
 
     const folder = mkdtempSync(join(tmpdir(), "rig-kit-"));
     const stray: string[] = [];
-    const { providers, machines, ends, scripts } = fakes(one.given.config, one.given.fake, clock, stray);
+    const hold: Hold = { list: null };
+    const { providers, machines, ends, scripts } = fakes(one.given.config, one.given.fake, clock, stray, hold);
 
     if (one.given.store?.risk) {
         mkdirSync(join(folder, "rig", "1"), { recursive: true });
@@ -487,7 +515,7 @@ async function play(one: Case): Promise<void> {
         let failure: unknown;
 
         try {
-            result = await act(rig, step, time, machines);
+            result = await act(rig, step, time, machines, hold);
         } catch (error) {
             failure = error;
         }

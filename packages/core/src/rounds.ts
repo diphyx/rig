@@ -10,15 +10,43 @@ import { countLeft } from "./risk.js";
 import type { Known, Pending } from "./store.js";
 import type { ProviderMachine } from "./types.js";
 
-/** The provider's `end`, then out of the store. */
-export async function end(context: Context, known: Known): Promise<void> {
-    await providerOf(context, known).end(known.id);
+/* One end per machine at a time: an end asked while one runs waits for that one, and marks it `asked`. */
+function once(context: Context, known: Known, work: () => Promise<void>): Promise<void> {
+    const running = context.ending.get(known);
 
-    countLeft(context, known, false);
+    if (running) {
+        running.asked = true;
+
+        return running.done;
+    }
+
+    const done = work().finally(() => {
+        context.ending.delete(known);
+    });
+
+    context.ending.set(known, { done, asked: false });
+
+    return done;
+}
+
+/* The provider's `end`, then out of the store; `lost` counts it as a loss (§15.1). */
+async function forgo(context: Context, known: Known, lost: boolean): Promise<void> {
+    /* Counted once its provider has ended it: an `end` that throws leaves it for the next round, not counted twice. */
+    await providerOf(context, known).end(known.id);
+    context.gone.add(`${known.provider}/${known.id}`);
+    countLeft(context, known, lost);
+
     context.store.forget(known);
     context.store.save();
     await dropWorker(context, known);
-    context.emit(Event.MACHINE_ENDED, { machine: toMachine({ ...known, status: Status.ENDED }) });
+}
+
+/** The provider's `end`, then out of the store. */
+export function end(context: Context, known: Known): Promise<void> {
+    return once(context, known, async () => {
+        await forgo(context, known, false);
+        context.emit(Event.MACHINE_ENDED, { machine: toMachine({ ...known, status: Status.ENDED }) });
+    });
 }
 
 /* §16: replace a lost machine, up to its kind's `recovers`; no room waits for the next round. */
@@ -60,21 +88,21 @@ async function recover(context: Context, pending: Pending): Promise<void> {
 }
 
 /* §15.1, §16: count the loss and the hours it ran, `end` it so the provider removes what it left, then recover. */
-async function lose(context: Context, known: Known): Promise<void> {
-    const { store } = context;
+function lose(context: Context, known: Known): Promise<void> {
+    return once(context, known, async () => {
+        await forgo(context, known, true);
 
-    /* Counted once its provider has ended it: an `end` that throws leaves it for the next round, not counted twice. */
-    await providerOf(context, known).end(known.id);
-    countLeft(context, known, true);
+        const lost = toMachine({ ...known, status: Status.ENDED });
 
-    store.forget(known);
-    store.save();
-    await dropWorker(context, known);
+        context.emit(Event.MACHINE_LOST, { machine: lost });
 
-    const lost = toMachine({ ...known, status: Status.ENDED });
+        /* The app ended it meanwhile: it wants no replacement. */
+        if (context.ending.get(known)?.asked) {
+            return;
+        }
 
-    context.emit(Event.MACHINE_LOST, { machine: lost });
-    await recover(context, { lost, chain: known.chain, ...(known.options && { options: known.options }) });
+        await recover(context, { lost, chain: known.chain, ...(known.options && { options: known.options }) });
+    });
 }
 
 /* A machine on the provider, by `<provider>/<id>`. */
@@ -109,6 +137,8 @@ export function round(context: Context): Promise<void> {
 async function pass(context: Context): Promise<void> {
     const { store, kinds, emit } = context;
 
+    context.gone = new Set();
+
     /* Only what the store held before the list was taken: a machine made meanwhile, by a create or a recover, is not judged. */
     const before = [...store.machines];
     const listed = await listAll(context);
@@ -119,11 +149,20 @@ async function pass(context: Context): Promise<void> {
         }),
     );
 
+    /* The app may end a machine while the round awaits: one ended, or being ended, is not judged, nor ended twice. */
+    const kept = (known: Known): boolean => {
+        return store.machines.includes(known) && !context.ending.has(known);
+    };
+
     for (const pending of [...store.pending]) {
         await recover(context, pending);
     }
 
     for (const known of before) {
+        if (!kept(known)) {
+            continue;
+        }
+
         const now = listed.get(`${known.provider}/${known.id}`);
 
         if (!now || now.machine.status === Status.ENDED) {
@@ -146,15 +185,16 @@ async function pass(context: Context): Promise<void> {
 
         const life = kinds.get(known.kind)?.life;
 
-        if (life && context.clock() - known.created > dur(life)) {
+        if (life && context.clock() - known.created > dur(life) && kept(known)) {
             await end(context, known);
         }
     }
 
     for (const [at, { provider, machine }] of listed) {
-        /* Held when the round began (it may have just ended it), or made since: not found. */
+        /* Held when the round began, ended since (the list is older), or made since: not found. */
         const known =
             held.has(at) ||
+            context.gone.has(at) ||
             store.machines.some((one) => {
                 return `${one.provider}/${one.id}` === at;
             });

@@ -221,7 +221,7 @@
                     "if": {
                         "properties": {
                             "do": {
-                                "enum": ["open", "close", "round"]
+                                "enum": ["open", "close"]
                             }
                         }
                     },
@@ -229,6 +229,35 @@
                         "properties": {
                             "do": true,
                             "expect": true
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "do": {
+                                "const": "round"
+                            }
+                        }
+                    },
+                    "then": {
+                        "properties": {
+                            "do": true,
+                            "expect": true,
+                            "during": {
+                                "type": "object",
+                                "required": ["call", "args"],
+                                "properties": {
+                                    "call": {
+                                        "type": "string"
+                                    },
+                                    "args": {
+                                        "type": "array"
+                                    }
+                                },
+                                "additionalProperties": false
+                            }
                         },
                         "additionalProperties": false
                     }
