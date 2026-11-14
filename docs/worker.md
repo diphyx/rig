@@ -67,13 +67,14 @@ Where the hub runs, the IP its machines trust, its key, ports and release: [grid
 
 ## 3. First Boot
 
-At its create, each machine gets its own grid key pair, and these lines, after its `login` and before its `script`:
+At its create, each machine gets its own grid key pair, and these lines, after its `login`:
 
 1. **grid installed:** the release's archive for the machine's arch, checked by its SHA-256.
 2. **its user:** a system user, `grid`, that the node runs as.
 3. **its keys:** the machine's private key, and the hub's public key, in `/etc/grid`.
 4. **`/etc/grid/node.toml`:** its tags, its cmds, its port, and the hub, by IP; with `signal`, the hub's `listen` port too.
-5. **a systemd unit,** `grid-node`, started.
+5. **a systemd unit,** `grid-node`.
+6. **the node started,** after its `script`: no job comes before what the `script` sets up; a failed `script` leaves it off.
 
 It also gets its node's `port`, open to the hub's IP only. RIG's store keeps the public half of the key; the hub trusts it only from that machine's IP.
 

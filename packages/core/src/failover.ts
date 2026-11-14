@@ -58,7 +58,7 @@ function specOf(context: Context, kind: Kind, entry: Entry): { spec: Spec; worke
     /* §22.2: the worker's part of the machine: its first-boot lines, the ports it needs, and what it knows it by. */
     const plugin = kind.worker && workerOf(context.config, kind.worker);
     const setup = plugin && kind.worker && plugin.setup({ name, tags: kind.worker.tags, worker: kind.worker });
-    const script = buildBoot(kind, setup?.script);
+    const script = buildBoot(kind, setup);
 
     return {
         spec: {

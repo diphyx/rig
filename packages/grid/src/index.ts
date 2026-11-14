@@ -227,7 +227,7 @@ export function createGrid(config: GridConfig = {}): Grid {
             const key = makeGridKey();
 
             return {
-                script: nodePart(machine.worker as GridWorker, side, key.private),
+                ...nodePart(machine.worker as GridWorker, side, key.private),
                 ports: [hubRule(side)],
                 key: key.public,
             };

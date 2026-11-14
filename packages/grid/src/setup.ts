@@ -95,11 +95,14 @@ const UNIT = [
     "WantedBy=multi-user.target",
 ];
 
-/** The first-boot lines that make a machine a grid node: grid installed, checked by its SHA-256, set up, and started. */
-export function nodePart(worker: GridWorker, hub: HubSide, key: string): string[] {
+/* Enabled only after the kind's `script`: no job before what its cmds need, and none at all after a failed one. */
+const START = ["systemctl enable --now grid-node"];
+
+/** The first-boot lines that make a machine a grid node: grid installed, checked by its SHA-256, and set up; started after the kind's `script`. */
+export function nodePart(worker: GridWorker, hub: HubSide, key: string): { script: string[]; start: string[] } {
     const { version, sha256 } = hub.release;
 
-    return [
+    const script = [
         'case "$(uname -m)" in',
         `    aarch64) arch=arm64; sha=${sha256.arm} ;;`,
         `    x86_64) arch=amd64; sha=${sha256.x86} ;;`,
@@ -123,8 +126,9 @@ export function nodePart(worker: GridWorker, hub: HubSide, key: string): string[
         `echo '${base64Of(tomlOf(worker, hub))}' | base64 -d > /etc/grid/node.toml`,
         `echo '${base64Of(UNIT)}' | base64 -d > /etc/systemd/system/grid-node.service`,
         "systemctl daemon-reload",
-        "systemctl enable --now grid-node",
     ];
+
+    return { script, start: START };
 }
 
 /** A kind's `worker`, as grid reads it: its cmds, and `signal` only with a hub that listens. */

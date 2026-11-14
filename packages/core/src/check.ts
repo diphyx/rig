@@ -269,7 +269,7 @@ export function config(config: RigConfig): void {
         /* §22.2: a trial setup, for the first-boot script's size and the ports the worker needs. */
         const setup = kind.worker !== undefined ? checkKindWorker(path, kind, config) : undefined;
 
-        checkBoot(path, kind, setup?.script);
+        checkBoot(path, kind, setup);
 
         if (kind.risk !== undefined) {
             if (!isObject(kind.risk)) {

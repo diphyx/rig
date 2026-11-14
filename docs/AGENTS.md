@@ -111,7 +111,7 @@ const rig = createRig({
 | `image`    | the provider's Linux image id, booted in place of `distro`; needs `login.user` |
 | `extra`    | the provider's own create options                                              |
 
-**First boot:** one bash script the core builds: a guard (runs once), the `login` part, the worker's lines, the `script`. Output to `/var/log/rig/boot.log`, exit code to `/var/lib/rig/boot.exit`; at most 16 KB; a failed first boot is not run again.
+**First boot:** one bash script the core builds: a guard (runs once), the `login` part, the worker's lines, the `script`, the worker's `start`. Output to `/var/log/rig/boot.log`, exit code to `/var/lib/rig/boot.exit`; at most 16 KB; a failed first boot is not run again.
 
 **Distro:** the provider boots the version's newest image for the type's arch, found at each create; a region without it is `busy type`.
 
@@ -275,7 +275,7 @@ createRig({
 ```
 
 - **Job machines:** a kind's `worker` is fixed at each machine's create, like its type. One machine's own: `rig.machine.create(kind, { worker: { tags, cmds } })`, kept for its recovers; give it its own tag.
-- **Lifecycle:** at create, `setup` gives the machine's first-boot lines (grid installed, a `grid` user, its keys, `node.toml`, a systemd unit) and its node's port, open to the hub's IP only. Once it has an IP, the core `add`s it to the worker; when it is gone, `drop`s it; when recovers are spent, `spent(tags)`.
+- **Lifecycle:** at create, `setup` gives the machine's first-boot lines (grid installed, a `grid` user, its keys, `node.toml`, a systemd unit; the node started after the kind's `script`) and its node's port, open to the hub's IP only. Once it has an IP, the core `add`s it to the worker; when it is gone, `drop`s it; when recovers are spent, `spent(tags)`.
 - **Jobs:** `grid.run({ name?, tag, push?, steps, pull?, retries? }, { signal?, watch?, next?, placed? })` → `{ name, state: "done" | "failed" | "stopped", message, node, steps, pushed, files }`. Push `{ from, to?, share? }`; step `{ cmd, args?, env? }`; pull `{ path, into, fresh?, keep? }`.
 - **Sessions:** `grid.session({ tag, name?, share?, signal?, watch?, placed? })` → `push`, `exec`, `pull`, `close()` (the outcome). No retries; after a kill, only `pull` and `close`.
 - **Views:** `grid.jobs({ tag?, state?, node? })`, `grid.job(name)`, `grid.nodes({ tag?, beating?, lost? })`, `grid.kill(name)`, `grid.watch(name, handler)`, `grid.on(JobEvent.PLACED | RETRIED | ENDED, handler)`.

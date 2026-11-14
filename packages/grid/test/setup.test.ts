@@ -25,7 +25,7 @@ describe("grid setup", () => {
     });
 
     it("writes a node config without signal: no listen port, a cmd without a timeout", () => {
-        const script = nodePart({ tags: ["a"], cmds: { go: { exec: ["go", "run"] } } }, HUB, "node-key");
+        const { script } = nodePart({ tags: ["a"], cmds: { go: { exec: ["go", "run"] } } }, HUB, "node-key");
         const line = script.find((one) => {
             return one.endsWith("> /etc/grid/node.toml");
         })!;
@@ -36,6 +36,13 @@ describe("grid setup", () => {
         expect(toml).toContain('[cmds.go]\nexec = ["go", "run"]\n');
         expect(toml).not.toContain("signal");
         expect(script).toContain("echo 'node-key' > /etc/grid/node.key");
+    });
+
+    it("sets the node up before the kind's script, and starts it only after", () => {
+        const { script, start } = nodePart({ tags: ["a"], cmds: { go: { exec: ["go"] } } }, HUB, "node-key");
+
+        expect(script.at(-1)).toBe("systemctl daemon-reload");
+        expect(start).toEqual(["systemctl enable --now grid-node"]);
     });
 
     it("takes a worker with cmds, each with an exec and a dur timeout, and signal only with listen", () => {

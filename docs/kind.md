@@ -119,6 +119,7 @@ At first boot, the core's one bash script runs, once, as root, the same on every
 1. **`login`:** the user, the distro's or `login.user`, gets the keys and `sudo` without a password.
 2. **the worker's lines,** when the kind has a `worker`.
 3. **`script`:** yours; under its own `#!` if it has one, else by `bash`.
+4. **the worker's start,** when it has one: what takes jobs, once your `script` is done.
 
 Its output goes to `/var/log/rig/boot.log`, its exit code to `/var/lib/rig/boot.exit`. A failed first boot is not run again. The whole script fits in 16 KB.
 

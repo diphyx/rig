@@ -181,11 +181,11 @@ When the core opens, each of these MUST be a refusal, `config`, naming the key b
 
 ### 6.2 First boot
 
-At first boot, every machine signs in its kind's `login`, then runs its worker's lines (§22.2), then its kind's `script`; the core builds them into one bash script, `spec.script`.
+At first boot, every machine signs in its kind's `login`, then runs its worker's lines (§22.2), then its kind's `script`, then its worker's `start`; the core builds them into one bash script, `spec.script`.
 
 - `login.keys` is at least one SSH public key, one line each: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGm5nRrnDrU0H8wXkVhQvTq1aXj4Q0bQ0aQ0bQ0aQ0bQ me@laptop`. `login.user` is a `name` that is not `root`; without it, the distro's login user (§6.1), the same on every cloud. The user gets the keys and `sudo` without a password; one the image already has keeps its own keys too, and a system user (uid below 1000) fails the first boot. Only root reads the log and its exit code.
 - `script` is a script of its own: a `str`, or a `[str]` of its lines, joined by `\n`, with one more at the end. It runs under its own `#!` if it has one, else by `bash`.
-- The core MUST build the first-boot script exactly as below, then each part the kind has, in that order: `login`, the worker's lines (§22.2), `script`; a kind with none has none. It runs once, as root, on every provider and distro; its output goes to `/var/log/rig/boot.log`, and its exit code to `/var/lib/rig/boot.exit`. A failed first boot is not run again.
+- The core MUST build the first-boot script exactly as below, then each part the kind has, in that order: `login`, the worker's lines (§22.2), `script`, the worker's `start` (§22.2); a kind with none has none. A part that fails ends the first boot: the parts after it do not run. It runs once, as root, on every provider and distro; its output goes to `/var/log/rig/boot.log`, and its exit code to `/var/lib/rig/boot.exit`. A failed first boot is not run again.
 - `<user>` is the login user; `<keys>` is `login.keys`, joined as `script` is, then base64 on one line; `<script>` is the `script`, joined, then base64 on one line. The lines are joined by `\n`, and the first-boot script ends with one.
 
 ```bash
@@ -385,16 +385,16 @@ Every call is asynchronous. A failure §11 does not define MUST throw. The core 
 
 **spec**: filled by the core.
 
-| Key      | Type                           | Definition                                                                                                                             |
-| -------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`   | `str`                          | `<app>-<kind>-<8 lowercase hex>`                                                                                                       |
-| `distro` | `?{ name: str, version: str }` | the kind's `distro`, its version filled in; absent with `image`                                                                        |
-| `image`  | `?str`                         | the entry's image id; absent with `distro`                                                                                             |
-| `disk`   | `?uint`                        | GB of the boot disk; absent → the provider's default                                                                                   |
-| `script` | `?str`                         | the first-boot script the core built from the kind's `login`, its worker's lines and its `script`, §6.2; the provider runs it as it is |
-| `tags`   | `{str: str}`                   | the rig tags and the kind's own, §13                                                                                                   |
-| `extra`  | `?{str: any}`                  | the entry's `extra`, unchanged                                                                                                         |
-| `ports`  | `[rule]`                       | the kind's `ports` and its worker's, each once, each `from` a CIDR (§20); none is `[]`                                                 |
+| Key      | Type                           | Definition                                                                                                                                                   |
+| -------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`   | `str`                          | `<app>-<kind>-<8 lowercase hex>`                                                                                                                             |
+| `distro` | `?{ name: str, version: str }` | the kind's `distro`, its version filled in; absent with `image`                                                                                              |
+| `image`  | `?str`                         | the entry's image id; absent with `distro`                                                                                                                   |
+| `disk`   | `?uint`                        | GB of the boot disk; absent → the provider's default                                                                                                         |
+| `script` | `?str`                         | the first-boot script the core built from the kind's `login`, its worker's lines, its `script` and its worker's `start`, §6.2; the provider runs it as it is |
+| `tags`   | `{str: str}`                   | the rig tags and the kind's own, §13                                                                                                                         |
+| `extra`  | `?{str: any}`                  | the entry's `extra`, unchanged                                                                                                                               |
+| `ports`  | `[rule]`                       | the kind's `ports` and its worker's, each once, each `from` a CIDR (§20); none is `[]`                                                                       |
 
 **answer**: exactly one of:
 
@@ -746,14 +746,14 @@ A worker is a plugin in the config's `workers`: one object with these keys.
 | `rig`  | `uint`     | the generation it follows                   |
 | calls  | functions  | below                                       |
 
-| Call    | Input                                                              | Output                                       | Does                                                                                                                                                 |
-| ------- | ------------------------------------------------------------------ | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `open`  | —                                                                  | —                                            | optional: called once when the core opens, before any `setup`: what the worker finds out first, like its own address; a throw is a refusal, `plugin` |
-| `check` | the kind's `worker`                                                | —                                            | throws when the worker's own keys are not one: a refusal, `config`                                                                                   |
-| `setup` | `{ name: str, tags: [name], worker }`                              | `{ script: [str], ports: [rule], key: str }` | for one machine, at its create: its first-boot lines, the inbound rules it needs, what it knows it by                                                |
-| `add`   | `{ name: str, ip: { public?, private? }, key: str, tags: [name] }` | —                                            | takes the machine                                                                                                                                    |
-| `drop`  | `name: str`                                                        | —                                            | forgets the machine                                                                                                                                  |
-| `spent` | `tags: [name]`                                                     | —                                            | no more machines come for these tags: a job waiting for one SHOULD fail                                                                              |
+| Call    | Input                                                              | Output                                                      | Does                                                                                                                                                 |
+| ------- | ------------------------------------------------------------------ | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open`  | —                                                                  | —                                                           | optional: called once when the core opens, before any `setup`: what the worker finds out first, like its own address; a throw is a refusal, `plugin` |
+| `check` | the kind's `worker`                                                | —                                                           | throws when the worker's own keys are not one: a refusal, `config`                                                                                   |
+| `setup` | `{ name: str, tags: [name], worker }`                              | `{ script: [str], start?: [str], ports: [rule], key: str }` | for one machine, at its create: its first-boot lines, before and after the kind's `script`, the inbound rules it needs, what it knows it by          |
+| `add`   | `{ name: str, ip: { public?, private? }, key: str, tags: [name] }` | —                                                           | takes the machine                                                                                                                                    |
+| `drop`  | `name: str`                                                        | —                                                           | forgets the machine                                                                                                                                  |
+| `spent` | `tags: [name]`                                                     | —                                                           | no more machines come for these tags: a job waiting for one SHOULD fail                                                                              |
 
 - When the core opens, each worker MUST pass §8's steps 1 and 3, with `slot: "worker"`, and have every call but `open`: otherwise a refusal, `plugin`. The core then awaits each worker's `open`, if it has one.
 - `check` and `setup` are synchronous, and MUST NOT call out: `setup` makes what it gives, like a key pair.
@@ -770,7 +770,7 @@ A worker is a plugin in the config's `workers`: one object with these keys.
 For each machine of a kind with a `worker`, the core MUST:
 
 - read its `worker` as the kind's, with its create's `options` over it (§20);
-- call `setup` at its create, and put its `script` lines in the machine's first-boot script (§6.2), and its `ports` in `spec.ports`;
+- call `setup` at its create, and put its `script` lines in the machine's first-boot script (§6.2) before the kind's `script`, its `start` lines after it, and its `ports` in `spec.ports`: what takes jobs, in `start`, waits for what the kind sets up;
 - give the machine to its worker, `add({ name, ip, key, tags })`, once the machine has an IP, and again when its IPs change; the `tags` are those the machine was made with;
 - `drop` it once it is ended or lost, after the store has forgotten it;
 - call `spent(<its tags>)`, the lost machine's own, when it stops recovering it: when it emits `machine:failed`;
@@ -781,7 +781,7 @@ When the core opens, it MUST call `setup` once for each kind with a `worker`, wi
 
 A machine a round finds (§16) has no `key` in the store, so its worker cannot take it: the core MUST end it, and emit `machine:ended` with `reason: "found"`.
 
-The store keeps, as the machine's `worker`: its worker's `name`, the `key` from `setup`, its `tags`, and the IPs the worker has. A `key` is no secret; anything secret in `setup`'s `script` stays there (§8.1).
+The store keeps, as the machine's `worker`: its worker's `name`, the `key` from `setup`, its `tags`, and the IPs the worker has. A `key` is no secret; anything secret in `setup`'s `script` or `start` stays there (§8.1).
 
 ### 22.3 Jobs
 

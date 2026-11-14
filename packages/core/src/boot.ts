@@ -4,7 +4,7 @@ import { distroOf, DISTROS } from "./distro.js";
 import { Reason } from "./enums.js";
 import { base64Of, isStrings, NAME } from "./parse.js";
 import { Refusal } from "./refusal.js";
-import type { Kind } from "./types.js";
+import type { Kind, Worker } from "./types.js";
 
 /* An SSH public key, one line: its type, its base64, and a comment if it has one. */
 const KEY =
@@ -22,8 +22,11 @@ export function userOf(kind: Kind): string | undefined {
     return kind.login ? (kind.login.user ?? DISTROS[distroOf(kind.distro).name].user) : undefined;
 }
 
-/** §6.2: the first-boot script from the kind's `login`, its worker's lines (§22.2) and `script`: once, as root, logged; none without any. */
-export function buildBoot(kind: Kind, worker?: string[]): string | undefined {
+/* §22.2: a worker's first-boot lines: `script` before the kind's `script`, `start` after it. */
+type Lines = Pick<ReturnType<Worker["setup"]>, "script" | "start">;
+
+/** §6.2: the first-boot script from the kind's `login`, its worker's lines (§22.2), `script` and its worker's `start`: once, as root, logged; none without any. */
+export function buildBoot(kind: Kind, worker?: Lines): string | undefined {
     if (!kind.login && !worker && kind.script === undefined) {
         return undefined;
     }
@@ -54,7 +57,7 @@ export function buildBoot(kind: Kind, worker?: string[]): string | undefined {
                   "chmod 440 /etc/sudoers.d/rig-login",
               ]
             : []),
-        ...(worker ?? []),
+        ...(worker?.script ?? []),
         ...(kind.script !== undefined
             ? [
                   `echo '${base64Of(kind.script)}' | base64 -d > /var/lib/rig/script`,
@@ -62,11 +65,12 @@ export function buildBoot(kind: Kind, worker?: string[]): string | undefined {
                   "if head -n 1 /var/lib/rig/script | grep -q '^#!'; then /var/lib/rig/script; else bash /var/lib/rig/script; fi",
               ]
             : []),
+        ...(worker?.start ?? []),
     ].join("\n")}\n`;
 }
 
 /** §5, §6.2: a kind's `login` and `script` are each one, and its first-boot script fits; else a refusal naming the key. */
-export function checkBoot(path: string, kind: Kind, worker?: string[]): void {
+export function checkBoot(path: string, kind: Kind, worker?: Lines): void {
     const { login, script } = kind as { login?: unknown; script?: unknown };
 
     if (login !== undefined) {

@@ -139,7 +139,7 @@ const web = aws.presets.small({
 | `login.user` | who they sign in as, with `sudo`; by default the distro's login user; required with an entry's `image`      |
 | `script`     | a script of your own, or its lines, joined by newlines; one with its own `#!` runs under it, else by `bash` |
 
-- **Once, as root, at first boot:** the `login`, then the worker's lines, then the `script`, in one bash script, the same on every provider and distro (spec §6.2).
+- **Once, as root, at first boot:** the `login`, then the worker's lines, then the `script`, then the worker's start, in one bash script, the same on every provider and distro (spec §6.2).
 - **Its output:** `/var/log/rig/boot.log`, its exit code `/var/lib/rig/boot.exit`; a failed first boot is not run again.
 - **`machine.user`:** the login user.
 

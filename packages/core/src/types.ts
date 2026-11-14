@@ -40,6 +40,8 @@ export type Worker = {
     /** For one machine, at its create: its first-boot lines, the inbound rules it needs, and what the worker knows it by. */
     setup(machine: { name: string; tags: string[]; worker: KindWorker }): {
         script: string[];
+        /** Optional: its first-boot lines after the kind's `script`, like starting what takes jobs. */
+        start?: string[];
         ports: Rule[];
         key: string;
     };

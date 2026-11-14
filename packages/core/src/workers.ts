@@ -177,7 +177,7 @@ export function checkOptions(context: Context, kind: Kind, options: unknown): Cr
     const one = kindWith(kind, checked);
     const setup = checkKindWorker("options.", one, context.config);
 
-    checkBoot("options.", one, setup.script);
+    checkBoot("options.", one, setup);
 
     for (const entry of kind.try) {
         if (setup.ports.length > 0 && !context.providers.get(entry.provider)?.can?.port) {

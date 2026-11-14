@@ -4,6 +4,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { buildBoot } from "../src/boot.js";
+
 import {
     createRig,
     DISTROS,
@@ -132,5 +134,19 @@ describe("workers", () => {
         ]);
 
         await again.close();
+    });
+
+    it("runs a worker's lines before the kind's script, and its start after it", () => {
+        const boot = buildBoot(
+            { name: "k", try: [], script: "echo kind" },
+            { script: ["echo worker"], start: ["echo start"] },
+        )!;
+
+        const worker = boot.indexOf("echo worker");
+        const script = boot.indexOf("bash /var/lib/rig/script");
+
+        expect(worker).toBeGreaterThan(-1);
+        expect(worker).toBeLessThan(script);
+        expect(boot.endsWith("fi\necho start\n")).toBe(true);
     });
 });

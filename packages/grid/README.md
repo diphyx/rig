@@ -99,13 +99,14 @@ await grid.run({ tag: "req-42", steps: [{ cmd: "train" }] });
 
 ## A Machine's First Boot
 
-At its create, each machine gets its own grid key pair, and these first-boot lines, after its `login` and before its `script`:
+At its create, each machine gets its own grid key pair, and these first-boot lines, after its `login`:
 
 1. **grid installed:** the release's archive for the machine's arch, checked by its SHA-256, its binary owned by root.
 2. **its user:** a system user, `grid`, that the node runs as.
 3. **its keys:** the machine's private key in `/etc/grid/node.key`, the hub's public key in `/etc/grid/hub.pub`.
 4. **`/etc/grid/node.toml`:** its tags, its cmds, its port, and the hub, by IP; with `signal`, the hub's `listen` port too.
-5. **a systemd unit,** `grid-node`, started.
+5. **a systemd unit,** `grid-node`.
+6. **the node started,** after its `script`: no job comes before what the `script` sets up; a failed `script` leaves it off.
 
 It also gets its node's `port`, open to the hub's IP only. The private key is in the machine's first-boot script, which the cloud keeps as its user data: anything that can read the machine's metadata can read it, and the hub trusts it only from that machine's IP. RIG's store keeps the public half only.
 
