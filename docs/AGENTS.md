@@ -268,6 +268,8 @@ createRig({
                     make: { exec: ["make", "-j8"], timeout: "1h" },
                 },
                 signal: false,
+                jobs: { limit: 4, expires: "1h" }, // grid's [jobs]: 4 at once, by default 1
+                share: { limit: "10GB" }, // grid's [share]: keeps share pushes, up to 10GB
             },
         }),
     ],

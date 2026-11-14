@@ -138,14 +138,15 @@ A job waits for a node with its tag and room, as long as it takes: give it a `si
 
 ## 7. When It Goes Wrong
 
-| You see                                               | It is                                              | Do                                                             |
-| ----------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
-| a job that waits, and `node ... does not answer`      | the node is booting, or out of the hub's reach     | a minute or two at first; then the machine's first boot, below |
-| `does not answer` long after the boot                 | the node lets in an IP other than the hub's        | the hub's `ip`: the IP it dials from, as the machine sees it   |
-| a node with `signal`, silent                          | the hub's `listen` port is closed to the machines  | open it on the app's host, or its security group               |
-| a refusal at `open`: `no public IP found for the hub` | `checkip.amazonaws.com` was out of reach           | give `ip`                                                      |
-| a job that fails: `push: sha256 differs, 3 times`     | its files changed on the way, each time            | the network between the hub and the node                       |
-| a refusal naming a kind's `worker` key                | a key outside grid's own: `tags`, `cmds`, `signal` | the kind's `worker`                                            |
+| You see                                               | It is                                                               | Do                                                             |
+| ----------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------- |
+| a job that waits, and `node ... does not answer`      | the node is booting, or out of the hub's reach                      | a minute or two at first; then the machine's first boot, below |
+| `does not answer` long after the boot                 | the node lets in an IP other than the hub's                         | the hub's `ip`: the IP it dials from, as the machine sees it   |
+| a job that waits: `no build node has room`            | every node with its tag runs as many jobs as its `jobs.limit`       | more machines, or a bigger `jobs.limit` on the kind            |
+| a node with `signal`, silent                          | the hub's `listen` port is closed to the machines                   | open it on the app's host, or its security group               |
+| a refusal at `open`: `no public IP found for the hub` | `checkip.amazonaws.com` was out of reach                            | give `ip`                                                      |
+| a job that fails: `push: sha256 differs, 3 times`     | its files changed on the way, each time                             | the network between the hub and the node                       |
+| a refusal naming a kind's `worker` key                | a key outside grid's own: `tags`, `cmds`, `signal`, `jobs`, `share` | the kind's `worker`                                            |
 
 On a machine, over SSH: its first boot, then its node:
 

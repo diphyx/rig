@@ -76,13 +76,17 @@ Every option has a default: `createGrid()` is a whole hub.
 
 ## A Kind's Worker
 
-| Key      | Is                                                                                      |
-| -------- | --------------------------------------------------------------------------------------- |
-| `tags`   | the kinds of work the node does: a job runs only on a node with its tag                 |
-| `cmds`   | the only cmds it runs: grid's `[cmds.<name>]`, `exec` and `timeout`; at least one       |
-| `signal` | grid's `signal`: the node also dials the hub, with heartbeats; needs the hub's `listen` |
+| Key      | Is                                                                                                                            |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `tags`   | the kinds of work the node does: a job runs only on a node with its tag                                                       |
+| `cmds`   | the only cmds it runs: grid's `[cmds.<name>]`, `exec` and `timeout`; at least one                                             |
+| `signal` | grid's `signal`: the node also dials the hub, with heartbeats; needs the hub's `listen`                                       |
+| `jobs`   | grid's `[jobs]`: `limit`, how many at once, `1`; `expires`, how long it keeps a job left idle                                 |
+| `share`  | grid's `[share]`: `limit`, how much of its share pushes it keeps, like `"10GB"`; `expires`, how long it keeps one no job uses |
 
-One kind, cmds per machine: `rig.machine.create(kind, { worker })` gives one machine its own `tags` and `cmds`, over the kind's.
+A node takes as many jobs at once as its machine can run: `jobs.limit` per kind, by its type. With `share.limit`, it keeps share pushes for the next job that pushes the same files.
+
+One kind, cmds per machine: `rig.machine.create(kind, { worker })` gives one machine its own `tags`, `cmds`, `jobs` or `share`, over the kind's: each key whole.
 
 ```ts
 await rig.machine.create("builder", {
@@ -104,7 +108,7 @@ At its create, each machine gets its own grid key pair, and these first-boot lin
 1. **grid installed:** the release's archive for the machine's arch, checked by its SHA-256, its binary owned by root.
 2. **its user:** a system user, `grid`, that the node runs as.
 3. **its keys:** the machine's private key in `/etc/grid/node.key`, the hub's public key in `/etc/grid/hub.pub`.
-4. **`/etc/grid/node.toml`:** its tags, its cmds, its port, and the hub, by IP; with `signal`, the hub's `listen` port too.
+4. **`/etc/grid/node.toml`:** its tags, its cmds, its port, and the hub, by IP; with `signal`, the hub's `listen` port too; its `jobs` and `share`, when the kind has them.
 5. **a systemd unit,** `grid-node`.
 6. **the node started,** after its `script`: no job comes before what the `script` sets up; a failed `script` leaves it off.
 

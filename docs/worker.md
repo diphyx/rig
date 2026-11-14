@@ -56,12 +56,14 @@ await rig.open();
 await rig.machine.create("builder"); // its node joins the hub once the machine has an IP
 ```
 
-| `worker` key | Is                                                                                  |
-| ------------ | ----------------------------------------------------------------------------------- |
-| `name`       | the worker's `name`; without it, the config's only worker                           |
-| `tags`       | the kinds of work its machines do: a job runs only on a machine with its tag        |
-| `cmds`       | grid's: the only cmds its node runs, `exec` and `timeout`; a job adds `args`, `env` |
-| `signal`     | grid's: the node also dials the hub, with heartbeats; needs the hub's `listen`      |
+| `worker` key | Is                                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `name`       | the worker's `name`; without it, the config's only worker                                                           |
+| `tags`       | the kinds of work its machines do: a job runs only on a machine with its tag                                        |
+| `cmds`       | grid's: the only cmds its node runs, `exec` and `timeout`; a job adds `args`, `env`                                 |
+| `signal`     | grid's: the node also dials the hub, with heartbeats; needs the hub's `listen`                                      |
+| `jobs`       | grid's: `limit`, how many at once, `1`; `expires`, how long it keeps a job left idle                                |
+| `share`      | grid's: `limit`, how much of its share pushes it keeps, like `"10GB"`; `expires`, how long it keeps one no job uses |
 
 Where the hub runs, the IP its machines trust, its key, ports and release: [grid](grid.md).
 
@@ -72,7 +74,7 @@ At its create, each machine gets its own grid key pair, and these lines, after i
 1. **grid installed:** the release's archive for the machine's arch, checked by its SHA-256.
 2. **its user:** a system user, `grid`, that the node runs as.
 3. **its keys:** the machine's private key, and the hub's public key, in `/etc/grid`.
-4. **`/etc/grid/node.toml`:** its tags, its cmds, its port, and the hub, by IP; with `signal`, the hub's `listen` port too.
+4. **`/etc/grid/node.toml`:** its tags, its cmds, its port, and the hub, by IP; with `signal`, the hub's `listen` port too; its `jobs` and `share`, when the kind has them.
 5. **a systemd unit,** `grid-node`.
 6. **the node started,** after its `script`: no job comes before what the `script` sets up; a failed `script` leaves it off.
 

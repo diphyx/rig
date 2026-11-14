@@ -13,12 +13,19 @@ const NAME = /^[a-z][a-z0-9-]{0,31}$/;
 /* A dur: a number and one of s, m, h, d. */
 const DUR = /^\d+(s|m|h|d)$/;
 
-/** A kind's `worker`, as grid reads it: its tags, its cmds, and `signal`. */
+/* A size: a number and one of B, KB, MB, GB, TB, in binary. */
+const SIZE = /^\d+(B|KB|MB|GB|TB)$/;
+
+/** A kind's `worker`, as grid reads it: its tags, its cmds, `signal`, `jobs` and `share`. */
 export type GridWorker = KindWorker & {
     /** The only cmds its node runs: grid's `[cmds.<name>]`. */
     cmds: Record<string, { exec: string[]; timeout?: string }>;
     /** grid's `signal`: the node also dials the hub, with heartbeats. */
     signal?: boolean;
+    /** grid's `[jobs]`: `limit`, how many at once, `1`; `expires`, how long it keeps a job left idle. */
+    jobs?: { limit?: number; expires?: string };
+    /** grid's `[share]`: `limit`, how much of its share pushes it keeps; `expires`, how long it keeps one no job uses. */
+    share?: { limit?: string; expires?: string };
 };
 
 /** What a node needs to know of its hub. */
@@ -51,10 +58,19 @@ function base64Of(lines: string[]): string {
     return Buffer.from(`${lines.join("\n")}\n`).toString("base64");
 }
 
-/* The node's config, grid's `node.toml`: its strings as JSON writes them; with signal, the hub's `listen` port. */
+/* The node's config, grid's `node.toml`: its strings as JSON writes them; with signal, the hub's `listen` port; `jobs` and `share` only with a key. */
 function tomlOf(worker: GridWorker, hub: HubSide): string[] {
     const text = (value: string): string => {
         return JSON.stringify(value);
+    };
+
+    const table = (name: string, keys: { limit?: number | string; expires?: string } = {}): string[] => {
+        const lines = [
+            ...(keys.limit !== undefined ? [`limit = ${isString(keys.limit) ? text(keys.limit) : keys.limit}`] : []),
+            ...(keys.expires !== undefined ? [`expires = ${text(keys.expires)}`] : []),
+        ];
+
+        return lines.length > 0 ? ["", `[${name}]`, ...lines] : [];
     };
 
     return [
@@ -68,6 +84,8 @@ function tomlOf(worker: GridWorker, hub: HubSide): string[] {
         `ip = ${text(hub.ip)}`,
         ...(worker.signal ? [`port = ${hub.listen}`] : []),
         'trust = "/etc/grid/hub.pub"',
+        ...table("jobs", worker.jobs),
+        ...table("share", worker.share),
         ...Object.entries(worker.cmds).flatMap(([name, cmd]) => {
             return [
                 "",
@@ -131,15 +149,15 @@ export function nodePart(worker: GridWorker, hub: HubSide, key: string): { scrip
     return { script, start: START };
 }
 
-/** A kind's `worker`, as grid reads it: its cmds, and `signal` only with a hub that listens. */
+/** A kind's `worker`, as grid reads it: its cmds, `signal` only with a hub that listens, `jobs` and `share`. */
 export function checkWorker(worker: KindWorker, listen: number | undefined): void {
     for (const key of Object.keys(worker)) {
-        if (!["name", "tags", "cmds", "signal"].includes(key)) {
+        if (!["name", "tags", "cmds", "signal", "jobs", "share"].includes(key)) {
             throw new Error(`${key} is not a key of grid's worker`);
         }
     }
 
-    const { cmds, signal } = worker as Partial<GridWorker>;
+    const { cmds, signal, jobs, share } = worker as Partial<GridWorker>;
 
     if (!isObject(cmds) || Object.keys(cmds).length === 0) {
         throw new Error("cmds: at least one cmd");
@@ -177,5 +195,34 @@ export function checkWorker(worker: KindWorker, listen: number | undefined): voi
 
     if (signal && listen === undefined) {
         throw new Error("signal: needs a hub with listen");
+    }
+
+    /* grid's `[jobs]` and `[share]`: each a `limit` and an `expires`. */
+    for (const [name, table] of Object.entries({ jobs, share })) {
+        if (table === undefined) {
+            continue;
+        }
+
+        if (!isObject(table)) {
+            throw new Error(`${name}: not an object`);
+        }
+
+        for (const key of Object.keys(table)) {
+            if (!["limit", "expires"].includes(key)) {
+                throw new Error(`${name}.${key}: not a key of ${name}`);
+            }
+        }
+
+        if (table.expires !== undefined && (!isString(table.expires) || !DUR.test(table.expires))) {
+            throw new Error(`${name}.expires: not a dur`);
+        }
+    }
+
+    if (jobs?.limit !== undefined && (!Number.isSafeInteger(jobs.limit) || jobs.limit < 1)) {
+        throw new Error("jobs.limit: a uint, from 1");
+    }
+
+    if (share?.limit !== undefined && (!isString(share.limit) || !SIZE.test(share.limit))) {
+        throw new Error('share.limit: not a size, like "10GB"');
     }
 }

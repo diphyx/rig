@@ -35,7 +35,29 @@ describe("grid setup", () => {
         expect(toml).toContain('ip = "2001:db8::1"\ntrust');
         expect(toml).toContain('[cmds.go]\nexec = ["go", "run"]\n');
         expect(toml).not.toContain("signal");
+        expect(toml).not.toContain("[jobs]");
+        expect(toml).not.toContain("[share]");
         expect(script).toContain("echo 'node-key' > /etc/grid/node.key");
+    });
+
+    it("writes the node's jobs and share, only the keys it has, before its cmds", () => {
+        const worker = {
+            tags: ["a"],
+            cmds: { go: { exec: ["go"] } },
+            jobs: { limit: 4 },
+            share: { limit: "10GB", expires: "168h" },
+        };
+
+        const { script } = nodePart(worker, HUB, "node-key");
+        const line = script.find((one) => {
+            return one.endsWith("> /etc/grid/node.toml");
+        })!;
+
+        const toml = Buffer.from(line.split("'")[1]!, "base64").toString();
+
+        expect(toml).toContain(
+            'trust = "/etc/grid/hub.pub"\n\n[jobs]\nlimit = 4\n\n[share]\nlimit = "10GB"\nexpires = "168h"\n\n[cmds.go]',
+        );
     });
 
     it("sets the node up before the kind's script, and starts it only after", () => {
@@ -45,11 +67,13 @@ describe("grid setup", () => {
         expect(start).toEqual(["systemctl enable --now grid-node"]);
     });
 
-    it("takes a worker with cmds, each with an exec and a dur timeout, and signal only with listen", () => {
+    it("takes a worker with cmds, each with an exec and a dur timeout, signal only with listen, and its jobs and share", () => {
         const cmds = { make: { exec: ["make"], timeout: "10m" } };
+        const tables = { jobs: { limit: 4, expires: "1h" }, share: { limit: "0B", expires: "7d" } };
 
         expect(checkWorker({ tags: ["a"], cmds, signal: false } as KindWorker, undefined)).toBeUndefined();
         expect(checkWorker({ tags: ["a"], cmds, signal: true } as KindWorker, 9500)).toBeUndefined();
+        expect(checkWorker({ tags: ["a"], cmds, ...tables } as KindWorker, undefined)).toBeUndefined();
     });
 
     it("refuses a worker that is not grid's: each key it checks, and why", () => {
@@ -66,6 +90,15 @@ describe("grid setup", () => {
             [{ tags: [], cmds: { a: { exec: ["a"], timeout: 60 } } }, "cmds.a.timeout: not a dur"],
             [{ tags: [], cmds: { a: { exec: ["a"], timeout: "1 hour" } } }, "cmds.a.timeout: not a dur"],
             [{ tags: [], cmds: { a: { exec: ["a"] } }, signal: "yes" }, "signal: not a bool"],
+            [{ tags: [], cmds: { a: { exec: ["a"] } }, jobs: 4 }, "jobs: not an object"],
+            [{ tags: [], cmds: { a: { exec: ["a"] } }, jobs: { path: "/x" } }, "jobs.path: not a key of jobs"],
+            [{ tags: [], cmds: { a: { exec: ["a"] } }, jobs: { limit: 0 } }, "jobs.limit: a uint, from 1"],
+            [{ tags: [], cmds: { a: { exec: ["a"] } }, jobs: { limit: 1.5 } }, "jobs.limit: a uint, from 1"],
+            [{ tags: [], cmds: { a: { exec: ["a"] } }, jobs: { limit: "4" } }, "jobs.limit: a uint, from 1"],
+            [{ tags: [], cmds: { a: { exec: ["a"] } }, jobs: { expires: "1 hour" } }, "jobs.expires: not a dur"],
+            [{ tags: [], cmds: { a: { exec: ["a"] } }, share: { limit: 10 } }, "share.limit: not a size"],
+            [{ tags: [], cmds: { a: { exec: ["a"] } }, share: { limit: "10G" } }, "share.limit: not a size"],
+            [{ tags: [], cmds: { a: { exec: ["a"] } }, share: { expires: 60 } }, "share.expires: not a dur"],
         ];
 
         for (const [worker, message] of refused) {
